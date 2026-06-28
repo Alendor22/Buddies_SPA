@@ -1,29 +1,32 @@
-# DogID App
+# Buddies SPA V2
 
-Version 1 of a dog digital identity + safety network.
+Production-oriented scaffold for a dog identity, safety, walking, and social network.
 
 ## Stack
 
-- Next.js App Router
-- React + TypeScript
+- Next.js 15 App Router
+- React 19 + TypeScript
 - Tailwind CSS
 - PostgreSQL + Prisma
-- Cloudflare R2
 - Upstash Redis
+- Cloudflare R2
 - Mapbox
-- Ably realtime
+- Ably WebSockets/realtime
+- Zod validation
 
-## V1 Features
+## V2 modules
 
-- Dog profile
-- QR identity
-- Public dog safety page
-- Lost dog mode
-- Emergency/medical info
-- Last-seen map
-- Realtime lost dog and QR scan events via Ably
+- Dog and owner profiles
+- QR-based dog identity
+- Public safety profile
+- Lost-dog alerts and live last-seen events
+- Walker discovery and walk requests
+- Realtime messaging and presence
+- Map-based nearby activity
+- Media upload adapter for Cloudflare R2
+- Redis-backed caching/rate-limit utilities
 
-## Setup
+## Local setup
 
 ```bash
 npm install
@@ -33,18 +36,16 @@ npx prisma migrate dev --name init
 npm run dev
 ```
 
-## GitHub Push
+Open http://localhost:3000.
+
+## Validation
 
 ```bash
-git init
-git add .
-git commit -m "Initial DogID V1 scaffold"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/dogid-app.git
-git push -u origin main
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-## Notes
+## Deployment
 
-This is a scaffold. Add authentication before production use.
-Recommended auth: Clerk or NextAuth.
+Deploy the Next.js application to Vercel or another Node-compatible host. Use a managed PostgreSQL provider, Upstash Redis, Cloudflare R2, Mapbox, and Ably.

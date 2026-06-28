@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DogStatus {
+  SAFE
+  LOST
+  FOUND
+}
+
+enum WalkStatus {
+  REQUESTED
+  ACCEPTED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  displayName String
+  avatarUrl   String?
+  bio         String?
+  latitude    Float?
+  longitude   Float?
+  dogs        Dog[]
+  sentWalks   Walk[]    @relation("RequesterWalks")
+  assignedWalks Walk[]  @relation("WalkerWalks")
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Dog {
+  id           String      @id @default(cuid())
+  ownerId      String
+  owner        User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name         String
+  slug         String      @unique
+  breed        String?
+  birthDate    DateTime?
+  photoUrl     String?
+  status       DogStatus   @default(SAFE)
+  medicalNotes String?
+  emergencyContact String?
+  latitude     Float?
+  longitude    Float?
+  qrScans      QrScan[]
+  sightings    Sighting[]
+  walks        Walk[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model QrScan {
+  id        String   @id @default(cuid())
+  dogId     String
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  latitude  Float?
+  longitude Float?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([dogId, createdAt])
+}
+
+model Sighting {
+  id        String   @id @default(cuid())
+  dogId     String
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  note      String?
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+
+  @@index([dogId, createdAt])
+}
+
+model Walk {
+  id          String     @id @default(cuid())
+  dogId       String
+  dog         Dog        @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User       @relation("RequesterWalks", fields: [requesterId], references: [id])
+  walkerId    String?
+  walker      User?      @relation("WalkerWalks", fields: [walkerId], references: [id])
+  startsAt    DateTime
+  durationMin Int
+  status      WalkStatus @default(REQUESTED)
+  notes       String?
+  messages    Message[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([dogId, startsAt])
+  @@index([walkerId, status])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  walkId    String
+  walk      Walk     @relation(fields: [walkId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([walkId, createdAt])
+}
