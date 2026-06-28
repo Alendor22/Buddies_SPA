@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum DogStatus {
@@ -22,40 +23,40 @@ enum WalkStatus {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  displayName String
-  avatarUrl   String?
-  bio         String?
-  latitude    Float?
-  longitude   Float?
-  dogs        Dog[]
-  sentWalks   Walk[]    @relation("RequesterWalks")
-  assignedWalks Walk[]  @relation("WalkerWalks")
-  messages    Message[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  displayName   String
+  avatarUrl     String?
+  bio           String?
+  latitude      Float?
+  longitude     Float?
+  dogs          Dog[]
+  sentWalks     Walk[]    @relation("RequesterWalks")
+  assignedWalks Walk[]    @relation("WalkerWalks")
+  messages      Message[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Dog {
-  id           String      @id @default(cuid())
-  ownerId      String
-  owner        User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  name         String
-  slug         String      @unique
-  breed        String?
-  birthDate    DateTime?
-  photoUrl     String?
-  status       DogStatus   @default(SAFE)
-  medicalNotes String?
+  id               String      @id @default(cuid())
+  ownerId          String
+  owner            User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name             String
+  slug             String      @unique
+  breed            String?
+  birthDate        DateTime?
+  photoUrl         String?
+  status           DogStatus   @default(SAFE)
+  medicalNotes     String?
   emergencyContact String?
-  latitude     Float?
-  longitude    Float?
-  qrScans      QrScan[]
-  sightings    Sighting[]
-  walks        Walk[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  latitude         Float?
+  longitude        Float?
+  qrScans          QrScan[]
+  sightings        Sighting[]
+  walks            Walk[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   @@index([ownerId])
   @@index([status])
