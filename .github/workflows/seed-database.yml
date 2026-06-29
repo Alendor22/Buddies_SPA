@@ -1,0 +1,44 @@
+name: Seed database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type SEED to continue"
+        required: true
+        type: string
+
+jobs:
+  seed:
+    if: ${{ github.event.inputs.confirm == 'SEED' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npx prisma migrate deploy
+
+      - name: Run seed
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          ALLOW_DB_SEED: "true"
+        run: npm run db:seed
