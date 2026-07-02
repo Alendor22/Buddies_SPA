@@ -27,11 +27,38 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify required database secrets
+      - name: Verify database secrets and target
         shell: bash
         run: |
           test -n "$DATABASE_URL" || (echo "DATABASE_URL is missing" && exit 1)
           test -n "$DATABASE_URL_UNPOOLED" || (echo "DATABASE_URL_UNPOOLED is missing" && exit 1)
+
+          node --input-type=module <<'NODE'
+          const pooled = new URL(process.env.DATABASE_URL);
+          const direct = new URL(process.env.DATABASE_URL_UNPOOLED);
+
+          const pooledDb = pooled.pathname.replace(/^\//, '');
+          const directDb = direct.pathname.replace(/^\//, '');
+
+          console.log(JSON.stringify({
+            pooledHost: pooled.hostname,
+            pooledDatabase: pooledDb,
+            directHost: direct.hostname,
+            directDatabase: directDb
+          }));
+
+          if (!pooled.hostname.includes('-pooler')) {
+            throw new Error('DATABASE_URL must use the Neon pooled host containing -pooler');
+          }
+
+          if (direct.hostname.includes('-pooler')) {
+            throw new Error('DATABASE_URL_UNPOOLED must use the direct Neon host without -pooler');
+          }
+
+          if (pooledDb !== directDb) {
+            throw new Error(`Database mismatch: pooled=${pooledDb}, direct=${directDb}`);
+          }
+          NODE
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
