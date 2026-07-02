@@ -26,8 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: package.json
 
       - name: Verify required database secrets
         shell: bash
@@ -53,14 +51,15 @@ jobs:
           import { PrismaClient } from '@prisma/client';
           const prisma = new PrismaClient();
           try {
-            const [dogs, users, walks] = await Promise.all([
+            const [dogs, users, walks, messages] = await Promise.all([
               prisma.dog.count(),
               prisma.user.count(),
-              prisma.walk.count()
+              prisma.walk.count(),
+              prisma.message.count()
             ]);
-            console.log(JSON.stringify({ dogs, users, walks }));
-            if (dogs !== 12 || users !== 6 || walks !== 4) {
-              throw new Error(`Unexpected seed counts: dogs=${dogs}, users=${users}, walks=${walks}`);
+            console.log(JSON.stringify({ dogs, users, walks, messages }));
+            if (dogs !== 12 || users !== 6 || walks !== 4 || messages !== 3) {
+              throw new Error(`Unexpected seed counts: dogs=${dogs}, users=${users}, walks=${walks}, messages=${messages}`);
             }
           } finally {
             await prisma.$disconnect();
