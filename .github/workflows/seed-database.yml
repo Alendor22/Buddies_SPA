@@ -34,18 +34,27 @@ jobs:
           test -n "$DATABASE_URL_UNPOOLED" || (echo "DATABASE_URL_UNPOOLED is missing" && exit 1)
 
           node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+
           const pooled = new URL(process.env.DATABASE_URL);
           const direct = new URL(process.env.DATABASE_URL_UNPOOLED);
 
           const pooledDb = pooled.pathname.replace(/^\//, '');
           const directDb = direct.pathname.replace(/^\//, '');
 
-          console.log(JSON.stringify({
+          const identity = {
             pooledHost: pooled.hostname,
             pooledDatabase: pooledDb,
             directHost: direct.hostname,
             directDatabase: directDb
-          }));
+          };
+
+          console.log(JSON.stringify(identity));
+
+          appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            `## Seed target\n\n- Pooled host: \`${identity.pooledHost}\`\n- Pooled database: \`${identity.pooledDatabase}\`\n- Direct host: \`${identity.directHost}\`\n- Direct database: \`${identity.directDatabase}\`\n\n`
+          );
 
           if (!pooled.hostname.includes('-pooler')) {
             throw new Error('DATABASE_URL must use the Neon pooled host containing -pooler');
@@ -75,7 +84,9 @@ jobs:
       - name: Verify seeded records
         run: |
           node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
           import { PrismaClient } from '@prisma/client';
+
           const prisma = new PrismaClient();
           try {
             const [dogs, users, walks, messages] = await Promise.all([
@@ -84,7 +95,15 @@ jobs:
               prisma.walk.count(),
               prisma.message.count()
             ]);
-            console.log(JSON.stringify({ dogs, users, walks, messages }));
+
+            const counts = { dogs, users, walks, messages };
+            console.log(JSON.stringify(counts));
+
+            appendFileSync(
+              process.env.GITHUB_STEP_SUMMARY,
+              `## Seed result\n\n- Dogs: **${dogs}**\n- Users: **${users}**\n- Walks: **${walks}**\n- Messages: **${messages}**\n`
+            );
+
             if (dogs !== 12 || users !== 6 || walks !== 4 || messages !== 3) {
               throw new Error(`Unexpected seed counts: dogs=${dogs}, users=${users}, walks=${walks}, messages=${messages}`);
             }
