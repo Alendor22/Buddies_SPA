@@ -38,10 +38,11 @@ export async function GET() {
   const identity = getDatabaseIdentity();
 
   try {
-    const [dogCount, userCount, migrationCount] = await Promise.all([
+    const [dogCount, userCount, walkCount, messageCount] = await Promise.all([
       prisma.dog.count(),
       prisma.user.count(),
-      prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM "_prisma_migrations"`
+      prisma.walk.count(),
+      prisma.message.count()
     ]);
 
     return NextResponse.json(
@@ -51,7 +52,8 @@ export async function GET() {
         counts: {
           dogs: dogCount,
           users: userCount,
-          migrations: Number(migrationCount[0]?.count ?? 0)
+          walks: walkCount,
+          messages: messageCount
         },
         checkedAt: new Date().toISOString()
       },
