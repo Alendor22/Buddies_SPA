@@ -49,3 +49,5 @@ npm run build
 ## Deployment
 
 Deploy the Next.js application to Vercel or another Node-compatible host. Use a managed PostgreSQL provider, Upstash Redis, Cloudflare R2, Mapbox, and Ably.
+
+Latest production deployment trigger: 2026-07-02.
