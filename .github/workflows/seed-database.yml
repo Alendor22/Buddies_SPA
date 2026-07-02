@@ -10,7 +10,7 @@ on:
 
 jobs:
   seed:
-    if: ${{ github.event.inputs.confirm == 'SEED' }}
+    if: ${{ inputs.confirm == 'SEED' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -27,20 +27,42 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: package.json
 
       - name: Verify required database secrets
+        shell: bash
         run: |
           test -n "$DATABASE_URL" || (echo "DATABASE_URL is missing" && exit 1)
           test -n "$DATABASE_URL_UNPOOLED" || (echo "DATABASE_URL_UNPOOLED is missing" && exit 1)
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Apply migrations
-        run: npx prisma migrate deploy
+      - name: Synchronize database schema
+        run: npx prisma db push --skip-generate
 
-      - name: Run seed
+      - name: Run deterministic seed
         run: npm run db:seed
+
+      - name: Verify seeded records
+        run: |
+          node --input-type=module <<'NODE'
+          import { PrismaClient } from '@prisma/client';
+          const prisma = new PrismaClient();
+          try {
+            const [dogs, users, walks] = await Promise.all([
+              prisma.dog.count(),
+              prisma.user.count(),
+              prisma.walk.count()
+            ]);
+            console.log(JSON.stringify({ dogs, users, walks }));
+            if (dogs !== 12 || users !== 6 || walks !== 4) {
+              throw new Error(`Unexpected seed counts: dogs=${dogs}, users=${users}, walks=${walks}`);
+            }
+          } finally {
+            await prisma.$disconnect();
+          }
+          NODE
