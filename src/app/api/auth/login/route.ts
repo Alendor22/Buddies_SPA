@@ -15,10 +15,8 @@ function encodeSession(userId: string) {
   return Buffer.from(JSON.stringify({ userId, signature: signSession(userId) })).toString('base64url');
 }
 
-export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const email = normalizeEmail(String(formData.get('email') ?? ''));
-  const password = String(formData.get('password') ?? '');
+async function completeLogin(request: NextRequest, emailRaw: string, password: string) {
+  const email = normalizeEmail(emailRaw);
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -38,4 +36,17 @@ export async function POST(request: NextRequest) {
     path: '/'
   });
   return response;
+}
+
+export async function GET(request: NextRequest) {
+  const email = request.nextUrl.searchParams.get('email') ?? '';
+  const password = request.nextUrl.searchParams.get('password') ?? '';
+  return completeLogin(request, email, password);
+}
+
+export async function POST(request: NextRequest) {
+  const formData = await request.formData();
+  const email = String(formData.get('email') ?? '');
+  const password = String(formData.get('password') ?? '');
+  return completeLogin(request, email, password);
 }
