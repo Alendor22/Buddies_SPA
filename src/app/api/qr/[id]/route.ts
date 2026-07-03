@@ -57,13 +57,13 @@ export async function GET(
     });
   }
 
-  const png = await QRCode.toBuffer(targetUrl, {
+  const pngBuffer = await QRCode.toBuffer(targetUrl, {
     ...options,
     type: 'png'
   });
-  const pngBody = new Uint8Array(png.buffer, png.byteOffset, png.byteLength);
+  const pngBytes = Uint8Array.from(pngBuffer);
 
-  return new Response(pngBody, {
+  return new Response(pngBytes, {
     status: 200,
     headers: {
       'Content-Type': 'image/png',
