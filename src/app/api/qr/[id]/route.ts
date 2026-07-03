@@ -1,5 +1,4 @@
 import QRCode from 'qrcode';
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +11,7 @@ export async function GET(
   const decodedId = decodeURIComponent(id || '').trim();
 
   if (!decodedId) {
-    return NextResponse.json({ ok: false, error: 'Missing QR id' }, { status: 400 });
+    return Response.json({ ok: false, error: 'Missing QR id' }, { status: 400 });
   }
 
   const dog = await prisma.dog.findFirst({
@@ -29,7 +28,7 @@ export async function GET(
   const origin = new URL(request.url).origin;
   const targetUrl = dog ? `${origin}/dogs/${dog.slug}` : `${origin}/dogs/${encodeURIComponent(decodedId)}`;
 
-  const svg = await QRCode.toString(targetUrl, {
+  const svgBody = await QRCode.toString(targetUrl, {
     type: 'svg',
     errorCorrectionLevel: 'M',
     margin: 2,
@@ -40,11 +39,14 @@ export async function GET(
     }
   });
 
-  return new NextResponse(svg, {
+  const svg = svgBody.startsWith('<?xml') ? svgBody : `<?xml version="1.0" encoding="UTF-8"?>\n${svgBody}`;
+
+  return new Response(svg, {
     status: 200,
     headers: {
-      'Content-Type': 'image/svg+xml; charset=utf-8',
-      'Cache-Control': 'no-store'
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': 'no-store, max-age=0',
+      'X-Content-Type-Options': 'nosniff'
     }
   });
 }
