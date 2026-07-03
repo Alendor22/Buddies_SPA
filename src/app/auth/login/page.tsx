@@ -1,19 +1,33 @@
-export default function LoginPage() {
+import Link from 'next/link';
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div>
-        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Login Fix</p>
+        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Real Login</p>
         <h1 className="mt-2 text-3xl font-bold">Sign in</h1>
         <p className="mt-2 text-slate-600">Access your dogs, QR profiles, dashboard, and public safety records.</p>
       </div>
 
-      <section className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-        <a href="https://buddies.vercel.app/dashboard" className="rounded-lg bg-slate-900 px-5 py-3 text-center font-medium text-white">Continue to dashboard</a>
-      </section>
+      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Invalid credentials.</div> : null}
+
+      <form action="/api/auth/login" method="post" className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
+        <label className="grid gap-2 text-sm font-medium">
+          Email
+          <input name="email" type="email" required className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+        <label className="grid gap-2 text-sm font-medium">
+          Password
+          <input name="password" type="password" required className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+        <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Sign in</button>
+      </form>
 
       <div className="mt-6 grid gap-2 text-sm text-slate-600">
-        <p><a href="https://buddies.vercel.app/dashboard" className="font-medium text-slate-900 underline">Create an account</a></p>
-        <p><a href="https://buddies.vercel.app/dogs/demo" className="font-medium text-slate-900 underline">View demo public profile</a></p>
+        <p>New to Buddies? <Link href="/auth/register" className="font-medium text-slate-900 underline">Create an account</Link></p>
+        <p><Link href="/dogs/demo" className="font-medium text-slate-900 underline">View demo public profile</Link></p>
       </div>
     </main>
   );
