@@ -1,0 +1,101 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth';
+
+export default async function NewDogPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) redirect('/auth/login');
+
+  const { error } = await searchParams;
+
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">Buddies V2</p>
+          <h1 className="mt-1 text-3xl font-bold">Add dog</h1>
+          <p className="mt-2 text-slate-600">Create a private owner record and public safety profile.</p>
+        </div>
+        <Link href="/dashboard" className="rounded-lg border px-4 py-2">Cancel</Link>
+      </div>
+
+      {error ? (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          A dog name is required.
+        </div>
+      ) : null}
+
+      <form action="/api/dogs" method="post" className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium">
+            Name
+            <input name="name" required maxLength={80} className="rounded-lg border px-3 py-3 text-base" />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Breed
+            <input name="breed" maxLength={120} className="rounded-lg border px-3 py-3 text-base" />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Birth date
+            <input name="birthDate" type="date" className="rounded-lg border px-3 py-3 text-base" />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Weight (lb)
+            <input name="weightLbs" type="number" min="1" max="300" className="rounded-lg border px-3 py-3 text-base" />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Gender
+            <select name="gender" className="rounded-lg border px-3 py-3 text-base">
+              <option value="">Not specified</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Safety status
+            <select name="status" defaultValue="SAFE" className="rounded-lg border px-3 py-3 text-base">
+              <option value="SAFE">Safe</option>
+              <option value="LOST">Lost</option>
+              <option value="FOUND">Found</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="grid gap-2 text-sm font-medium">
+          Photo URL
+          <input name="photoUrl" type="url" placeholder="https://..." className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium">
+          Temperament
+          <textarea name="temperament" rows={3} className="rounded-lg border px-3 py-3 text-base" placeholder="Calm, playful, reactive on leash..." />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium">
+          Vaccination notes
+          <textarea name="vaccinationNotes" rows={3} className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium">
+          Medical notes
+          <textarea name="medicalNotes" rows={3} className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium">
+          Emergency contact
+          <input name="emergencyContact" className="rounded-lg border px-3 py-3 text-base" />
+        </label>
+
+        <fieldset className="grid gap-3 rounded-xl border p-4">
+          <legend className="px-2 text-sm font-semibold">Compatibility</legend>
+          <label className="flex items-center gap-3"><input name="spayedNeutered" type="checkbox" /> Spayed or neutered</label>
+          <label className="flex items-center gap-3"><input name="friendlyDogs" type="checkbox" defaultChecked /> Friendly with dogs</label>
+          <label className="flex items-center gap-3"><input name="friendlyCats" type="checkbox" /> Friendly with cats</label>
+          <label className="flex items-center gap-3"><input name="friendlyChildren" type="checkbox" defaultChecked /> Friendly with children</label>
+        </fieldset>
+
+        <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create dog profile</button>
+      </form>
+    </main>
+  );
+}
