@@ -1,14 +1,44 @@
+import QRCode from 'qrcode';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const cleanId = encodeURIComponent(id || 'dog');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="white"/><rect x="48" y="48" width="120" height="120" fill="#0f172a"/><rect x="344" y="48" width="120" height="120" fill="#0f172a"/><rect x="48" y="344" width="120" height="120" fill="#0f172a"/><rect x="84" y="84" width="48" height="48" fill="white"/><rect x="380" y="84" width="48" height="48" fill="white"/><rect x="84" y="380" width="48" height="48" fill="white"/><text x="256" y="250" text-anchor="middle" font-family="Arial" font-size="32" font-weight="700" fill="#0f172a">Buddies</text><text x="256" y="296" text-anchor="middle" font-family="Arial" font-size="18" fill="#475569">${cleanId}</text></svg>`;
+  const decodedId = decodeURIComponent(id || '').trim();
+
+  if (!decodedId) {
+    return NextResponse.json({ ok: false, error: 'Missing QR id' }, { status: 400 });
+  }
+
+  const dog = await prisma.dog.findFirst({
+    where: {
+      OR: [
+        { id: decodedId },
+        { publicId: decodedId },
+        { slug: decodedId }
+      ]
+    },
+    select: { slug: true }
+  });
+
+  const origin = new URL(request.url).origin;
+  const targetUrl = dog ? `${origin}/dogs/${dog.slug}` : `${origin}/dogs/${encodeURIComponent(decodedId)}`;
+
+  const svg = await QRCode.toString(targetUrl, {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 512,
+    color: {
+      dark: '#0f172a',
+      light: '#ffffff'
+    }
+  });
 
   return new NextResponse(svg, {
     status: 200,
