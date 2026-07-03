@@ -1,19 +1,10 @@
+import QRCode from 'qrcode';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
-
-function safeText(value: string) {
-  return value.replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[char] ?? char));
-}
 
 export default async function DogQrPage({ params }: { params: Promise<{ slug: string }> }) {
   const user = await getCurrentUser();
@@ -28,11 +19,22 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
   if (!dog) notFound();
 
   const qrId = dog.publicId ?? dog.id;
-  const publicUrl = `/dogs/${dog.slug}`;
+  const publicPath = `/dogs/${dog.slug}`;
+  const publicUrl = `https://buddies.vercel.app${publicPath}`;
   const qrUrl = `/api/qr/${encodeURIComponent(qrId)}`;
-  const label = safeText(qrId);
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="block h-auto w-full max-w-[280px] sm:max-w-[360px]" viewBox="0 0 512 512" role="img" aria-label="Buddies public profile code"><rect width="512" height="512" fill="white"/><rect x="48" y="48" width="120" height="120" fill="#0f172a"/><rect x="344" y="48" width="120" height="120" fill="#0f172a"/><rect x="48" y="344" width="120" height="120" fill="#0f172a"/><rect x="84" y="84" width="48" height="48" fill="white"/><rect x="380" y="84" width="48" height="48" fill="white"/><rect x="84" y="380" width="48" height="48" fill="white"/><text x="256" y="244" text-anchor="middle" font-family="Arial" font-size="34" font-weight="700" fill="#0f172a">Buddies</text><text x="256" y="292" text-anchor="middle" font-family="Arial" font-size="18" fill="#475569">${label}</text></svg>`;
+  const svg = await QRCode.toString(publicUrl, {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 512,
+    color: {
+      dark: '#0f172a',
+      light: '#ffffff'
+    }
+  });
+
+  const responsiveSvg = svg.replace('<svg ', '<svg class="block h-auto w-full max-w-[280px] sm:max-w-[360px]" role="img" aria-label="Buddies public profile QR code" ');
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -41,10 +43,11 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
       <p className="mt-2 text-slate-600">Use this page to open the public profile code.</p>
 
       <section className="mt-8 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex justify-center rounded-xl border bg-white p-4 overflow-hidden" dangerouslySetInnerHTML={{ __html: svg }} />
+        <div className="flex justify-center rounded-xl border bg-white p-4 overflow-hidden" dangerouslySetInnerHTML={{ __html: responsiveSvg }} />
+        <p className="mt-3 break-all text-center text-sm text-slate-500">{publicUrl}</p>
         <div className="mt-6 grid gap-3">
-          <Link href={publicUrl} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open public page</Link>
-          <a href={qrUrl} className="rounded-lg border px-4 py-3 text-center">Open SVG</a>
+          <Link href={publicPath} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open public page</Link>
+          <a href={qrUrl} target="_blank" rel="noreferrer" className="rounded-lg border px-4 py-3 text-center">Open SVG</a>
           <Link href={`/dogs/${dog.slug}/edit`} className="rounded-lg border px-4 py-3 text-center">Back to edit</Link>
         </div>
       </section>
