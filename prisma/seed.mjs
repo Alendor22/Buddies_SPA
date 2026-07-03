@@ -1,187 +1,78 @@
-import { PrismaClient, DogStatus, WalkStatus } from '@prisma/client';
+import { PrismaClient, DogStatus, WalkStatus, FriendshipStatus, PackRole, PackPostKind } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 const users = [
-  {
-    id: 'seed_user_adeja',
-    email: 'adeja@example.test',
-    displayName: 'Adeja',
-    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
-    bio: 'Dog parent and Buddies early adopter.',
-    latitude: 40.7357,
-    longitude: -74.1724
-  },
-  {
-    id: 'seed_user_maya',
-    email: 'maya@example.test',
-    displayName: 'Maya',
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
-    bio: 'Weekend trail walker and rescue volunteer.',
-    latitude: 40.7421,
-    longitude: -74.1686
-  },
-  {
-    id: 'seed_user_jordan',
-    email: 'jordan@example.test',
-    displayName: 'Jordan',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-    bio: 'Always looking for a new dog-friendly park.',
-    latitude: 40.7284,
-    longitude: -74.1832
-  },
-  {
-    id: 'seed_user_priya',
-    email: 'priya@example.test',
-    displayName: 'Priya',
-    avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=400&q=80',
-    bio: 'Small-dog social coordinator.',
-    latitude: 40.7219,
-    longitude: -74.1598
-  },
-  {
-    id: 'seed_user_marcus',
-    email: 'marcus@example.test',
-    displayName: 'Marcus',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    bio: 'Morning runner with two energetic dogs.',
-    latitude: 40.7486,
-    longitude: -74.1881
-  },
-  {
-    id: 'seed_user_elena',
-    email: 'elena@example.test',
-    displayName: 'Elena',
-    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80',
-    bio: 'Senior-dog advocate and foster parent.',
-    latitude: 40.7312,
-    longitude: -74.1517
-  }
+  { id: 'seed_user_adeja', email: 'adeja@example.test', displayName: 'Adeja', bio: 'Dog parent and Buddies early adopter.', latitude: 40.7357, longitude: -74.1724 },
+  { id: 'seed_user_maya', email: 'maya@example.test', displayName: 'Maya', bio: 'Weekend trail walker and rescue volunteer.', latitude: 40.7421, longitude: -74.1686 },
+  { id: 'seed_user_jordan', email: 'jordan@example.test', displayName: 'Jordan', bio: 'Always looking for a new dog-friendly park.', latitude: 40.7284, longitude: -74.1832 },
+  { id: 'seed_user_priya', email: 'priya@example.test', displayName: 'Priya', bio: 'Small-dog social coordinator.', latitude: 40.7219, longitude: -74.1598 },
+  { id: 'seed_user_marcus', email: 'marcus@example.test', displayName: 'Marcus', bio: 'Morning runner with two energetic dogs.', latitude: 40.7486, longitude: -74.1881 },
+  { id: 'seed_user_elena', email: 'elena@example.test', displayName: 'Elena', bio: 'Senior-dog advocate and foster parent.', latitude: 40.7312, longitude: -74.1517 }
 ];
 
 const dogs = [
-  ['seed_dog_buddy', 'seed_user_adeja', 'Buddy', 'buddy', 'Golden Retriever', '2021-04-14', 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7357, -74.1724],
-  ['seed_dog_luna', 'seed_user_maya', 'Luna', 'luna', 'Siberian Husky', '2020-09-03', 'https://images.unsplash.com/photo-1605568427561-40dd23c2acea?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7421, -74.1686],
-  ['seed_dog_max', 'seed_user_jordan', 'Max', 'max', 'German Shepherd', '2019-06-21', 'https://images.unsplash.com/photo-1568572933382-74d440642117?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7284, -74.1832],
-  ['seed_dog_daisy', 'seed_user_priya', 'Daisy', 'daisy', 'Cavalier King Charles Spaniel', '2022-01-11', 'https://images.unsplash.com/photo-1544717297-fa95b6ee9643?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7219, -74.1598],
-  ['seed_dog_rocky', 'seed_user_marcus', 'Rocky', 'rocky', 'Boxer', '2020-02-08', 'https://images.unsplash.com/photo-1543071220-6ee5bf71a54e?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7486, -74.1881],
-  ['seed_dog_coco', 'seed_user_elena', 'Coco', 'coco', 'French Bulldog', '2021-11-19', 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7312, -74.1517],
-  ['seed_dog_milo', 'seed_user_marcus', 'Milo', 'milo', 'Labrador Retriever', '2023-03-30', 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7469, -74.1864],
-  ['seed_dog_bella', 'seed_user_maya', 'Bella', 'bella', 'Beagle', '2018-08-17', 'https://images.unsplash.com/photo-1505628346881-b72b27e84530?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7407, -74.1668],
-  ['seed_dog_teddy', 'seed_user_priya', 'Teddy', 'teddy', 'Miniature Poodle', '2022-07-05', 'https://images.unsplash.com/photo-1616190264687-b7ebf7aa2eb4?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7231, -74.1574],
-  ['seed_dog_sadie', 'seed_user_elena', 'Sadie', 'sadie', 'Mixed Breed', '2017-12-12', 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7325, -74.1531],
-  ['seed_dog_nova', 'seed_user_jordan', 'Nova', 'nova', 'Australian Shepherd', '2021-05-23', 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7298, -74.1814],
-  ['seed_dog_ollie', 'seed_user_adeja', 'Ollie', 'ollie', 'Boston Terrier', '2023-10-01', 'https://images.unsplash.com/photo-1612536057832-2ff7ead58194?auto=format&fit=crop&w=900&q=80', DogStatus.SAFE, 40.7342, -74.1708]
-].map(([id, ownerId, name, slug, breed, birthDate, photoUrl, status, latitude, longitude]) => ({
+  ['seed_dog_buddy', 'seed_user_adeja', 'Buddy', 'buddy', 'Golden Retriever', '2021-04-14', DogStatus.SAFE, 40.7357, -74.1724],
+  ['seed_dog_luna', 'seed_user_maya', 'Luna', 'luna', 'Siberian Husky', '2020-09-03', DogStatus.SAFE, 40.7421, -74.1686],
+  ['seed_dog_max', 'seed_user_jordan', 'Max', 'max', 'German Shepherd', '2019-06-21', DogStatus.SAFE, 40.7284, -74.1832],
+  ['seed_dog_teddy', 'seed_user_priya', 'Teddy', 'teddy', 'Miniature Poodle', '2022-07-05', DogStatus.SAFE, 40.7231, -74.1574],
+  ['seed_dog_sadie', 'seed_user_elena', 'Sadie', 'sadie', 'Mixed Breed', '2017-12-12', DogStatus.SAFE, 40.7325, -74.1531],
+  ['seed_dog_ollie', 'seed_user_adeja', 'Ollie', 'ollie', 'Boston Terrier', '2023-10-01', DogStatus.SAFE, 40.7342, -74.1708]
+].map(([id, ownerId, name, slug, breed, birthDate, status, latitude, longitude]) => ({
   id,
   ownerId,
   name,
   slug,
   breed,
   birthDate: new Date(`${birthDate}T12:00:00.000Z`),
-  photoUrl,
   status,
   medicalNotes: 'No active medical alerts.',
-  emergencyContact: 'Seed emergency contact: 555-0100',
+  emergencyContact: 'Seed contact',
   latitude,
   longitude
 }));
 
 const walks = [
-  {
-    id: 'seed_walk_1',
-    dogId: 'seed_dog_buddy',
-    requesterId: 'seed_user_adeja',
-    walkerId: 'seed_user_maya',
-    startsAt: new Date('2026-07-02T22:00:00.000Z'),
-    durationMin: 45,
-    status: WalkStatus.ACCEPTED,
-    notes: 'Meet near the south entrance of Branch Brook Park.'
-  },
-  {
-    id: 'seed_walk_2',
-    dogId: 'seed_dog_luna',
-    requesterId: 'seed_user_maya',
-    walkerId: 'seed_user_jordan',
-    startsAt: new Date('2026-07-04T14:30:00.000Z'),
-    durationMin: 60,
-    status: WalkStatus.REQUESTED,
-    notes: 'Bring water; Luna prefers shaded routes.'
-  },
-  {
-    id: 'seed_walk_3',
-    dogId: 'seed_dog_sadie',
-    requesterId: 'seed_user_elena',
-    walkerId: 'seed_user_adeja',
-    startsAt: new Date('2026-06-27T16:00:00.000Z'),
-    durationMin: 30,
-    status: WalkStatus.COMPLETED,
-    notes: 'Easy senior-dog pace.'
-  },
-  {
-    id: 'seed_walk_4',
-    dogId: 'seed_dog_rocky',
-    requesterId: 'seed_user_marcus',
-    walkerId: null,
-    startsAt: new Date('2026-07-06T11:00:00.000Z'),
-    durationMin: 40,
-    status: WalkStatus.REQUESTED,
-    notes: 'Rocky is leash trained and high energy.'
-  }
+  { id: 'seed_walk_1', dogId: 'seed_dog_buddy', requesterId: 'seed_user_adeja', walkerId: 'seed_user_maya', startsAt: new Date('2026-07-02T22:00:00.000Z'), durationMin: 45, status: WalkStatus.ACCEPTED, notes: 'Meet near the south entrance.' },
+  { id: 'seed_walk_2', dogId: 'seed_dog_luna', requesterId: 'seed_user_maya', walkerId: 'seed_user_jordan', startsAt: new Date('2026-07-04T14:30:00.000Z'), durationMin: 60, status: WalkStatus.REQUESTED, notes: 'Bring water.' }
 ];
 
 const messages = [
-  {
-    id: 'seed_message_1',
-    walkId: 'seed_walk_1',
-    senderId: 'seed_user_adeja',
-    body: 'Buddy will be ready at the south entrance.',
-    createdAt: new Date('2026-06-28T15:00:00.000Z')
-  },
-  {
-    id: 'seed_message_2',
-    walkId: 'seed_walk_1',
-    senderId: 'seed_user_maya',
-    body: 'Confirmed. I will bring an extra water bowl.',
-    createdAt: new Date('2026-06-28T15:05:00.000Z')
-  },
-  {
-    id: 'seed_message_3',
-    walkId: 'seed_walk_3',
-    senderId: 'seed_user_elena',
-    body: 'Thanks for keeping the pace comfortable for Sadie.',
-    createdAt: new Date('2026-06-27T17:00:00.000Z')
-  }
+  { id: 'seed_message_1', walkId: 'seed_walk_1', senderId: 'seed_user_adeja', body: 'Buddy will be ready.', createdAt: new Date('2026-06-28T15:00:00.000Z') },
+  { id: 'seed_message_2', walkId: 'seed_walk_1', senderId: 'seed_user_maya', body: 'Confirmed.', createdAt: new Date('2026-06-28T15:05:00.000Z') }
 ];
 
 const qrScans = [
-  {
-    id: 'seed_scan_1',
-    dogId: 'seed_dog_buddy',
-    latitude: 40.7361,
-    longitude: -74.1719,
-    userAgent: 'Buddies deterministic seed',
-    createdAt: new Date('2026-06-25T18:00:00.000Z')
-  },
-  {
-    id: 'seed_scan_2',
-    dogId: 'seed_dog_luna',
-    latitude: 40.7418,
-    longitude: -74.1682,
-    userAgent: 'Buddies deterministic seed',
-    createdAt: new Date('2026-06-26T19:30:00.000Z')
-  }
+  { id: 'seed_scan_1', dogId: 'seed_dog_buddy', latitude: 40.7361, longitude: -74.1719, userAgent: 'Buddies deterministic seed', createdAt: new Date('2026-06-25T18:00:00.000Z') }
 ];
 
 const sightings = [
-  {
-    id: 'seed_sighting_1',
-    dogId: 'seed_dog_max',
-    note: 'Test sighting near the park entrance.',
-    latitude: 40.7291,
-    longitude: -74.1825,
-    createdAt: new Date('2026-06-24T13:15:00.000Z')
-  }
+  { id: 'seed_sighting_1', dogId: 'seed_dog_max', note: 'Test sighting near the park entrance.', latitude: 40.7291, longitude: -74.1825, createdAt: new Date('2026-06-24T13:15:00.000Z') }
+];
+
+const friendships = [
+  { id: 'seed_friendship_1', requesterId: 'seed_user_adeja', addresseeId: 'seed_user_maya', status: FriendshipStatus.ACCEPTED, note: 'Frequent walk coordination.' },
+  { id: 'seed_friendship_2', requesterId: 'seed_user_jordan', addresseeId: 'seed_user_adeja', status: FriendshipStatus.PENDING, note: 'Nova and Buddy should meet.' },
+  { id: 'seed_friendship_3', requesterId: 'seed_user_adeja', addresseeId: 'seed_user_priya', status: FriendshipStatus.PENDING, note: 'Small dog meetup request.' },
+  { id: 'seed_friendship_4', requesterId: 'seed_user_elena', addresseeId: 'seed_user_adeja', status: FriendshipStatus.ACCEPTED, note: 'Senior-dog care network.' }
+];
+
+const packs = [
+  { id: 'seed_pack_branch_brook', name: 'Branch Brook Morning Pack', slug: 'branch-brook-morning-pack', description: 'Early walks, check-ins, and safe meetup coordination.', city: 'Newark, NJ', latitude: 40.7412, longitude: -74.1724, ownerId: 'seed_user_adeja' },
+  { id: 'seed_pack_small_buddies', name: 'Small Buddies Social', slug: 'small-buddies-social', description: 'Low-pressure social group for small and senior dogs.', city: 'Newark, NJ', latitude: 40.7244, longitude: -74.1591, ownerId: 'seed_user_priya' }
+];
+
+const packMemberships = [
+  { id: 'seed_membership_1', packId: 'seed_pack_branch_brook', userId: 'seed_user_adeja', dogId: 'seed_dog_buddy', role: PackRole.OWNER },
+  { id: 'seed_membership_2', packId: 'seed_pack_branch_brook', userId: 'seed_user_maya', dogId: 'seed_dog_luna', role: PackRole.MEMBER },
+  { id: 'seed_membership_3', packId: 'seed_pack_branch_brook', userId: 'seed_user_jordan', dogId: 'seed_dog_max', role: PackRole.MEMBER },
+  { id: 'seed_membership_4', packId: 'seed_pack_small_buddies', userId: 'seed_user_priya', dogId: 'seed_dog_teddy', role: PackRole.OWNER },
+  { id: 'seed_membership_5', packId: 'seed_pack_small_buddies', userId: 'seed_user_elena', dogId: 'seed_dog_sadie', role: PackRole.MODERATOR }
+];
+
+const packPosts = [
+  { id: 'seed_pack_post_1', packId: 'seed_pack_branch_brook', authorId: 'seed_user_adeja', kind: PackPostKind.MEETUP, title: 'Saturday group loop', body: 'Meet at the south entrance.', latitude: 40.7398, longitude: -74.1705, startsAt: new Date('2026-07-04T13:00:00.000Z') },
+  { id: 'seed_pack_post_2', packId: 'seed_pack_small_buddies', authorId: 'seed_user_priya', kind: PackPostKind.MEETUP, title: 'Small dog decompression walk', body: 'Short route with plenty of distance.', latitude: 40.723, longitude: -74.158, startsAt: new Date('2026-07-05T15:00:00.000Z') }
 ];
 
 async function seed() {
@@ -190,6 +81,10 @@ async function seed() {
   }
 
   await prisma.$transaction([
+    prisma.packPost.deleteMany(),
+    prisma.packMembership.deleteMany(),
+    prisma.pack.deleteMany(),
+    prisma.friendship.deleteMany(),
     prisma.message.deleteMany(),
     prisma.qrScan.deleteMany(),
     prisma.sighting.deleteMany(),
@@ -204,8 +99,12 @@ async function seed() {
   await prisma.message.createMany({ data: messages });
   await prisma.qrScan.createMany({ data: qrScans });
   await prisma.sighting.createMany({ data: sightings });
+  await prisma.friendship.createMany({ data: friendships });
+  await prisma.pack.createMany({ data: packs });
+  await prisma.packMembership.createMany({ data: packMemberships });
+  await prisma.packPost.createMany({ data: packPosts });
 
-  console.log(`Seed complete: ${users.length} users, ${dogs.length} dogs, ${walks.length} walks, ${messages.length} messages, ${qrScans.length} QR scans, ${sightings.length} sighting.`);
+  console.log('Seed complete.');
 }
 
 seed()
