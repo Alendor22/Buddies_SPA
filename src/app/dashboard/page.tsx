@@ -23,25 +23,32 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const dogs = await prisma.dog.findMany({
-    where: { ownerId: user.id },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      breed: true,
-      status: true,
-      photoUrl: true,
-      birthDate: true,
-      weightLbs: true,
-      temperament: true,
-      medicalNotes: true,
-      vaccinationNotes: true,
-      emergencyContact: true
-    }
-  });
+  const [dogs, buddyCounts] = await Promise.all([
+    prisma.dog.findMany({
+      where: { ownerId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        breed: true,
+        status: true,
+        photoUrl: true,
+        birthDate: true,
+        weightLbs: true,
+        temperament: true,
+        medicalNotes: true,
+        vaccinationNotes: true,
+        emergencyContact: true
+      }
+    }),
+    Promise.all([
+      prisma.buddy.count({ where: { OR: [{ userAId: user.id }, { userBId: user.id }] } }),
+      prisma.buddyRequest.count({ where: { receiverId: user.id, status: 'PENDING' } })
+    ]).catch(() => [0, 0])
+  ]);
 
+  const [buddyCount, incomingBuddyCount] = buddyCounts;
   const lostCount = dogs.filter((dog) => dog.status !== 'SAFE').length;
   const completeCount = dogs.filter((dog) => completeness(dog) >= 75).length;
 
@@ -49,12 +56,13 @@ export default async function DashboardPage() {
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.1</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2</p>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-2 text-slate-600">Signed in as {user.displayName}. Manage safety profiles, QR pages, and public dog records.</p>
+          <p className="mt-2 text-slate-600">Signed in as {user.displayName}. Manage dogs, QR pages, public safety records, and buddy connections.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/dogs/new" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link>
+          <Link href="/dashboard/buddies" className="rounded-lg border px-4 py-2">Buddies</Link>
           <Link href="/dogs" className="rounded-lg border px-4 py-2">Browse dogs</Link>
           <form action="/api/session/end" method="post">
             <button className="rounded-lg border px-4 py-2">Sign out</button>
@@ -62,11 +70,21 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-3">
+      <section className="mt-8 grid gap-4 sm:grid-cols-5">
         <article className="rounded-2xl border bg-white p-5 shadow-sm">
           <p className="text-sm font-medium text-slate-500">Profiles</p>
           <p className="mt-2 text-3xl font-bold">{dogs.length}</p>
           <p className="mt-1 text-sm text-slate-600">Dogs owned by this account</p>
+        </article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm">
+          <p className="text-sm font-medium text-slate-500">Buddies</p>
+          <p className="mt-2 text-3xl font-bold">{buddyCount}</p>
+          <p className="mt-1 text-sm text-slate-600">Trusted owner connections</p>
+        </article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm">
+          <p className="text-sm font-medium text-slate-500">Requests</p>
+          <p className="mt-2 text-3xl font-bold">{incomingBuddyCount}</p>
+          <p className="mt-1 text-sm text-slate-600">Incoming buddy requests</p>
         </article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm">
           <p className="text-sm font-medium text-slate-500">Safety alerts</p>
@@ -78,6 +96,16 @@ export default async function DashboardPage() {
           <p className="mt-2 text-3xl font-bold">{completeCount}</p>
           <p className="mt-1 text-sm text-slate-600">At least 75% complete</p>
         </article>
+      </section>
+
+      <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Buddy network</h2>
+            <p className="mt-1 text-slate-600">Send requests, accept incoming invitations, and manage trusted owners.</p>
+          </div>
+          <Link href="/dashboard/buddies" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Open buddies</Link>
+        </div>
       </section>
 
       <section className="mt-8">
@@ -115,13 +143,8 @@ export default async function DashboardPage() {
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${dog.status === 'SAFE' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}>{dog.status}</span>
                     </div>
                     <div className="mt-4">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>Profile completeness</span>
-                        <span>{percent}%</span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-slate-900" style={{ width: `${percent}%` }} />
-                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-500"><span>Profile completeness</span><span>{percent}%</span></div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-900" style={{ width: `${percent}%` }} /></div>
                     </div>
                     <div className="mt-5 grid grid-cols-3 gap-2 text-center text-sm">
                       <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-3 py-2">Profile</Link>
@@ -134,17 +157,6 @@ export default async function DashboardPage() {
             })}
           </div>
         )}
-      </section>
-
-      <section className="mt-10 grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">v2.1 stabilization</h2>
-          <p className="mt-2 text-slate-600">Focus: stable profile CRUD, QR page flow, mobile UX, and safer public pages before Buddy requests and Packs.</p>
-        </article>
-        <article className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">Next layer</h2>
-          <p className="mt-2 text-slate-600">Buddy requests, Packs, messaging, and nearby map discovery follow after this release is stable.</p>
-        </article>
       </section>
     </main>
   );
