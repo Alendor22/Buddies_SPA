@@ -1,22 +1,68 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server';
+import { DogStatus } from '@prisma/client';
+import { getCurrentUser, slugify } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-const dogSchema = z.object({
-  ownerId: z.string().min(1),
-  name: z.string().min(1).max(80),
-  slug: z.string().regex(/^[a-z0-9-]+$/),
-  breed: z.string().max(120).optional()
-});
+function bool(value: FormDataEntryValue | null) {
+  return value === 'on' || value === 'true';
+}
+
+async function uniqueSlug(name: string) {
+  const base = slugify(name) || 'dog';
+  let slug = base;
+  let index = 2;
+
+  while (await prisma.dog.findUnique({ where: { slug }, select: { id: true } })) {
+    slug = `${base}-${index}`;
+    index += 1;
+  }
+
+  return slug;
+}
 
 export async function GET() {
-  const dogs = await prisma.dog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 });
+  const dogs = await prisma.dog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    include: { owner: { select: { id: true, displayName: true } } }
+  });
   return NextResponse.json({ data: dogs });
 }
 
-export async function POST(request: Request) {
-  const parsed = dogSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const dog = await prisma.dog.create({ data: parsed.data });
-  return NextResponse.json({ data: dog }, { status: 201 });
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
+
+  const formData = await request.formData();
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return NextResponse.redirect(new URL('/dogs/new?error=name', request.url));
+
+  const birthDateRaw = String(formData.get('birthDate') ?? '').trim();
+  const weightRaw = String(formData.get('weightLbs') ?? '').trim();
+  const statusRaw = String(formData.get('status') ?? 'SAFE') as keyof typeof DogStatus;
+
+  const dog = await prisma.dog.create({
+    data: {
+      ownerId: user.id,
+      name,
+      slug: await uniqueSlug(name),
+      breed: String(formData.get('breed') ?? '').trim() || null,
+      birthDate: birthDateRaw ? new Date(`${birthDateRaw}T12:00:00.000Z`) : null,
+      weightLbs: weightRaw ? Number(weightRaw) : null,
+      gender: String(formData.get('gender') ?? '').trim() || null,
+      photoUrl: String(formData.get('photoUrl') ?? '').trim() || null,
+      status: DogStatus[statusRaw] ?? DogStatus.SAFE,
+      temperament: String(formData.get('temperament') ?? '').trim() || null,
+      medicalNotes: String(formData.get('medicalNotes') ?? '').trim() || null,
+      vaccinationNotes: String(formData.get('vaccinationNotes') ?? '').trim() || null,
+      emergencyContact: String(formData.get('emergencyContact') ?? '').trim() || null,
+      spayedNeutered: bool(formData.get('spayedNeutered')),
+      friendlyDogs: bool(formData.get('friendlyDogs')),
+      friendlyCats: bool(formData.get('friendlyCats')),
+      friendlyChildren: bool(formData.get('friendlyChildren'))
+    },
+    select: { slug: true }
+  });
+
+  return NextResponse.redirect(new URL(`/dogs/${dog.slug}`, request.url));
 }
