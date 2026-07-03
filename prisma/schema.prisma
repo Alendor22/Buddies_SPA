@@ -53,7 +53,7 @@ model Dog {
   owner            User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name             String
   slug             String      @unique
-  publicId         String      @unique @default(cuid())
+  publicId         String?     @unique @default(cuid())
   breed            String?
   birthDate        DateTime?
   weightLbs        Int?
