@@ -1,19 +1,15 @@
 import QRCode from 'qrcode';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import DogQrActions from '@/components/DogQrActions';
-import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DogQrPage({ params }: { params: Promise<{ slug: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/auth/login');
-
   const { slug } = await params;
   const dog = await prisma.dog.findFirst({
-    where: { slug, ownerId: user.id },
+    where: { slug },
     select: { id: true, publicId: true, slug: true, name: true }
   });
 
@@ -38,7 +34,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 print:max-w-none print:px-0">
       <div className="print:text-center">
-        <p className="text-sm font-medium text-slate-500 print:hidden">Buddies V2</p>
+        <p className="text-sm font-medium text-slate-500 print:hidden">Buddies V2.2 QR No-Auth Fix</p>
         <h1 className="text-3xl font-bold">Code for {dog.name}</h1>
         <p className="mt-2 text-slate-600 print:hidden">Use this page to open the public profile code.</p>
       </div>
@@ -47,7 +43,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
         <div className="flex justify-center overflow-hidden rounded-xl border bg-white p-4 print:border-0" dangerouslySetInnerHTML={{ __html: responsiveSvg }} />
         <p className="mt-3 break-all text-center text-sm text-slate-500">{publicUrl}</p>
         <DogQrActions dogName={dog.name} publicUrl={publicUrl} svg={svg} />
-        <Link href={`/dogs/${dog.slug}/edit`} className="mt-3 block rounded-lg border px-4 py-3 text-center print:hidden">Back to edit</Link>
+        <Link href="/dashboard" className="mt-3 block rounded-lg border px-4 py-3 text-center print:hidden">Back to dashboard</Link>
       </section>
     </main>
   );
