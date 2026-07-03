@@ -39,6 +39,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
 
   const publicId = dog.publicId ?? dog.id;
   const publicUrl = `/dogs/${dog.slug}`;
+  const qrUrl = `https://buddies.vercel.app/api/qr/${encodeURIComponent(publicId)}`;
   const birthDate = dog.birthDate ? dog.birthDate.toISOString().slice(0, 10) : '';
 
   return (
@@ -60,7 +61,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
         <p className="mt-2 break-all text-slate-600">{publicUrl}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href={publicUrl} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Open public page</Link>
-          <Link href={`/api/qr/${publicId}`} className="rounded-lg border px-4 py-2">Open QR SVG</Link>
+          <a href={qrUrl} className="rounded-lg border px-4 py-2">Open QR SVG</a>
         </div>
       </section>
 
