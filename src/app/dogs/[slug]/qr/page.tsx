@@ -48,7 +48,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
         <p className="mt-3 break-all text-center text-sm text-slate-500">{publicUrl}</p>
         <div className="mt-6 grid gap-3">
           <Link href={publicPath} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open public page</Link>
-          <Link href={qrUrl} className="rounded-lg border px-4 py-3 text-center">Open SVG</Link>
+          <a href={absoluteQrUrl} className="block rounded-lg border px-4 py-3 text-center">Open SVG</a>
           <p className="break-all text-xs text-slate-500">SVG URL: {absoluteQrUrl}</p>
           <Link href={`/dogs/${dog.slug}/edit`} className="rounded-lg border px-4 py-3 text-center">Back to edit</Link>
         </div>
