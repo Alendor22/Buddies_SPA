@@ -11,6 +11,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
   if (!dog && slug !== 'demo') notFound();
 
   const profile = dog ?? {
+    id: 'demo',
     publicId: 'demo-buddy',
     name: 'Buddy',
     breed: 'Mixed breed',
@@ -40,7 +41,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
       <article className="overflow-hidden rounded-3xl border bg-white shadow-sm">
         {profile.photoUrl ? <img src={profile.photoUrl} alt={`${profile.name} profile`} className="h-72 w-full object-cover" /> : null}
         <div className="p-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Public dog ID · {profile.publicId}</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Public dog ID · {profile.publicId ?? profile.id}</p>
           <h1 className="mt-2 text-4xl font-bold">{profile.name}</h1>
           <p className="mt-2 text-slate-600">{profile.breed ?? 'Breed not listed'} · Owner: {profile.owner.displayName}</p>
 
