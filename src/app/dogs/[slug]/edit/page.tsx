@@ -10,10 +10,35 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
   if (!user) redirect('/auth/login');
 
   const { slug } = await params;
-  const dog = await prisma.dog.findFirst({ where: { slug, ownerId: user.id } });
+  const dog = await prisma.dog.findFirst({
+    where: { slug, ownerId: user.id },
+    select: {
+      id: true,
+      publicId: true,
+      slug: true,
+      name: true,
+      breed: true,
+      birthDate: true,
+      weightLbs: true,
+      gender: true,
+      photoUrl: true,
+      status: true,
+      temperament: true,
+      medicalNotes: true,
+      vaccinationNotes: true,
+      emergencyContact: true,
+      latitude: true,
+      longitude: true,
+      spayedNeutered: true,
+      friendlyDogs: true,
+      friendlyCats: true,
+      friendlyChildren: true
+    }
+  });
   if (!dog) notFound();
 
-  const publicUrl = `/d/${dog.publicId ?? dog.id}`;
+  const publicId = dog.publicId ?? dog.id;
+  const publicUrl = `/d/${publicId}`;
   const birthDate = dog.birthDate ? dog.birthDate.toISOString().slice(0, 10) : '';
 
   return (
@@ -22,7 +47,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
         <div>
           <p className="text-sm font-medium text-slate-500">Buddies V2</p>
           <h1 className="text-3xl font-bold">Edit {dog.name}</h1>
-          <p className="mt-2 text-slate-600">Manage profile data, QR identity, and lost dog mode.</p>
+          <p className="mt-2 text-slate-600">Manage profile data and public identity.</p>
         </div>
         <div className="flex gap-2">
           <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-4 py-2">Public page</Link>
@@ -30,37 +55,13 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm md:grid-cols-[180px_1fr]">
-        <div className="rounded-xl bg-slate-50 p-4 text-center">
-          <img src={`/api/qr/${dog.publicId ?? dog.id}`} alt="Dog QR code" className="mx-auto h-36 w-36" />
+      <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold">Public identity</h2>
+        <p className="mt-2 break-all text-slate-600">{publicUrl}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={publicUrl} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Open public page</Link>
+          <Link href={`/api/qr/${publicId}`} className="rounded-lg border px-4 py-2">Open QR SVG</Link>
         </div>
-        <div>
-          <h2 className="text-xl font-semibold">Public QR identity</h2>
-          <p className="mt-2 break-all text-slate-600">{publicUrl}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href={publicUrl} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Open QR page</Link>
-            <Link href={`/api/qr/${dog.publicId ?? dog.id}`} className="rounded-lg border px-4 py-2">Download QR SVG</Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold">Lost dog mode</h2>
-        <form action="/api/dogs/manage" method="post" className="mt-4 grid gap-4">
-          <input type="hidden" name="id" value={dog.id} />
-          <input type="hidden" name="_intent" value="lost" />
-          <label className="grid gap-2 text-sm font-medium">Last seen location<input name="lastSeenLocation" defaultValue={dog.lastSeenLocation ?? ''} className="rounded-lg border px-3 py-3 text-base" /></label>
-          <label className="grid gap-2 text-sm font-medium">Reward<input name="lostReward" defaultValue={dog.lostReward ?? ''} className="rounded-lg border px-3 py-3 text-base" /></label>
-          <label className="grid gap-2 text-sm font-medium">Lost notes<textarea name="lostNotes" defaultValue={dog.lostNotes ?? ''} rows={3} className="rounded-lg border px-3 py-3 text-base" /></label>
-          <button className="rounded-lg bg-red-700 px-5 py-3 font-medium text-white">Mark as LOST</button>
-        </form>
-        {dog.status === 'LOST' ? (
-          <form action="/api/dogs/manage" method="post" className="mt-3">
-            <input type="hidden" name="id" value={dog.id} />
-            <input type="hidden" name="_intent" value="safe" />
-            <button className="rounded-lg border px-5 py-3 font-medium">Mark as SAFE</button>
-          </form>
-        ) : null}
       </section>
 
       <form action="/api/dogs/manage" method="post" className="mt-6 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
@@ -88,14 +89,6 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
           <label className="flex items-center gap-3"><input name="friendlyChildren" type="checkbox" defaultChecked={dog.friendlyChildren} /> Friendly with children</label>
         </fieldset>
         <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Save changes</button>
-      </form>
-
-      <form action="/api/dogs/manage" method="post" className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
-        <input type="hidden" name="id" value={dog.id} />
-        <input type="hidden" name="_intent" value="remove" />
-        <h2 className="text-xl font-semibold text-red-800">Remove profile</h2>
-        <p className="mt-2 text-red-700">This removes this dog and related records from your account.</p>
-        <button className="mt-4 rounded-lg bg-red-700 px-5 py-3 font-medium text-white">Remove dog</button>
       </form>
     </main>
   );
