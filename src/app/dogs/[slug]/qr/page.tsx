@@ -22,6 +22,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
   const publicPath = `/dogs/${dog.slug}`;
   const publicUrl = `https://buddies.vercel.app${publicPath}`;
   const qrUrl = `/api/qr/${encodeURIComponent(qrId)}`;
+  const absoluteQrUrl = `https://buddies.vercel.app${qrUrl}`;
 
   const svg = await QRCode.toString(publicUrl, {
     type: 'svg',
@@ -47,7 +48,8 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
         <p className="mt-3 break-all text-center text-sm text-slate-500">{publicUrl}</p>
         <div className="mt-6 grid gap-3">
           <Link href={publicPath} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open public page</Link>
-          <a href={qrUrl} target="_blank" rel="noreferrer" className="rounded-lg border px-4 py-3 text-center">Open SVG</a>
+          <Link href={qrUrl} className="rounded-lg border px-4 py-3 text-center">Open SVG</Link>
+          <p className="break-all text-xs text-slate-500">SVG URL: {absoluteQrUrl}</p>
           <Link href={`/dogs/${dog.slug}/edit`} className="rounded-lg border px-4 py-3 text-center">Back to edit</Link>
         </div>
       </section>
