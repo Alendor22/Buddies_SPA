@@ -6,7 +6,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div>
-        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Real Login</p>
+        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Real Login Deploy Check</p>
         <h1 className="mt-2 text-3xl font-bold">Sign in</h1>
         <p className="mt-2 text-slate-600">Access your dogs, QR profiles, dashboard, and public safety records.</p>
       </div>
