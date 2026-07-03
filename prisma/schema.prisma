@@ -37,12 +37,15 @@ model User {
   emailVerifiedAt DateTime?
   avatarUrl       String?
   bio             String?
+  city            String?
+  phone           String?
   latitude        Float?
   longitude       Float?
   dogs            Dog[]
   sentWalks       Walk[]    @relation("RequesterWalks")
   assignedWalks   Walk[]    @relation("WalkerWalks")
   messages        Message[]
+  vetRecords      VetRecord[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -64,6 +67,10 @@ model Dog {
   medicalNotes     String?
   vaccinationNotes String?
   emergencyContact String?
+  lostSince        DateTime?
+  lastSeenLocation String?
+  lostReward       String?
+  lostNotes        String?
   spayedNeutered   Boolean     @default(false)
   friendlyDogs     Boolean     @default(true)
   friendlyCats     Boolean     @default(false)
@@ -73,6 +80,7 @@ model Dog {
   qrScans          QrScan[]
   sightings        Sighting[]
   walks            Walk[]
+  vetRecords       VetRecord[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
@@ -135,4 +143,22 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([walkId, createdAt])
+}
+
+model VetRecord {
+  id          String   @id @default(cuid())
+  dogId       String
+  dog         Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title       String
+  recordType  String?
+  notes       String?
+  documentUrl String?
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dogId, dueAt])
+  @@index([ownerId])
 }
