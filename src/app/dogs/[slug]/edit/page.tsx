@@ -38,7 +38,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
   if (!dog) notFound();
 
   const publicId = dog.publicId ?? dog.id;
-  const publicUrl = `/d/${publicId}`;
+  const publicUrl = `/dogs/${dog.slug}`;
   const birthDate = dog.birthDate ? dog.birthDate.toISOString().slice(0, 10) : '';
 
   return (
@@ -50,7 +50,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
           <p className="mt-2 text-slate-600">Manage profile data and public identity.</p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-4 py-2">Public page</Link>
+          <Link href={publicUrl} className="rounded-lg border px-4 py-2">Public page</Link>
           <Link href="/dashboard" className="rounded-lg border px-4 py-2">Dashboard</Link>
         </div>
       </div>
