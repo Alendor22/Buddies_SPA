@@ -6,7 +6,29 @@ export const dynamic = 'force-dynamic';
 
 export default async function DogProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const dog = slug === 'demo' ? null : await prisma.dog.findUnique({ where: { slug }, include: { owner: true } });
+  const dog = slug === 'demo' ? null : await prisma.dog.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      publicId: true,
+      name: true,
+      breed: true,
+      status: true,
+      photoUrl: true,
+      birthDate: true,
+      weightLbs: true,
+      gender: true,
+      temperament: true,
+      medicalNotes: true,
+      vaccinationNotes: true,
+      emergencyContact: true,
+      spayedNeutered: true,
+      friendlyDogs: true,
+      friendlyCats: true,
+      friendlyChildren: true,
+      owner: { select: { displayName: true } }
+    }
+  });
 
   if (!dog && slug !== 'demo') notFound();
 
