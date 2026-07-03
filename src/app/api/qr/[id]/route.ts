@@ -61,8 +61,9 @@ export async function GET(
     ...options,
     type: 'png'
   });
+  const pngBody = new Uint8Array(png.buffer, png.byteOffset, png.byteLength);
 
-  return new Response(png, {
+  return new Response(pngBody, {
     status: 200,
     headers: {
       'Content-Type': 'image/png',
