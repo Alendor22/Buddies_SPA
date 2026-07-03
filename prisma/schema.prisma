@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
+enum UserRole {
+  OWNER
+  WALKER
+  ADMIN
+}
+
 enum DogStatus {
   SAFE
   LOST
@@ -23,19 +29,22 @@ enum WalkStatus {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  displayName   String
-  avatarUrl     String?
-  bio           String?
-  latitude      Float?
-  longitude     Float?
-  dogs          Dog[]
-  sentWalks     Walk[]    @relation("RequesterWalks")
-  assignedWalks Walk[]    @relation("WalkerWalks")
-  messages      Message[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  displayName     String
+  passwordHash    String?
+  role            UserRole  @default(OWNER)
+  emailVerifiedAt DateTime?
+  avatarUrl       String?
+  bio             String?
+  latitude        Float?
+  longitude       Float?
+  dogs            Dog[]
+  sentWalks       Walk[]    @relation("RequesterWalks")
+  assignedWalks   Walk[]    @relation("WalkerWalks")
+  messages        Message[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Dog {
@@ -44,12 +53,21 @@ model Dog {
   owner            User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name             String
   slug             String      @unique
+  publicId         String      @unique @default(cuid())
   breed            String?
   birthDate        DateTime?
+  weightLbs        Int?
+  gender           String?
   photoUrl         String?
   status           DogStatus   @default(SAFE)
+  temperament      String?
   medicalNotes     String?
+  vaccinationNotes String?
   emergencyContact String?
+  spayedNeutered   Boolean     @default(false)
+  friendlyDogs     Boolean     @default(true)
+  friendlyCats     Boolean     @default(false)
+  friendlyChildren Boolean     @default(true)
   latitude         Float?
   longitude        Float?
   qrScans          QrScan[]
@@ -60,6 +78,7 @@ model Dog {
 
   @@index([ownerId])
   @@index([status])
+  @@index([publicId])
 }
 
 model QrScan {
