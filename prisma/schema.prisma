@@ -28,26 +28,37 @@ enum WalkStatus {
   CANCELLED
 }
 
+enum BuddyRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  displayName     String
-  passwordHash    String?
-  role            UserRole  @default(OWNER)
-  emailVerifiedAt DateTime?
-  avatarUrl       String?
-  bio             String?
-  city            String?
-  phone           String?
-  latitude        Float?
-  longitude       Float?
-  dogs            Dog[]
-  sentWalks       Walk[]    @relation("RequesterWalks")
-  assignedWalks   Walk[]    @relation("WalkerWalks")
-  messages        Message[]
-  vetRecords      VetRecord[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                    String         @id @default(cuid())
+  email                 String         @unique
+  displayName           String
+  passwordHash          String?
+  role                  UserRole       @default(OWNER)
+  emailVerifiedAt       DateTime?
+  avatarUrl             String?
+  bio                   String?
+  city                  String?
+  phone                 String?
+  latitude              Float?
+  longitude             Float?
+  dogs                  Dog[]
+  sentWalks             Walk[]         @relation("RequesterWalks")
+  assignedWalks         Walk[]         @relation("WalkerWalks")
+  messages              Message[]
+  vetRecords            VetRecord[]
+  sentBuddyRequests     BuddyRequest[] @relation("SentBuddyRequests")
+  receivedBuddyRequests BuddyRequest[] @relation("ReceivedBuddyRequests")
+  buddyLinksA           Buddy[]        @relation("BuddyUserA")
+  buddyLinksB           Buddy[]        @relation("BuddyUserB")
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 }
 
 model Dog {
@@ -87,6 +98,36 @@ model Dog {
   @@index([ownerId])
   @@index([status])
   @@index([publicId])
+}
+
+model BuddyRequest {
+  id          String              @id @default(cuid())
+  senderId    String
+  receiverId  String
+  sender      User                @relation("SentBuddyRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User                @relation("ReceivedBuddyRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  status      BuddyRequestStatus  @default(PENDING)
+  message     String?
+  respondedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@index([senderId, status])
+}
+
+model Buddy {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  userA     User     @relation("BuddyUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("BuddyUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
 }
 
 model QrScan {
