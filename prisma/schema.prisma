@@ -22,20 +22,45 @@ enum WalkStatus {
   CANCELLED
 }
 
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+enum PackRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum PackPostKind {
+  UPDATE
+  WALK_REQUEST
+  MEETUP
+  ALERT
+}
+
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  displayName   String
-  avatarUrl     String?
-  bio           String?
-  latitude      Float?
-  longitude     Float?
-  dogs          Dog[]
-  sentWalks     Walk[]    @relation("RequesterWalks")
-  assignedWalks Walk[]    @relation("WalkerWalks")
-  messages      Message[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String        @id @default(cuid())
+  email               String        @unique
+  displayName         String
+  avatarUrl           String?
+  bio                 String?
+  latitude            Float?
+  longitude           Float?
+  dogs                Dog[]
+  sentWalks           Walk[]        @relation("RequesterWalks")
+  assignedWalks       Walk[]        @relation("WalkerWalks")
+  messages            Message[]
+  sentFriendships     Friendship[]  @relation("FriendshipRequester")
+  receivedFriendships Friendship[]  @relation("FriendshipAddressee")
+  ownedPacks          Pack[]        @relation("PackOwner")
+  packMemberships     PackMembership[]
+  packPosts           PackPost[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 }
 
 model Dog {
@@ -55,6 +80,7 @@ model Dog {
   qrScans          QrScan[]
   sightings        Sighting[]
   walks            Walk[]
+  packMemberships  PackMembership[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
@@ -116,4 +142,74 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([walkId, createdAt])
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String
+  addresseeId String
+  requester   User             @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User             @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  note        String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+}
+
+model Pack {
+  id          String           @id @default(cuid())
+  name        String
+  slug        String           @unique
+  description String?
+  city        String?
+  latitude    Float?
+  longitude   Float?
+  ownerId     String?
+  owner       User?            @relation("PackOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  memberships PackMembership[]
+  posts       PackPost[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([city])
+  @@index([ownerId])
+}
+
+model PackMembership {
+  id        String   @id @default(cuid())
+  packId    String
+  userId    String
+  dogId     String?
+  role      PackRole @default(MEMBER)
+  pack      Pack     @relation(fields: [packId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dog       Dog?     @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([packId, userId])
+  @@index([userId])
+  @@index([dogId])
+}
+
+model PackPost {
+  id        String       @id @default(cuid())
+  packId    String
+  authorId  String
+  kind      PackPostKind @default(UPDATE)
+  title     String
+  body      String?
+  latitude  Float?
+  longitude Float?
+  startsAt  DateTime?
+  pack      Pack         @relation(fields: [packId], references: [id], onDelete: Cascade)
+  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([packId, createdAt])
+  @@index([authorId])
 }
