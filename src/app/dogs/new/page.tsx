@@ -7,7 +7,7 @@ export default async function NewDogPage({ searchParams }: { searchParams: Promi
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog No-Auth Fix</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog GET Fix</p>
           <h1 className="mt-1 text-3xl font-bold">Add dog</h1>
           <p className="mt-2 text-slate-600">Create a public safety profile with identifying details, health notes, and emergency contact information.</p>
         </div>
@@ -18,7 +18,8 @@ export default async function NewDogPage({ searchParams }: { searchParams: Promi
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">A dog name is required.</div>
       ) : null}
 
-      <form action="/api/dogs" method="post" className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
+      <form action="/api/dogs" method="get" className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
+        <input type="hidden" name="create" value="1" />
         <section>
           <h2 className="text-xl font-semibold">Core profile</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -45,7 +46,7 @@ export default async function NewDogPage({ searchParams }: { searchParams: Promi
           <label className="flex items-center gap-3"><input name="friendlyChildren" type="checkbox" defaultChecked /> Friendly with children</label>
         </fieldset>
 
-        <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create dog profile</button>
+        <button type="submit" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create dog profile</button>
       </form>
     </main>
   );
