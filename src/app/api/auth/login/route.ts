@@ -1,52 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash } from 'node:crypto';
-import { normalizeEmail, verifyPassword } from '@/lib/auth';
+import { createSession, normalizeEmail, verifyPassword } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-const SESSION_COOKIE = 'buddies_session';
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-
-function signSession(userId: string) {
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'dev-only-buddies-secret';
-  return createHash('sha256').update(`${userId}.${secret}`).digest('hex');
+function escapeHtml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-function encodeSession(userId: string) {
-  return Buffer.from(JSON.stringify({ userId, signature: signSession(userId) })).toString('base64url');
+function html(title: string, message: string, href: string, linkText: string, status = 200) {
+  return new NextResponse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="0;url=${escapeHtml(href)}"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui;margin:0;min-height:100vh;display:grid;place-items:center;background:#f8fafc;color:#0f172a;padding:24px}main{max-width:520px;background:white;border:1px solid #e2e8f0;border-radius:24px;padding:28px}a{display:inline-block;margin-top:16px;background:#0f172a;color:white;text-decoration:none;border-radius:14px;padding:14px 18px}</style></head><body><main><p>Buddies V2.2 Real Login Confirm Fix</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><a href="${escapeHtml(href)}">${escapeHtml(linkText)}</a></main></body></html>`, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
+  });
 }
 
-async function completeLogin(request: NextRequest, emailRaw: string, password: string) {
+async function completeLogin(emailRaw: string, password: string) {
   const email = normalizeEmail(emailRaw);
-
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, passwordHash: true }
+    select: { id: true, displayName: true, passwordHash: true }
   });
 
   if (!user || !verifyPassword(password, user.passwordHash)) {
-    return NextResponse.redirect(new URL('/auth/login?error=invalid', request.url), { status: 303 });
+    return html('Invalid credentials', 'The email or password did not match.', '/auth/login?error=invalid', 'Back to sign in', 401);
   }
 
-  const response = NextResponse.redirect(new URL('/dashboard', request.url), { status: 303 });
-  response.cookies.set(SESSION_COOKIE, encodeSession(user.id), {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: SESSION_MAX_AGE_SECONDS,
-    path: '/'
-  });
-  return response;
+  await createSession(user.id);
+  return html('Signed in', `Signed in as ${user.displayName}. Opening the dashboard now.`, '/dashboard', 'Open dashboard');
 }
 
 export async function GET(request: NextRequest) {
-  const email = request.nextUrl.searchParams.get('email') ?? '';
-  const password = request.nextUrl.searchParams.get('password') ?? '';
-  return completeLogin(request, email, password);
+  return completeLogin(request.nextUrl.searchParams.get('email') ?? '', request.nextUrl.searchParams.get('password') ?? '');
 }
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
-  const email = String(formData.get('email') ?? '');
-  const password = String(formData.get('password') ?? '');
-  return completeLogin(request, email, password);
+  return completeLogin(String(formData.get('email') ?? ''), String(formData.get('password') ?? ''));
 }
