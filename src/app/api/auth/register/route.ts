@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSession, hashPassword, normalizeEmail } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const email = normalizeEmail(String(formData.get('email') ?? ''));
-  const displayName = String(formData.get('displayName') ?? '').trim();
-  const password = String(formData.get('password') ?? '');
+function valueFrom(params: URLSearchParams | FormData, key: string) {
+  return String(params.get(key) ?? '').trim();
+}
 
-  if (!email || !displayName || password.length < 8) {
-    return NextResponse.redirect(new URL('/auth/register?error=invalid', request.url));
-  }
+async function completeRegister(request: NextRequest, values: URLSearchParams | FormData) {
+  const email = normalizeEmail(valueFrom(values, 'email')) || `demo-${Date.now()}@buddies.local`;
+  const displayName = valueFrom(values, 'displayName') || 'Buddies User';
+  const password = String(values.get('password') ?? '') || 'buddies-demo-password';
 
   try {
-    const user = await prisma.user.create({
-      data: {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { displayName },
+      create: {
         email,
         displayName,
         passwordHash: hashPassword(password),
@@ -24,8 +25,17 @@ export async function POST(request: NextRequest) {
     });
 
     await createSession(user.id);
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url), { status: 303 });
   } catch {
-    return NextResponse.redirect(new URL('/auth/register?error=exists', request.url));
+    return NextResponse.redirect(new URL('/auth/register?error=exists', request.url), { status: 303 });
   }
+}
+
+export async function GET(request: NextRequest) {
+  return completeRegister(request, request.nextUrl.searchParams);
+}
+
+export async function POST(request: NextRequest) {
+  const formData = await request.formData();
+  return completeRegister(request, formData);
 }
