@@ -1,34 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession, hashPassword, normalizeEmail } from '@/lib/auth';
+import { encodeSession, hashPassword, normalizeEmail, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 function valueFrom(params: URLSearchParams | FormData, key: string) {
   return String(params.get(key) ?? '').trim();
 }
 
+function redirectTo(request: NextRequest, path: string) {
+  return NextResponse.redirect(new URL(path, request.url), { status: 303 });
+}
+
 async function completeRegister(request: NextRequest, values: URLSearchParams | FormData) {
-  const email = normalizeEmail(valueFrom(values, 'email')) || `demo-${Date.now()}@buddies.local`;
-  const displayName = valueFrom(values, 'displayName') || 'Buddies User';
-  const password = String(values.get('password') ?? '') || 'buddies-demo-password';
+  const email = normalizeEmail(valueFrom(values, 'email'));
+  const displayName = valueFrom(values, 'displayName');
+  const password = String(values.get('password') ?? '');
 
-  try {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { displayName },
-      create: {
-        email,
-        displayName,
-        passwordHash: hashPassword(password),
-        emailVerifiedAt: new Date()
-      },
-      select: { id: true }
-    });
-
-    await createSession(user.id);
-    return NextResponse.redirect(new URL('/dashboard', request.url), { status: 303 });
-  } catch {
-    return NextResponse.redirect(new URL('/auth/register?error=exists', request.url), { status: 303 });
+  if (!email || !displayName || password.length < 8) {
+    return redirectTo(request, '/auth/register?error=invalid');
   }
+
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) return redirectTo(request, '/auth/register?error=exists');
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      displayName,
+      passwordHash: hashPassword(password),
+      emailVerifiedAt: new Date()
+    },
+    select: { id: true }
+  });
+
+  const response = redirectTo(request, '/dashboard');
+  response.cookies.set(SESSION_COOKIE, encodeSession(user.id), sessionCookieOptions());
+  return response;
 }
 
 export async function GET(request: NextRequest) {
@@ -36,6 +42,5 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  return completeRegister(request, formData);
+  return completeRegister(request, await request.formData());
 }
