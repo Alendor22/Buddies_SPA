@@ -5,42 +5,40 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const currentUser = await getCurrentUser();
-  const seededUser = currentUser ?? await prisma.user.findFirst({
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
+        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Milestone 3 Cloudflare Access</p>
+        <h1 className="mt-2 text-3xl font-bold">Account required</h1>
+        <p className="mt-3 text-slate-600">Use Cloudflare Access in front of this app, or create/sign in with the fallback form.</p>
+        <Link href="/auth/login" className="mt-6 rounded-lg bg-slate-900 px-5 py-3 text-center font-medium text-white">Sign in</Link>
+        <Link href="/auth/register" className="mt-3 rounded-lg border px-5 py-3 text-center font-medium">Create account</Link>
+      </main>
+    );
+  }
+
+  const dogs = await prisma.dog.findMany({
+    where: { ownerId: user.id },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, email: true, displayName: true, role: true }
+    select: { id: true, name: true, slug: true, breed: true, status: true }
   });
 
-  const isRealSession = Boolean(currentUser);
-  const user = seededUser
-    ? { ...seededUser, role: seededUser.role.toString() }
-    : { id: '', email: 'demo@buddies.local', displayName: 'Demo User', role: 'OWNER' };
+  const [buddyCount, incomingBuddyCount] = await Promise.all([
+    prisma.buddy.count({ where: { OR: [{ userAId: user.id }, { userBId: user.id }] } }),
+    prisma.buddyRequest.count({ where: { receiverId: user.id, status: 'PENDING' } })
+  ]).catch(() => [0, 0]);
 
-  const dogs = user.id
-    ? await prisma.dog.findMany({
-        where: { ownerId: user.id },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, name: true, slug: true, breed: true, status: true }
-      })
-    : [];
-
-  const buddyCounts = user.id
-    ? await Promise.all([
-        prisma.buddy.count({ where: { OR: [{ userAId: user.id }, { userBId: user.id }] } }),
-        prisma.buddyRequest.count({ where: { receiverId: user.id, status: 'PENDING' } })
-      ]).catch(() => [0, 0])
-    : [0, 0];
-
-  const [buddyCount, incomingBuddyCount] = buddyCounts;
   const lostCount = dogs.filter((dog) => dog.status !== 'SAFE').length;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Latest Account Dashboard</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Milestone 3 Account-Bound Dashboard</p>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-2 text-slate-600">{isRealSession ? `Signed in as ${user.displayName}.` : `Using latest account: ${user.displayName} (${user.email}).`} Manage dogs, QR pages, public safety records, and buddy connections.</p>
+          <p className="mt-2 text-slate-600">Signed in as {user.displayName} ({user.email}). Manage dogs, QR pages, public safety records, and buddy connections.</p>
         </div>
         <div className="flex flex-wrap gap-2"><Link href="/dogs/new" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link><Link href="/dashboard/buddies" className="rounded-lg border px-4 py-2">Buddies</Link><Link href="/dogs" className="rounded-lg border px-4 py-2">Browse dogs</Link></div>
       </div>
