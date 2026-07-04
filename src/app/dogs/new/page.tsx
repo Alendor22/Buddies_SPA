@@ -1,18 +1,13 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth';
 
 export default async function NewDogPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/auth/login');
-
   const { error } = await searchParams;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.1</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog No-Auth Fix</p>
           <h1 className="mt-1 text-3xl font-bold">Add dog</h1>
           <p className="mt-2 text-slate-600">Create a public safety profile with identifying details, health notes, and emergency contact information.</p>
         </div>
