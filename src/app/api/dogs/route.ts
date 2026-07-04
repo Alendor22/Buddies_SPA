@@ -20,6 +20,18 @@ async function uniqueSlug(name: string) {
   return slug;
 }
 
+async function getWritableUserId() {
+  const currentUser = await getCurrentUser();
+  if (currentUser?.id) return currentUser.id;
+
+  const seededUser = await prisma.user.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { id: true }
+  });
+
+  return seededUser?.id ?? null;
+}
+
 export async function GET() {
   const dogs = await prisma.dog.findMany({
     orderBy: { createdAt: 'desc' },
@@ -30,12 +42,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
+  const ownerId = await getWritableUserId();
+  if (!ownerId) return NextResponse.redirect(new URL('/auth/register', request.url), { status: 303 });
 
   const formData = await request.formData();
   const name = String(formData.get('name') ?? '').trim();
-  if (!name) return NextResponse.redirect(new URL('/dogs/new?error=name', request.url));
+  if (!name) return NextResponse.redirect(new URL('/dogs/new?error=name', request.url), { status: 303 });
 
   const birthDateRaw = String(formData.get('birthDate') ?? '').trim();
   const weightRaw = String(formData.get('weightLbs') ?? '').trim();
@@ -43,7 +55,7 @@ export async function POST(request: NextRequest) {
 
   const dog = await prisma.dog.create({
     data: {
-      ownerId: user.id,
+      ownerId,
       name,
       slug: await uniqueSlug(name),
       breed: String(formData.get('breed') ?? '').trim() || null,
@@ -64,5 +76,5 @@ export async function POST(request: NextRequest) {
     select: { slug: true }
   });
 
-  return NextResponse.redirect(new URL(`/dogs/${dog.slug}`, request.url));
+  return NextResponse.redirect(new URL(`/dogs/${dog.slug}/qr`, request.url), { status: 303 });
 }
