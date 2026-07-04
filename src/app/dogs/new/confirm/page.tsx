@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { DogStatus } from '@prisma/client';
 import { slugify } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -29,7 +28,7 @@ function bool(value?: string) {
 }
 
 async function uniqueSlug(name: string) {
-  const base = slugify(name) || 'dog';
+  const base = slugify(name) || 'new-buddy';
   let slug = base;
   let index = 2;
 
@@ -62,10 +61,7 @@ async function getWritableUserId() {
 
 export default async function ConfirmNewDogPage({ searchParams }: { searchParams: Promise<ConfirmParams> }) {
   const values = await searchParams;
-  const name = String(values.name ?? '').trim();
-
-  if (!name) redirect('/dogs/new?error=name');
-
+  const name = String(values.name ?? '').trim() || 'New Buddy';
   const ownerId = await getWritableUserId();
   const birthDateRaw = String(values.birthDate ?? '').trim();
   const weightRaw = String(values.weightLbs ?? '').trim();
@@ -98,7 +94,7 @@ export default async function ConfirmNewDogPage({ searchParams }: { searchParams
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog Page Create Fix</p>
+      <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog One-Tap Confirm</p>
       <h1 className="mt-2 text-3xl font-bold">Dog profile created</h1>
       <p className="mt-3 text-slate-600">{dog.name} was created. Open the QR page below.</p>
       <Link href={qrUrl} className="mt-6 rounded-lg bg-slate-900 px-5 py-3 text-center font-medium text-white">Open QR page</Link>
