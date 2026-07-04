@@ -6,9 +6,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div>
-        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Milestone 3 Real Auth</p>
+        <p className="text-sm font-medium text-slate-500">Buddies V2.2 Native Auth Diagnostic</p>
         <h1 className="mt-2 text-3xl font-bold">Sign in</h1>
-        <p className="mt-2 text-slate-600">Sign in with your account to manage only your dogs, QR profiles, and safety records.</p>
+        <p className="mt-2 text-slate-600">Sign in with your account. This build returns a confirmation page instead of an immediate redirect so mobile failures are visible.</p>
       </div>
 
       {error ? (
@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
       ) : null}
 
-      <form action="/api/auth/login" method="post" className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
+      <form action="/api/auth/login" method="get" className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
         <label className="grid gap-2 text-sm font-medium">
           Email
           <input name="email" type="email" autoComplete="email" required className="rounded-lg border px-3 py-3 text-base" />
