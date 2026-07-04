@@ -11,6 +11,7 @@ export default async function DashboardPage() {
     select: { id: true, email: true, displayName: true, role: true }
   });
 
+  const isRealSession = Boolean(currentUser);
   const user = seededUser
     ? { ...seededUser, role: seededUser.role.toString() }
     : { id: '', email: 'demo@buddies.local', displayName: 'Demo User', role: 'OWNER' };
@@ -37,9 +38,16 @@ export default async function DashboardPage() {
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Dashboard Fix</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Dashboard + Add Dog No-Auth Fix</p>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-2 text-slate-600">Signed in as {user.displayName}. Manage dogs, QR pages, public safety records, and buddy connections.</p>
+          <p className="mt-2 text-slate-600">
+            {isRealSession ? `Signed in as ${user.displayName}.` : `Demo access as ${user.displayName}; session cookie is not active.`} Manage dogs, QR pages, public safety records, and buddy connections.
+          </p>
+          {!isRealSession ? (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Current mode: dashboard bypass. Add Dog and QR are enabled without login while mobile auth is being stabilized.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/dogs/new" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link>
