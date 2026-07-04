@@ -1,28 +1,16 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
 
 export const SESSION_COOKIE = 'buddies_session';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-export type CurrentUser = {
-  id: string;
-  email: string;
-  displayName: string;
-  role: string;
-};
+export type CurrentUser = { id: string; email: string; displayName: string; role: string };
 
-export function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
+export function normalizeEmail(email: string) { return email.trim().toLowerCase(); }
 
 export function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '')
-    .slice(0, 72);
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '').slice(0, 72);
 }
 
 export function hashPassword(password: string) {
@@ -35,10 +23,8 @@ export function verifyPassword(password: string, storedHash: string | null | und
   if (!storedHash) return false;
   const [algorithm, iterationsRaw, salt, hash] = storedHash.split('$');
   if (algorithm !== 'pbkdf2_sha256' || !iterationsRaw || !salt || !hash) return false;
-
   const iterations = Number(iterationsRaw);
   if (!Number.isFinite(iterations)) return false;
-
   const candidate = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
   const expected = Buffer.from(hash, 'hex');
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
@@ -55,25 +41,16 @@ export function encodeSession(userId: string) {
 
 function decodeSession(value: string | undefined) {
   if (!value) return null;
-
   try {
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { userId?: string; signature?: string };
     if (!parsed.userId || !parsed.signature) return null;
     if (parsed.signature !== signSession(parsed.userId)) return null;
     return parsed.userId;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export function sessionCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: SESSION_MAX_AGE_SECONDS,
-    path: '/'
-  };
+  return { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', maxAge: SESSION_MAX_AGE_SECONDS, path: '/' };
 }
 
 export async function createSession(userId: string) {
@@ -81,26 +58,33 @@ export async function createSession(userId: string) {
   store.set(SESSION_COOKIE, encodeSession(userId), sessionCookieOptions());
 }
 
-export async function clearSession() {
-  const store = await cookies();
-  store.delete(SESSION_COOKIE);
+export async function clearSession() { const store = await cookies(); store.delete(SESSION_COOKIE); }
+
+function displayNameFromEmail(email: string) {
+  return (email.split('@')[0] || 'Buddies User').replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+async function getAccessUser(): Promise<CurrentUser | null> {
+  const h = await headers();
+  const email = normalizeEmail(h.get('cf-access-authenticated-user-email') ?? '');
+  if (!email) return null;
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { emailVerifiedAt: new Date() },
+    create: { email, displayName: displayNameFromEmail(email), emailVerifiedAt: new Date() },
+    select: { id: true, email: true, displayName: true, role: true }
+  });
+  return { ...user, role: user.role.toString() };
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const accessUser = await getAccessUser();
+  if (accessUser) return accessUser;
   const store = await cookies();
   const userId = decodeSession(store.get(SESSION_COOKIE)?.value);
   if (!userId) return null;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, displayName: true, role: true }
-  });
-
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, displayName: true, role: true } });
   return user ? { ...user, role: user.role.toString() } : null;
 }
 
-export async function requireCurrentUser() {
-  const user = await getCurrentUser();
-  if (!user) throw new Error('Authentication required');
-  return user;
-}
+export async function requireCurrentUser() { const user = await getCurrentUser(); if (!user) throw new Error('Authentication required'); return user; }
