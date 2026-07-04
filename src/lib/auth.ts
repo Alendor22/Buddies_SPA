@@ -2,8 +2,8 @@ import { cookies } from 'next/headers';
 import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
 
-const SESSION_COOKIE = 'buddies_session';
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const SESSION_COOKIE = 'buddies_session';
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 export type CurrentUser = {
   id: string;
@@ -49,7 +49,7 @@ function signSession(userId: string) {
   return createHash('sha256').update(`${userId}.${secret}`).digest('hex');
 }
 
-function encodeSession(userId: string) {
+export function encodeSession(userId: string) {
   return Buffer.from(JSON.stringify({ userId, signature: signSession(userId) })).toString('base64url');
 }
 
@@ -66,15 +66,19 @@ function decodeSession(value: string | undefined) {
   }
 }
 
-export async function createSession(userId: string) {
-  const store = await cookies();
-  store.set(SESSION_COOKIE, encodeSession(userId), {
+export function sessionCookieOptions() {
+  return {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: '/'
-  });
+  };
+}
+
+export async function createSession(userId: string) {
+  const store = await cookies();
+  store.set(SESSION_COOKIE, encodeSession(userId), sessionCookieOptions());
 }
 
 export async function clearSession() {
