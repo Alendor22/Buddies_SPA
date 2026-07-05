@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth';
 
-function logout(request: NextRequest) {
-  const response = NextResponse.redirect(new URL('/auth/login?status=signed-out', request.url), { status: 303 });
+const expired = new Date(0);
+
+function clearCookie(response: NextResponse, secure: boolean) {
   response.cookies.set(SESSION_COOKIE, '', {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure,
+    expires: expired,
     maxAge: 0,
     path: '/'
   });
+
+  response.cookies.set(SESSION_COOKIE, '', {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure,
+    expires: expired,
+    maxAge: 0,
+    path: '/'
+  });
+}
+
+function logout(request: NextRequest) {
+  const response = NextResponse.redirect(new URL('/auth/signed-out', request.url), { status: 303 });
+  clearCookie(response, true);
+  clearCookie(response, false);
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   return response;
 }
 
