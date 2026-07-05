@@ -56,7 +56,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </div>
             <div className="hidden items-center gap-2 text-sm font-medium sm:flex">
               <Link href="/dashboard" className="rounded-lg border px-3 py-2">Dashboard</Link>
-              <Link href="/dogs" className="rounded-lg border px-3 py-2">Dogs</Link>
+              <Link href="/dogs" className="rounded-lg border px-3 py-2">Profiles</Link>
               <Link href="/dogs/new" className="rounded-lg border px-3 py-2">Add Dog</Link>
               <Link href="/dashboard/buddies" className="rounded-lg border px-3 py-2">Buddies</Link>
               <Link href="/dashboard/notifications" className="relative rounded-lg bg-slate-900 px-3 py-2 text-white">Notifications<NavBadge count={notificationCount} /></Link>
@@ -70,7 +70,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <div className="mx-auto grid max-w-md grid-cols-6 gap-1 px-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2">
             <NavItem href="/" icon="⌂" label="Home" />
             <NavItem href="/dashboard" icon="▦" label="Dash" />
-            <NavItem href="/dogs" icon="🐶" label="Dogs" />
+            <NavItem href="/dogs" icon="🐶" label="Profiles" />
             <NavItem href="/dogs/new" icon="＋" label="Add" />
             <NavItem href="/dashboard/notifications" icon="🔔" label="Alerts" count={notificationCount} />
             <NavItem href={user ? '/dashboard/account' : '/auth/login'} icon="👤" label={user ? 'Acct' : 'Login'} />
