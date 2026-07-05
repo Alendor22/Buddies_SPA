@@ -19,7 +19,7 @@ export default async function MenuPage() {
         <Link href="/dogs/new" className="rounded-lg border px-4 py-4 font-medium">Add dog</Link>
         <Link href="/dashboard/buddies" className="rounded-lg border px-4 py-4 font-medium">Buddies social graph</Link>
         <Link href="/dashboard/notifications" className="rounded-lg border px-4 py-4 font-medium">Notifications</Link>
-        <Link href="/api/auth/logout" className="rounded-lg bg-red-600 px-4 py-4 text-center font-medium text-white">Sign out</Link>
+        <a href="/logout" className="rounded-lg bg-red-600 px-4 py-4 text-center font-medium text-white">Sign out</a>
       </section>
     </main>
   );
