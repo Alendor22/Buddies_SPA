@@ -3,6 +3,7 @@ import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypt
 import { prisma } from '@/lib/db';
 
 export const SESSION_COOKIE = 'buddies_session';
+export const LOGOUT_COOKIE = 'buddies_signed_out';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 export type CurrentUser = { id: string; email: string; displayName: string; role: string };
@@ -56,9 +57,14 @@ export function sessionCookieOptions() {
 export async function createSession(userId: string) {
   const store = await cookies();
   store.set(SESSION_COOKIE, encodeSession(userId), sessionCookieOptions());
+  store.set(LOGOUT_COOKIE, '', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 0, path: '/' });
 }
 
-export async function clearSession() { const store = await cookies(); store.delete(SESSION_COOKIE); }
+export async function clearSession() {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  store.set(LOGOUT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 30, path: '/' });
+}
 
 function displayNameFromEmail(email: string) {
   return (email.split('@')[0] || 'Buddies User').replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -78,9 +84,12 @@ async function getAccessUser(): Promise<CurrentUser | null> {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const store = await cookies();
+  if (store.get(LOGOUT_COOKIE)?.value === '1') return null;
+
   const accessUser = await getAccessUser();
   if (accessUser) return accessUser;
-  const store = await cookies();
+
   const userId = decodeSession(store.get(SESSION_COOKIE)?.value);
   if (!userId) return null;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, displayName: true, role: true } });
