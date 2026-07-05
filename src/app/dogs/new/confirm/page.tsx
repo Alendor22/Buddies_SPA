@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { DogStatus } from '@prisma/client';
-import { slugify } from '@/lib/auth';
+import { getCurrentUser, slugify } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -40,36 +41,19 @@ async function uniqueSlug(name: string) {
   return slug;
 }
 
-async function getWritableUserId() {
-  const seededUser = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { id: true }
-  });
-
-  if (seededUser?.id) return seededUser.id;
-
-  const fallbackUser = await prisma.user.create({
-    data: {
-      email: 'demo@buddies.local',
-      displayName: 'Adeja'
-    },
-    select: { id: true }
-  });
-
-  return fallbackUser.id;
-}
-
 export default async function ConfirmNewDogPage({ searchParams }: { searchParams: Promise<ConfirmParams> }) {
+  const user = await getCurrentUser();
+  if (!user) redirect('/auth/login');
+
   const values = await searchParams;
   const name = String(values.name ?? '').trim() || 'New Buddy';
-  const ownerId = await getWritableUserId();
   const birthDateRaw = String(values.birthDate ?? '').trim();
   const weightRaw = String(values.weightLbs ?? '').trim();
   const statusRaw = String(values.status ?? 'SAFE') as keyof typeof DogStatus;
 
   const dog = await prisma.dog.create({
     data: {
-      ownerId,
+      ownerId: user.id,
       name,
       slug: await uniqueSlug(name),
       breed: String(values.breed ?? '').trim() || null,
@@ -90,15 +74,14 @@ export default async function ConfirmNewDogPage({ searchParams }: { searchParams
     select: { name: true, slug: true }
   });
 
-  const qrUrl = `/dogs/${dog.slug}/qr`;
-
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog One-Tap Confirm</p>
+      <p className="text-sm font-medium text-slate-500">Buddies V2.2 Account-Bound Dog Create</p>
       <h1 className="mt-2 text-3xl font-bold">Dog profile created</h1>
-      <p className="mt-3 text-slate-600">{dog.name} was created. Open the QR page below.</p>
-      <Link href={qrUrl} className="mt-6 rounded-lg bg-slate-900 px-5 py-3 text-center font-medium text-white">Open QR page</Link>
-      <Link href="/dashboard" className="mt-3 rounded-lg border px-5 py-3 text-center font-medium">Back to dashboard</Link>
+      <p className="mt-3 text-slate-600">{dog.name} was created under {user.email}. It will now appear on your dashboard.</p>
+      <Link href="/dashboard" className="mt-6 rounded-lg bg-slate-900 px-5 py-3 text-center font-medium text-white">Back to dashboard</Link>
+      <Link href={`/dogs/${dog.slug}/edit`} className="mt-3 rounded-lg border px-5 py-3 text-center font-medium">Edit attributes</Link>
+      <Link href={`/dogs/${dog.slug}/qr`} className="mt-3 rounded-lg border px-5 py-3 text-center font-medium">Open QR page</Link>
     </main>
   );
 }
