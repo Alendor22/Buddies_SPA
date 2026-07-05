@@ -14,7 +14,6 @@ async function getNotificationCount(userId: string) {
     prisma.buddyRequest.count({ where: { receiverId: userId, status: 'PENDING' } }),
     prisma.dog.count({ where: { ownerId: userId, NOT: { status: 'SAFE' } } })
   ]).catch(() => [0, 0]);
-
   return incomingRequests + safetyAlerts;
 }
 
@@ -37,6 +36,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const user = await getCurrentUser();
   const notificationCount = user ? await getNotificationCount(user.id) : 0;
   const initial = user?.displayName?.slice(0, 1).toUpperCase() ?? 'A';
+  const accountHref = user ? '/dashboard/menu' : '/auth/login';
 
   return (
     <html lang="en">
@@ -46,9 +46,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white">Buddies</Link>
             <div className="flex items-center gap-2">
               {user ? (
-                <Link href="/dashboard/account" className="relative flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold">
+                <Link href={accountHref} className="relative flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{initial}</span>
-                  <span className="hidden sm:inline">Account</span>
+                  <span className="hidden sm:inline">Menu</span>
                   <NavBadge count={notificationCount} />
                 </Link>
               ) : (
@@ -64,9 +64,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </div>
           </nav>
         </header>
-
         {children}
-
         <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white/95 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
           <div className="mx-auto grid max-w-md grid-cols-6 gap-1 px-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2">
             <NavItem href="/" icon="⌂" label="Home" />
@@ -74,7 +72,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <NavItem href="/dogs" icon="🐶" label="Profiles" />
             <NavItem href="/dogs/new" icon="＋" label="Add" />
             <NavItem href="/dashboard/buddies" icon="👥" label="Buddies" count={notificationCount} />
-            <NavItem href={user ? '/dashboard/account' : '/auth/login'} icon="👤" label={user ? 'Acct' : 'Login'} />
+            <NavItem href={accountHref} icon="👤" label={user ? 'Menu' : 'Login'} />
           </div>
         </nav>
       </body>
