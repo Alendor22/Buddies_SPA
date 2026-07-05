@@ -1,16 +1,18 @@
 import Link from 'next/link';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DogsPage() {
-  let dogs: Array<{ id: string; name: string; slug: string; breed: string | null; status: string }> = [];
+  const user = await getCurrentUser();
+  let dogs: Array<{ id: string; ownerId: string; name: string; slug: string; breed: string | null; status: string }> = [];
 
   try {
     dogs = await prisma.dog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 50,
-      select: { id: true, name: true, slug: true, breed: true, status: true }
+      select: { id: true, ownerId: true, name: true, slug: true, breed: true, status: true }
     });
   } catch {
     dogs = [];
@@ -20,8 +22,9 @@ export default async function DogsPage() {
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2</p>
+          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Owner-Safe Browse</p>
           <h1 className="text-3xl font-bold">Dogs</h1>
+          <p className="mt-2 text-slate-600">Browse public dog profiles. Edit controls only appear for dogs owned by the signed-in account.</p>
         </div>
         <Link href="/dashboard" className="rounded-lg border px-4 py-2">Dashboard</Link>
       </div>
@@ -34,12 +37,21 @@ export default async function DogsPage() {
         </section>
       ) : (
         <section className="mt-8 grid gap-4 md:grid-cols-2">
-          {dogs.map((dog) => (
-            <Link key={dog.id} href={`/dogs/${dog.slug}`} className="rounded-2xl border bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">{dog.name}</h2>
-              <p className="mt-2 text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p>
-            </Link>
-          ))}
+          {dogs.map((dog) => {
+            const isOwner = Boolean(user && dog.ownerId === user.id);
+            return (
+              <article key={dog.id} className="rounded-2xl border bg-white p-6 shadow-sm">
+                <Link href={`/dogs/${dog.slug}`}>
+                  <h2 className="text-xl font-semibold">{dog.name}</h2>
+                  <p className="mt-2 text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p>
+                </Link>
+                <div className="mt-5 grid grid-cols-2 gap-2 text-center text-sm">
+                  <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-3 py-2">Profile</Link>
+                  {isOwner ? <Link href={`/dogs/edit?slug=${dog.slug}`} className="rounded-lg border px-3 py-2">Edit</Link> : null}
+                </div>
+              </article>
+            );
+          })}
         </section>
       )}
     </main>
