@@ -46,9 +46,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white">Buddies</Link>
             <div className="flex items-center gap-2">
               {user ? (
-                <Link href="/dashboard/account" className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold">
+                <Link href="/dashboard/account" className="relative flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{initial}</span>
                   <span className="hidden sm:inline">Account</span>
+                  <NavBadge count={notificationCount} />
                 </Link>
               ) : (
                 <Link href="/auth/login" className="rounded-lg border px-3 py-2 text-sm font-semibold">Sign in</Link>
@@ -72,7 +73,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <NavItem href="/dashboard" icon="▦" label="Dash" />
             <NavItem href="/dogs" icon="🐶" label="Profiles" />
             <NavItem href="/dogs/new" icon="＋" label="Add" />
-            <NavItem href="/dashboard/notifications" icon="🔔" label="Alerts" count={notificationCount} />
+            <NavItem href="/dashboard/buddies" icon="👥" label="Buddies" count={notificationCount} />
             <NavItem href={user ? '/dashboard/account' : '/auth/login'} icon="👤" label={user ? 'Acct' : 'Login'} />
           </div>
         </nav>
