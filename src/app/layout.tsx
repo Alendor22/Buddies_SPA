@@ -20,7 +20,17 @@ async function getNotificationCount(userId: string) {
 
 function NavBadge({ count }: { count: number }) {
   if (count <= 0) return null;
-  return <span className="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{count}</span>;
+  return <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white">{count}</span>;
+}
+
+function NavItem({ href, icon, label, count }: { href: string; icon: string; label: string; count?: number }) {
+  return (
+    <Link href={href} className="relative flex min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold text-slate-700 active:bg-slate-100">
+      <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
+      <span className="leading-none">{label}</span>
+      <NavBadge count={count ?? 0} />
+    </Link>
+  );
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -29,25 +39,31 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en">
-      <body>
+      <body className="pb-24 sm:pb-0">
         <header className="sticky top-0 z-50 border-b bg-white/95 shadow-sm backdrop-blur">
-          <nav className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <Link href="/" className="shrink-0 rounded-full bg-slate-900 px-3 py-2 text-sm font-bold text-white">Buddies</Link>
-              <div className="min-w-0 flex-1 overflow-x-auto">
-                <div className="flex w-max items-center gap-2 px-1 text-sm font-medium">
-                  <Link href="/" className="rounded-lg border px-3 py-2">Home</Link>
-                  <Link href="/dashboard" className="rounded-lg border px-3 py-2">Dashboard</Link>
-                  <Link href="/dogs" className="rounded-lg border px-3 py-2">Dogs</Link>
-                  <Link href="/dogs/new" className="rounded-lg border px-3 py-2">Add dog</Link>
-                  <Link href="/dashboard/buddies" className="rounded-lg border px-3 py-2">Buddies</Link>
-                  <Link href="/dashboard/notifications" className="rounded-lg bg-slate-900 px-3 py-2 text-white">Notifications<NavBadge count={notificationCount} /></Link>
-                </div>
-              </div>
+          <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <Link href="/" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white">Buddies</Link>
+            <div className="hidden items-center gap-2 text-sm font-medium sm:flex">
+              <Link href="/dashboard" className="rounded-lg border px-3 py-2">Dashboard</Link>
+              <Link href="/dogs" className="rounded-lg border px-3 py-2">Dogs</Link>
+              <Link href="/dogs/new" className="rounded-lg border px-3 py-2">Add Dog</Link>
+              <Link href="/dashboard/buddies" className="rounded-lg border px-3 py-2">Buddies</Link>
+              <Link href="/dashboard/notifications" className="relative rounded-lg bg-slate-900 px-3 py-2 text-white">Notifications<NavBadge count={notificationCount} /></Link>
             </div>
           </nav>
         </header>
+
         {children}
+
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white/95 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
+          <div className="mx-auto grid max-w-md grid-cols-5 gap-1 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2">
+            <NavItem href="/" icon="⌂" label="Home" />
+            <NavItem href="/dashboard" icon="▦" label="Dash" />
+            <NavItem href="/dogs" icon="🐶" label="Dogs" />
+            <NavItem href="/dogs/new" icon="＋" label="Add" />
+            <NavItem href="/dashboard/notifications" icon="🔔" label="Alerts" count={notificationCount} />
+          </div>
+        </nav>
       </body>
     </html>
   );
