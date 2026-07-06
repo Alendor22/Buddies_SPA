@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Pt = { x: number; y: number };
 type Geo = { lat: number; lng: number };
@@ -57,12 +57,26 @@ function pinLabel(index: number) {
   return 'End';
 }
 
+function AnimatedMapBase() {
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-slate-100">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(14,165,233,.22),transparent_24%),radial-gradient(circle_at_78%_28%,rgba(34,197,94,.18),transparent_22%),radial-gradient(circle_at_56%_78%,rgba(99,102,241,.16),transparent_26%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,.10)_1px,transparent_1px),linear-gradient(rgba(15,23,42,.10)_1px,transparent_1px)] bg-[size:42px_42px]" />
+      <div className="absolute -left-20 top-16 h-24 w-[150%] rotate-[-12deg] rounded-full bg-white/70" />
+      <div className="absolute -left-16 top-56 h-20 w-[140%] rotate-[18deg] rounded-full bg-white/65" />
+      <div className="absolute left-24 top-0 h-full w-16 rotate-[8deg] rounded-full bg-white/55" />
+      <div className="absolute left-0 top-0 h-full w-full animate-pulse bg-gradient-to-br from-transparent via-white/20 to-transparent" />
+      <div className="absolute bottom-4 right-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow">Animated default map</div>
+    </div>
+  );
+}
+
 export default function WalkRoutePlanner() {
   const ref = useRef<HTMLDivElement | null>(null);
   const [center, setCenter] = useState<Geo>(DEFAULT_CENTER);
-  const [start, setStart] = useState<Geo | null>(null);
+  const [start, setStart] = useState<Geo | null>(DEFAULT_CENTER);
   const [destinationPoint, setDestinationPoint] = useState<Geo | null>(null);
-  const [status, setStatus] = useState('Default map is a 5 mile radius. Use current location to center it, then tap two points.');
+  const [status, setStatus] = useState('Default animated map shows a 5 mile radius. Current location is the starting point when permission is granted.');
   const [area, setArea] = useState<Pt[]>([]);
   const [drawing, setDrawing] = useState(false);
   const [mode, setMode] = useState<'select' | 'draw'>('select');
@@ -70,19 +84,17 @@ export default function WalkRoutePlanner() {
   const [routeName, setRouteName] = useState('Neighborhood walk');
   const [route, setRoute] = useState<Geo[]>([]);
   const [favorites, setFavorites] = useState<Saved[]>([]);
+  const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
     try { setFavorites(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { setFavorites([]); }
   }, []);
 
-  const mapUrl = useMemo(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    if (!token) return '';
-    return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center.lng},${center.lat},11.7,0/640x640?access_token=${token}`;
-  }, [center]);
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+  const mapUrl = token && !mapFailed ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center.lng},${center.lat},11.7,0/640x640?access_token=${token}` : '';
 
   function locate() {
-    if (!navigator.geolocation) return setStatus('Location is unavailable in this browser.');
+    if (!navigator.geolocation) return setStatus('Location is unavailable in this browser. Default animated 5 mile radius remains active.');
     setStatus('Requesting location...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -91,9 +103,10 @@ export default function WalkRoutePlanner() {
         setStart(here);
         setDestinationPoint(null);
         setRoute([]);
+        setMapFailed(false);
         setStatus('Start location set. Map centered to a 5 mile radius. Tap the apex/turnaround point next.');
       },
-      () => setStatus('Location permission denied. Map is using the default 5 mile radius draft location.'),
+      () => setStatus('Location permission denied. Default animated 5 mile radius remains active.'),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   }
@@ -117,7 +130,6 @@ export default function WalkRoutePlanner() {
       setStatus('Start point selected. Tap an apex/turnaround point.');
     } else {
       setDestinationPoint(geo);
-      setApexMiles(Math.min(5, Math.max(0.1, apexMiles)));
       setStatus('Apex point selected. Generate route variations or save this route.');
     }
   }
@@ -149,7 +161,7 @@ export default function WalkRoutePlanner() {
     setRouteName(data.name || saved.name);
     setCenter(data.center || DEFAULT_CENTER);
     setApexMiles(data.apexMiles || saved.apexMiles);
-    setStart(data.start || null);
+    setStart(data.start || DEFAULT_CENTER);
     setDestinationPoint(data.destinationPoint || null);
     setArea(data.area || []);
     setRoute(data.route || []);
@@ -163,16 +175,17 @@ export default function WalkRoutePlanner() {
 
   return (
     <section className="grid gap-5 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
-      <div><h2 className="text-xl font-semibold">Walk route planner</h2><p className="mt-1 text-sm text-slate-600">Default view is a 5 mile radius. Start at current location, or tap any two map points: start and apex. Draw mode lets you sketch a walk zone.</p></div>
+      <div><h2 className="text-xl font-semibold">Walk route planner</h2><p className="mt-1 text-sm text-slate-600">Default view is animated and always visible. Use current location to center the 5 mile radius, then tap any two points: start and apex. Draw mode sketches a walk zone.</p></div>
       <input type="hidden" name="routeName" value={routeName} />
       <input type="hidden" name="routeJson" value={routeJson} />
       <div className="grid gap-3 sm:grid-cols-3"><button type="button" onClick={locate} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white">Use current location</button><button type="button" onClick={() => setMode(mode === 'select' ? 'draw' : 'select')} className="rounded-lg border px-4 py-3 font-medium">Mode: {mode === 'select' ? 'select points' : 'draw area'}</button><button type="button" onClick={() => { setArea([]); setRoute([]); setDestinationPoint(null); }} className="rounded-lg border px-4 py-3 font-medium">Clear</button></div>
       <p className="text-sm text-slate-600">{status}</p>
       <div ref={ref} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className="relative h-[420px] overflow-auto rounded-2xl border bg-slate-100 touch-pan-x touch-pan-y">
-        {mapUrl ? <img src={mapUrl} alt="Map centered on selected walk area" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px)] bg-[size:32px_32px]" />}
+        <AnimatedMapBase />
+        {mapUrl ? <img src={mapUrl} onError={() => setMapFailed(true)} alt="Map centered on selected walk area" className="absolute inset-0 h-full w-full object-cover opacity-95" /> : null}
         <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow">5 mi radius · {center.lat}, {center.lng}</div>
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 640 640" preserveAspectRatio="none">
-          <circle cx="320" cy="320" r="310" fill="rgba(14,165,233,.08)" stroke="rgba(2,132,199,.45)" strokeWidth="4" />
+          <circle cx="320" cy="320" r="310" fill="rgba(14,165,233,.08)" stroke="rgba(2,132,199,.55)" strokeWidth="5" />
           {area.length > 1 ? <path d={path(area)} fill="rgba(14,165,233,.12)" stroke="rgba(15,23,42,.75)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /> : null}
           {line ? <path d={line} fill="none" stroke="rgba(2,132,199,.95)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="14 10" /> : null}
           {pins.map((g, i) => { const p = geoToPt(g, center); return <g key={i}><circle cx={p.x} cy={p.y} r="16" fill="#0f172a" /><text x={p.x + 20} y={p.y + 5} fill="#0f172a" fontSize="24" fontWeight="700">{pinLabel(i)}</text></g>; })}
