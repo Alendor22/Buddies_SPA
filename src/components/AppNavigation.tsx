@@ -1,0 +1,106 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
+
+type AppNavigationProps = {
+  signedIn: boolean;
+  initial: string;
+  notificationCount: number;
+};
+
+function Badge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white">{count}</span>;
+}
+
+function titleForPath(pathname: string) {
+  if (pathname === '/') return 'Home';
+  if (pathname.startsWith('/dashboard/buddies')) return 'Buddies';
+  if (pathname.startsWith('/dashboard/notifications')) return 'Alerts';
+  if (pathname.startsWith('/dashboard/menu') || pathname.startsWith('/dashboard/account')) return 'Account';
+  if (pathname.startsWith('/dashboard')) return 'Dashboard';
+  if (pathname.startsWith('/dogs/new')) return 'Add Profile';
+  if (pathname.startsWith('/dogs/edit')) return 'Edit Profile';
+  if (pathname.startsWith('/dogs')) return 'Profiles';
+  if (pathname.startsWith('/auth/login')) return 'Sign in';
+  if (pathname.startsWith('/auth/register')) return 'Create account';
+  if (pathname.startsWith('/logout')) return 'Signed out';
+  return 'Buddies';
+}
+
+function Tab({ href, icon, label, active, count }: { href: string; icon: string; label: string; active: boolean; count?: number }) {
+  return (
+    <Link href={href} className={`relative flex min-w-[56px] flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 text-xs font-semibold active:bg-slate-100 ${active ? 'text-slate-950' : 'text-slate-600'}`}>
+      <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
+      <span className="leading-none">{label}</span>
+      <Badge count={count ?? 0} />
+    </Link>
+  );
+}
+
+export default function AppNavigation({ signedIn, initial, notificationCount }: AppNavigationProps) {
+  const router = useRouter();
+  const pathname = usePathname() || '/';
+  const [open, setOpen] = useState(false);
+  const title = useMemo(() => titleForPath(pathname), [pathname]);
+  const accountHref = signedIn ? '/dashboard/menu' : '/auth/login';
+  const canBack = pathname !== '/';
+
+  return (
+    <>
+      <header className="sticky top-0 z-50 border-b bg-white/95 shadow-sm backdrop-blur">
+        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3 sm:px-6">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => (canBack ? router.back() : router.push('/'))}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-xl font-bold active:bg-slate-100"
+          >
+            ←
+          </button>
+          <Link href="/" className="hidden rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white sm:inline-block">Buddies</Link>
+          <Link href="/" className="min-w-0 flex-1 truncate text-center text-base font-bold text-slate-900 sm:text-left">{title}</Link>
+          <Link href="/dashboard/buddies" className="hidden h-10 w-10 items-center justify-center rounded-full border text-lg sm:flex" aria-label="Search owners">⌕</Link>
+          <Link href={accountHref} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border font-bold" aria-label="Account">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{initial}</span>
+            <Badge count={notificationCount} />
+          </Link>
+        </nav>
+      </header>
+
+      <button
+        type="button"
+        aria-label="Quick actions"
+        onClick={() => setOpen((value) => !value)}
+        className="fixed bottom-24 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-3xl font-semibold text-white shadow-xl sm:hidden"
+      >
+        +
+      </button>
+
+      {open ? (
+        <div className="fixed inset-x-4 bottom-40 z-50 rounded-2xl border bg-white p-4 shadow-2xl sm:hidden">
+          <div className="grid gap-2 text-sm font-semibold">
+            <Link onClick={() => setOpen(false)} href="/dogs/new" className="rounded-xl border px-4 py-3">Add Profile</Link>
+            <Link onClick={() => setOpen(false)} href="/dashboard/buddies/invite" className="rounded-xl border px-4 py-3">Invite Owner</Link>
+            <Link onClick={() => setOpen(false)} href="/dashboard/buddies" className="rounded-xl border px-4 py-3">Owner Search</Link>
+            <Link onClick={() => setOpen(false)} href="/dashboard/buddies" className="rounded-xl border px-4 py-3">Create Walk</Link>
+            <Link onClick={() => setOpen(false)} href="/dogs" className="rounded-xl border px-4 py-3">Report Lost Dog</Link>
+            <Link onClick={() => setOpen(false)} href="/dashboard/notifications" className="rounded-xl border px-4 py-3">Emergency Alert</Link>
+          </div>
+        </div>
+      ) : null}
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2">
+          <Tab href="/" icon="⌂" label="Home" active={pathname === '/'} />
+          <Tab href="/dashboard" icon="▦" label="Dash" active={pathname.startsWith('/dashboard') && !pathname.startsWith('/dashboard/buddies') && !pathname.startsWith('/dashboard/notifications')} />
+          <Tab href="/dogs" icon="🐶" label="Profiles" active={pathname.startsWith('/dogs')} />
+          <Tab href="/dashboard/buddies" icon="👥" label="Buddies" active={pathname.startsWith('/dashboard/buddies')} count={notificationCount} />
+          <Tab href="/dashboard/notifications" icon="🔔" label="Alerts" active={pathname.startsWith('/dashboard/notifications')} count={notificationCount} />
+        </div>
+      </nav>
+    </>
+  );
+}
