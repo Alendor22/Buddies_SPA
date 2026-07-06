@@ -18,6 +18,7 @@ function Badge({ count }: { count: number }) {
 
 function titleForPath(pathname: string) {
   if (pathname === '/') return 'Home';
+  if (pathname.startsWith('/dashboard/walks/new')) return 'Create Walk';
   if (pathname.startsWith('/dashboard/buddies/invite')) return 'Invite Buddy';
   if (pathname.startsWith('/dashboard/buddies')) return 'Buddies';
   if (pathname.startsWith('/dashboard/notifications')) return 'Alerts';
@@ -36,6 +37,7 @@ function titleForPath(pathname: string) {
 
 function fallbackPath(pathname: string) {
   if (pathname.startsWith('/dogs/new') || pathname.startsWith('/dogs/edit') || pathname.startsWith('/dogs/')) return '/dogs';
+  if (pathname.startsWith('/dashboard/walks')) return '/dashboard/buddies';
   if (pathname.startsWith('/dashboard/buddies')) return '/dashboard';
   if (pathname.startsWith('/dashboard/notifications')) return '/dashboard';
   if (pathname.startsWith('/dashboard')) return '/';
@@ -108,7 +110,7 @@ export default function AppNavigation({ signedIn, initial, notificationCount }: 
             <Link onClick={() => setOpen(false)} href="/dogs/new" className="rounded-xl border px-4 py-3">Add Profile</Link>
             <Link onClick={() => setOpen(false)} href="/dashboard/buddies/invite" className="rounded-xl border px-4 py-3">Invite Buddy</Link>
             <Link onClick={() => setOpen(false)} href="/dashboard/buddies" className="rounded-xl border px-4 py-3">Dog Search</Link>
-            <Link onClick={() => setOpen(false)} href="/dashboard/buddies" className="rounded-xl border px-4 py-3">Create Walk</Link>
+            <Link onClick={() => setOpen(false)} href="/dashboard/walks/new" className="rounded-xl border px-4 py-3">Create Walk</Link>
             <Link onClick={() => setOpen(false)} href="/dogs" className="rounded-xl border px-4 py-3">Report Lost Dog</Link>
             <Link onClick={() => setOpen(false)} href="/dashboard/notifications" className="rounded-xl border px-4 py-3">Emergency Alert</Link>
           </div>
@@ -118,9 +120,9 @@ export default function AppNavigation({ signedIn, initial, notificationCount }: 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 gap-1 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2">
           <Tab href="/" icon="⌂" label="Home" active={pathname === '/'} />
-          <Tab href="/dashboard" icon="▦" label="Dash" active={pathname.startsWith('/dashboard') && !pathname.startsWith('/dashboard/buddies') && !pathname.startsWith('/dashboard/notifications')} />
+          <Tab href="/dashboard" icon="▦" label="Dash" active={pathname.startsWith('/dashboard') && !pathname.startsWith('/dashboard/buddies') && !pathname.startsWith('/dashboard/notifications') && !pathname.startsWith('/dashboard/walks')} />
           <Tab href="/dogs" icon="🐶" label="Profiles" active={pathname.startsWith('/dogs')} />
-          <Tab href="/dashboard/buddies" icon="👥" label="Buddies" active={pathname.startsWith('/dashboard/buddies')} count={notificationCount} />
+          <Tab href="/dashboard/buddies" icon="👥" label="Buddies" active={pathname.startsWith('/dashboard/buddies') || pathname.startsWith('/dashboard/walks')} count={notificationCount} />
           <Tab href="/dashboard/notifications" icon="🔔" label="Alerts" active={pathname.startsWith('/dashboard/notifications')} count={notificationCount} />
         </div>
       </nav>
