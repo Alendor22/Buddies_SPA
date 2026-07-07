@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import Map, {
   GeolocateControl,
   Layer,
@@ -9,17 +9,14 @@ import Map, {
   Source,
   type MapRef
 } from 'react-map-gl/mapbox';
+import {
+  DEFAULT_CENTER,
+  DEFAULT_VIEW_FEET,
+  type Coordinate,
+  type SavedRoute,
+  useBuddiesStore
+} from '@/stores/useBuddiesStore';
 
-type Coordinate = { lat: number; lng: number };
-type MapMode = 'pan' | 'start' | 'apex' | 'waypoint';
-type SavedRoute = {
-  id: string;
-  name: string;
-  createdAt: string;
-  routeJson: string;
-  distanceMiles: number | null;
-  durationMinutes: number | null;
-};
 type DirectionsPayload = {
   geometry: Coordinate[];
   steps: Array<{
@@ -31,17 +28,17 @@ type DirectionsPayload = {
   distanceMiles: number;
   durationMinutes: number;
 };
+
 type Props = { initialToken: string };
 
 const EARTH_RADIUS_MILES = 3958.8;
-const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
 const FEET_PER_MILE = 5280;
-const DEFAULT_VIEW_FEET = 500;
 const ZOOM_STEP_FEET = 20;
 const MIN_VIEW_FEET = 40;
 const MAX_VIEW_FEET = 5 * FEET_PER_MILE;
 const ESTIMATED_MAP_WIDTH_PX = 640;
 const MAX_WAYPOINTS = 20;
+const ROUTE_CLIENT_TIMEOUT_MS = 8_000;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -118,61 +115,77 @@ function boundsForRoute(route: Coordinate[]) {
 
 export default function WalkRoutePlanner({ initialToken }: Props) {
   const mapRef = useRef<MapRef | null>(null);
-  const [token, setToken] = useState(initialToken);
-  const [center, setCenter] = useState<Coordinate>(DEFAULT_CENTER);
-  const [start, setStart] = useState<Coordinate | null>(DEFAULT_CENTER);
-  const [apex, setApex] = useState<Coordinate | null>(null);
-  const [waypoints, setWaypoints] = useState<Coordinate[]>([]);
-  const [mode, setMode] = useState<MapMode>('pan');
-  const [status, setStatus] = useState(
-    initialToken
-      ? 'Mapbox token loaded. Select Add flag, then tap the map to plot waypoints.'
-      : 'Mapbox public token is not available in this deployment.'
-  );
-  const [apexMiles, setApexMiles] = useState(1);
-  const [routeName, setRouteName] = useState('Neighborhood walk');
-  const [route, setRoute] = useState<Coordinate[]>([]);
-  const [routeSteps, setRouteSteps] = useState<string[]>([]);
-  const [distanceMiles, setDistanceMiles] = useState<number | null>(null);
-  const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
-  const [favorites, setFavorites] = useState<SavedRoute[]>([]);
-  const [viewFeet, setViewFeet] = useState(DEFAULT_VIEW_FEET);
-  const [routing, setRouting] = useState(false);
-  const [savingFavorite, setSavingFavorite] = useState(false);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const routeAbortRef = useRef<AbortController | null>(null);
+  const {
+    walkPlanner,
+    hydrateMapToken,
+    patchWalkPlanner,
+    resetRoute
+  } = useBuddiesStore();
+
+  const {
+    token: cachedToken,
+    tokenCachedAt,
+    center,
+    start,
+    apex,
+    waypoints,
+    mode,
+    status,
+    apexMiles,
+    routeName,
+    route,
+    routeSteps,
+    distanceMiles,
+    durationMinutes,
+    favorites,
+    viewFeet,
+    routingState,
+    routingError,
+    savingFavorite,
+    mapLoaded,
+    mapUpdatedAt
+  } = walkPlanner;
+
+  const token = initialToken || cachedToken;
+  const routing = routingState === 'routing';
 
   useEffect(() => {
     let active = true;
 
     async function initialize() {
-      const requests: Promise<Response>[] = [
-        fetch('/api/walk-routes/favorites', { cache: 'no-store' })
-      ];
-      if (!initialToken) requests.push(fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' }));
+      await useBuddiesStore.persist.rehydrate();
+      if (!active) return;
+
+      if (initialToken) {
+        hydrateMapToken(initialToken);
+      } else if (!useBuddiesStore.getState().walkPlanner.token) {
+        try {
+          const response = await fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' });
+          const payload = await response.json() as { token?: string; error?: string };
+          if (!active) return;
+          if (response.ok && payload.token) hydrateMapToken(payload.token);
+          else patchWalkPlanner({ status: payload.error || 'Mapbox token unavailable.' });
+        } catch {
+          if (active) patchWalkPlanner({ status: 'Map configuration could not be loaded.' });
+        }
+      }
 
       try {
-        const responses = await Promise.all(requests);
-        const favoritePayload = await responses[0].json() as { favorites?: SavedRoute[] };
-        if (!active) return;
-        if (responses[0].ok) setFavorites(favoritePayload.favorites ?? []);
-
-        if (!initialToken && responses[1]) {
-          const config = await responses[1].json() as { token?: string; error?: string };
-          if (responses[1].ok && config.token) {
-            setToken(config.token);
-            setStatus('Mapbox token loaded. Select Add flag, then tap the map to plot waypoints.');
-          } else {
-            setStatus(config.error || 'Mapbox token unavailable.');
-          }
-        }
+        const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' });
+        const payload = await response.json() as { favorites?: SavedRoute[] };
+        if (active && response.ok) patchWalkPlanner({ favorites: payload.favorites ?? [] });
       } catch {
-        if (active && !initialToken) setStatus('Map configuration could not be loaded.');
+        // Favorite retrieval must not block the map.
       }
     }
 
     void initialize();
-    return () => { active = false; };
-  }, [initialToken]);
+    return () => {
+      active = false;
+      routeAbortRef.current?.abort();
+    };
+  }, [hydrateMapToken, initialToken, patchWalkPlanner]);
 
   const routeFeature = useMemo(() => ({
     type: 'Feature' as const,
@@ -188,22 +201,20 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
     properties: {},
     geometry: {
       type: 'LineString' as const,
-      coordinates: [start, ...waypoints].filter((point): point is Coordinate => Boolean(point)).map((point) => [point.lng, point.lat])
+      coordinates: [start, ...waypoints]
+        .filter((point): point is Coordinate => Boolean(point))
+        .map((point) => [point.lng, point.lat])
     }
   }), [start, waypoints]);
 
-  const boundaryFeature = useMemo(() => circleFeature(start || center, 5), [start, center]);
-
-  function resetRoute() {
-    setRoute([]);
-    setRouteSteps([]);
-    setDistanceMiles(null);
-    setDurationMinutes(null);
-  }
+  const boundaryFeature = useMemo(
+    () => circleFeature(start || center, 5),
+    [start, center]
+  );
 
   function applyViewFeet(value: number) {
     const next = normalizeFeet(value);
-    setViewFeet(next);
+    patchWalkPlanner({ viewFeet: next });
     const map = mapRef.current;
     const current = map?.getCenter();
     const latitude = current?.lat ?? center.lat;
@@ -216,31 +227,34 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
 
   function locate() {
     if (!navigator.geolocation) {
-      setStatus('Location services are unavailable. Select a start point on the map.');
+      patchWalkPlanner({ status: 'Location services are unavailable. Select a start point on the map.' });
       return;
     }
 
-    setStatus('Requesting current location…');
+    patchWalkPlanner({ status: 'Requesting current location…' });
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const current = {
           lat: Number(position.coords.latitude.toFixed(6)),
           lng: Number(position.coords.longitude.toFixed(6))
         };
-        setCenter(current);
-        setStart(current);
-        setApex(null);
-        setWaypoints([]);
+        patchWalkPlanner({
+          center: current,
+          start: current,
+          apex: null,
+          waypoints: [],
+          viewFeet: DEFAULT_VIEW_FEET,
+          mode: 'pan',
+          status: `Current location set within approximately ${Math.round(position.coords.accuracy)} ft. Add flags to plot the route.`
+        });
         resetRoute();
-        setViewFeet(DEFAULT_VIEW_FEET);
         mapRef.current?.flyTo({
           center: [current.lng, current.lat],
           zoom: zoomForFeet(DEFAULT_VIEW_FEET, current.lat),
           duration: 900
         });
-        setStatus(`Current location set within approximately ${Math.round(position.coords.accuracy)} ft. Add flags to plot the route.`);
       },
-      () => setStatus('Location permission was denied. Select a start point on the map.'),
+      () => patchWalkPlanner({ status: 'Location permission was denied. Select a start point on the map.' }),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
     );
   }
@@ -254,42 +268,66 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
     };
 
     if (mode === 'start') {
-      setStart(coordinate);
-      setCenter(coordinate);
-      setApex(null);
-      setWaypoints([]);
+      patchWalkPlanner({
+        start: coordinate,
+        center: coordinate,
+        apex: null,
+        waypoints: [],
+        mode: 'pan',
+        status: 'Start point selected. Choose Add flag and tap the map for each waypoint.'
+      });
       resetRoute();
-      setMode('pan');
-      setStatus('Start point selected. Choose Add flag and tap the map for each waypoint.');
       return;
     }
 
     if (mode === 'waypoint') {
       if (waypoints.length >= MAX_WAYPOINTS) {
-        setStatus(`Maximum of ${MAX_WAYPOINTS} flag waypoints reached.`);
+        patchWalkPlanner({ status: `Maximum of ${MAX_WAYPOINTS} flag waypoints reached.` });
         return;
       }
-      setWaypoints((current) => [...current, coordinate]);
-      setApex(null);
+      patchWalkPlanner({
+        waypoints: [...waypoints, coordinate],
+        apex: null,
+        routingState: 'plotting',
+        status: `Flag ${waypoints.length + 1} added. Continue tapping or generate the street route.`
+      });
       resetRoute();
-      setStatus(`Flag ${waypoints.length + 1} added. Continue tapping to add more, or generate the street route.`);
       return;
     }
 
-    setApex(coordinate);
-    setWaypoints([]);
+    patchWalkPlanner({
+      apex: coordinate,
+      waypoints: [],
+      mode: 'pan',
+      status: 'Apex selected. Generate the walking-street route.'
+    });
     resetRoute();
-    setMode('pan');
-    setStatus('Apex selected. Generate the walking-street route.');
   }
 
   function removeWaypoint(index: number) {
-    setWaypoints((current) => current.filter((_, waypointIndex) => waypointIndex !== index));
+    patchWalkPlanner({
+      waypoints: waypoints.filter((_, waypointIndex) => waypointIndex !== index),
+      status: `Flag ${index + 1} removed. Remaining flags were renumbered.`
+    });
     resetRoute();
-    setStatus(`Flag ${index + 1} removed. Remaining flags were renumbered.`);
+  }
+
+  function cancelRouting() {
+    routeAbortRef.current?.abort();
+    routeAbortRef.current = null;
+    patchWalkPlanner({
+      routingState: 'cancelled',
+      routingError: null,
+      status: 'Street routing cancelled.'
+    });
   }
 
   async function generateStreetRoute() {
+    if (routing) {
+      cancelRouting();
+      return;
+    }
+
     const base = start || center;
     let selectedApex = apex;
     let coordinates: Coordinate[];
@@ -307,36 +345,60 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
       coordinates = [base, selectedApex, returnWaypoint, base];
     }
 
-    setRouting(true);
-    setStatus(waypoints.length
-      ? `Routing through ${waypoints.length} plotted flag${waypoints.length === 1 ? '' : 's'} along walkable streets…`
-      : 'Routing the loop along walkable streets and paths…');
+    const controller = new AbortController();
+    routeAbortRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), ROUTE_CLIENT_TIMEOUT_MS);
+
+    patchWalkPlanner({
+      routingState: 'routing',
+      routingError: null,
+      status: waypoints.length
+        ? `Routing through ${waypoints.length} plotted flag${waypoints.length === 1 ? '' : 's'} along walkable streets…`
+        : 'Routing the loop along walkable streets and paths…'
+    });
 
     try {
       const response = await fetch('/api/maps/directions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coordinates })
+        body: JSON.stringify({ coordinates }),
+        signal: controller.signal,
+        cache: 'no-store'
       });
       const payload = await response.json() as DirectionsPayload & { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Street routing failed.');
 
-      setApex(waypoints.length ? null : selectedApex);
-      setRoute(payload.geometry);
-      setRouteSteps(payload.steps.map((step) => `${step.instruction}${step.distanceFeet ? ` · ${step.distanceFeet.toLocaleString()} ft` : ''}`));
-      setDistanceMiles(payload.distanceMiles);
-      setDurationMinutes(payload.durationMinutes);
-      setStatus(waypoints.length
-        ? `Street route generated through ${waypoints.length} flag waypoint${waypoints.length === 1 ? '' : 's'}.`
-        : 'Street-routed walking loop generated.');
+      patchWalkPlanner({
+        apex: waypoints.length ? null : selectedApex,
+        route: payload.geometry,
+        routeSteps: payload.steps.map((step) => `${step.instruction}${step.distanceFeet ? ` · ${step.distanceFeet.toLocaleString()} ft` : ''}`),
+        distanceMiles: payload.distanceMiles,
+        durationMinutes: payload.durationMinutes,
+        routingState: 'success',
+        routingError: null,
+        status: waypoints.length
+          ? `Street route generated through ${waypoints.length} flag waypoint${waypoints.length === 1 ? '' : 's'}.`
+          : 'Street-routed walking loop generated.'
+      });
 
       const bounds = boundsForRoute(payload.geometry);
       if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 900 });
     } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === 'AbortError';
+      if (routingState === 'cancelled') return;
       resetRoute();
-      setStatus(error instanceof Error ? error.message : 'Street routing failed.');
+      patchWalkPlanner({
+        routingState: timedOut ? 'timeout' : 'error',
+        routingError: timedOut
+          ? `Street routing exceeded ${ROUTE_CLIENT_TIMEOUT_MS / 1000} seconds. Move flags closer to streets and retry.`
+          : error instanceof Error
+            ? error.message
+            : 'Street routing failed.',
+        status: timedOut ? 'Street routing timed out.' : 'Street routing failed.'
+      });
     } finally {
-      setRouting(false);
+      window.clearTimeout(timeout);
+      if (routeAbortRef.current === controller) routeAbortRef.current = null;
     }
   }
 
@@ -352,17 +414,17 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
     routeSteps,
     distanceMiles,
     durationMinutes,
-    viewFeet
+    viewFeet,
+    mapUpdatedAt
   });
 
   async function saveFavorite() {
     if (!route.length) {
-      setStatus('Generate a street route before saving it.');
+      patchWalkPlanner({ status: 'Generate a street route before saving it.' });
       return;
     }
 
-    setSavingFavorite(true);
-    setStatus('Saving favorite route to your account…');
+    patchWalkPlanner({ savingFavorite: true, status: 'Saving favorite route to your account…' });
 
     try {
       const response = await fetch('/api/walk-routes/favorites', {
@@ -372,12 +434,16 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
       });
       const payload = await response.json() as { favorite?: SavedRoute; error?: string };
       if (!response.ok || !payload.favorite) throw new Error(payload.error || 'Favorite route could not be saved.');
-      setFavorites((current) => [payload.favorite as SavedRoute, ...current].slice(0, 20));
-      setStatus('Favorite route saved to your account.');
+      patchWalkPlanner({
+        favorites: [payload.favorite, ...favorites].slice(0, 20),
+        savingFavorite: false,
+        status: 'Favorite route saved to your account.'
+      });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Favorite route could not be saved.');
-    } finally {
-      setSavingFavorite(false);
+      patchWalkPlanner({
+        savingFavorite: false,
+        status: error instanceof Error ? error.message : 'Favorite route could not be saved.'
+      });
     }
   }
 
@@ -389,10 +455,12 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
         body: JSON.stringify({ id })
       });
       if (!response.ok) throw new Error('Favorite route could not be removed.');
-      setFavorites((current) => current.filter((favorite) => favorite.id !== id));
-      setStatus('Favorite route removed.');
+      patchWalkPlanner({
+        favorites: favorites.filter((favorite) => favorite.id !== id),
+        status: 'Favorite route removed.'
+      });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Favorite route could not be removed.');
+      patchWalkPlanner({ status: error instanceof Error ? error.message : 'Favorite route could not be removed.' });
     }
   }
 
@@ -413,18 +481,22 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
 
     const loadedRoute = data.route ?? [];
     const loadedCenter = data.center ?? data.start ?? DEFAULT_CENTER;
-    setRouteName(data.name || saved.name);
-    setCenter(loadedCenter);
-    setApexMiles(data.apexMiles || 1);
-    setStart(data.start || loadedCenter);
-    setApex(data.apexPoint || null);
-    setWaypoints(Array.isArray(data.waypoints) ? data.waypoints.slice(0, MAX_WAYPOINTS) : []);
-    setRoute(loadedRoute);
-    setRouteSteps(data.routeSteps || []);
-    setDistanceMiles(data.distanceMiles ?? saved.distanceMiles ?? null);
-    setDurationMinutes(data.durationMinutes ?? saved.durationMinutes ?? null);
-    setViewFeet(normalizeFeet(data.viewFeet || DEFAULT_VIEW_FEET));
-    setStatus(`Loaded favorite route: ${saved.name}.`);
+    patchWalkPlanner({
+      routeName: data.name || saved.name,
+      center: loadedCenter,
+      apexMiles: data.apexMiles || 1,
+      start: data.start || loadedCenter,
+      apex: data.apexPoint || null,
+      waypoints: Array.isArray(data.waypoints) ? data.waypoints.slice(0, MAX_WAYPOINTS) : [],
+      route: loadedRoute,
+      routeSteps: data.routeSteps || [],
+      distanceMiles: data.distanceMiles ?? saved.distanceMiles ?? null,
+      durationMinutes: data.durationMinutes ?? saved.durationMinutes ?? null,
+      viewFeet: normalizeFeet(data.viewFeet || DEFAULT_VIEW_FEET),
+      routingState: loadedRoute.length ? 'success' : 'idle',
+      routingError: null,
+      status: `Loaded favorite route: ${saved.name}.`
+    });
 
     const bounds = boundsForRoute(loadedRoute);
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 800 });
@@ -439,7 +511,7 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
     <section className="grid gap-5 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
       <div>
         <h2 className="text-xl font-semibold">Interactive walk route planner</h2>
-        <p className="mt-1 text-sm text-slate-600">Plot numbered flag waypoints by tapping the map. The final route is snapped to walking streets and paths.</p>
+        <p className="mt-1 text-sm text-slate-600">Zustand preserves the latest route, flags, camera position, and public Mapbox token for this browser session.</p>
       </div>
 
       <input type="hidden" name="routeName" value={routeName} />
@@ -447,10 +519,10 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
 
       <div className="grid gap-2 sm:grid-cols-5">
         <button type="button" onClick={locate} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white">Current location</button>
-        <button type="button" onClick={() => setMode('pan')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'pan' ? 'bg-slate-100' : ''}`}>Pan map</button>
-        <button type="button" onClick={() => setMode('start')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'start' ? 'bg-slate-100' : ''}`}>Set start</button>
-        <button type="button" onClick={() => setMode('waypoint')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'waypoint' ? 'bg-amber-50 border-amber-400' : ''}`}>Add flag</button>
-        <button type="button" onClick={() => setMode('apex')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'apex' ? 'bg-slate-100' : ''}`}>Set apex</button>
+        <button type="button" onClick={() => patchWalkPlanner({ mode: 'pan' })} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'pan' ? 'bg-slate-100' : ''}`}>Pan map</button>
+        <button type="button" onClick={() => patchWalkPlanner({ mode: 'start' })} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'start' ? 'bg-slate-100' : ''}`}>Set start</button>
+        <button type="button" onClick={() => patchWalkPlanner({ mode: 'waypoint', routingState: 'plotting' })} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'waypoint' ? 'border-amber-400 bg-amber-50' : ''}`}>Add flag</button>
+        <button type="button" onClick={() => patchWalkPlanner({ mode: 'apex' })} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'apex' ? 'bg-slate-100' : ''}`}>Set apex</button>
       </div>
 
       <div className="grid gap-3 rounded-xl border bg-slate-50 p-3">
@@ -459,7 +531,7 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
           <input aria-label="Map view radius in feet" type="range" min={MIN_VIEW_FEET} max={MAX_VIEW_FEET} step={ZOOM_STEP_FEET} value={viewFeet} onChange={(event) => applyViewFeet(Number(event.target.value))} className="min-w-0 flex-1" />
           <button type="button" aria-label="Zoom out by 20 feet" onClick={() => applyViewFeet(viewFeet + ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">−</button>
         </div>
-        <p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · controls change by exactly 20 ft</p>
+        <p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · 20 ft controls · session snapshot {mapUpdatedAt ? new Date(mapUpdatedAt).toLocaleTimeString() : 'not saved'}</p>
       </div>
 
       <p className="text-sm text-slate-600" role="status">{status}</p>
@@ -467,12 +539,14 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
       <div className="relative h-[460px] overflow-hidden rounded-2xl border bg-slate-100">
         {token ? (
           <Map
+            id="walk-planner-map"
             ref={mapRef}
+            reuseMaps
             mapboxAccessToken={token}
             initialViewState={{
               latitude: center.lat,
               longitude: center.lng,
-              zoom: zoomForFeet(DEFAULT_VIEW_FEET, center.lat)
+              zoom: zoomForFeet(viewFeet, center.lat)
             }}
             mapStyle="mapbox://styles/mapbox/streets-v12"
             dragRotate={false}
@@ -480,17 +554,26 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
             cursor={mode === 'pan' ? 'grab' : 'crosshair'}
             onClick={selectPoint}
             onLoad={() => {
-              setMapLoaded(true);
-              setStatus('Map loaded. Select Add flag, then tap the map to plot waypoints.');
+              const latest = useBuddiesStore.getState().walkPlanner;
+              mapRef.current?.jumpTo({
+                center: [latest.center.lng, latest.center.lat],
+                zoom: zoomForFeet(latest.viewFeet, latest.center.lat)
+              });
+              patchWalkPlanner({
+                mapLoaded: true,
+                status: 'Map loaded. Select Add flag, then tap the map to plot waypoints.'
+              });
             }}
-            onError={(event) => {
-              setMapLoaded(false);
-              setStatus(`Mapbox failed to render: ${event.error?.message || 'unknown map error'}`);
-            }}
+            onError={(event) => patchWalkPlanner({
+              mapLoaded: false,
+              status: `Mapbox failed to render: ${event.error?.message || 'unknown map error'}`
+            })}
             onMoveEnd={(event) => {
               const nextCenter = event.target.getCenter();
-              setCenter({ lat: nextCenter.lat, lng: nextCenter.lng });
-              setViewFeet(feetForZoom(event.target.getZoom(), nextCenter.lat));
+              patchWalkPlanner({
+                center: { lat: nextCenter.lat, lng: nextCenter.lng },
+                viewFeet: feetForZoom(event.target.getZoom(), nextCenter.lat)
+              });
             }}
           >
             <NavigationControl position="top-right" showCompass={false} />
@@ -527,7 +610,7 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600">
             <p>Mapbox public token is missing from this Production deployment.</p>
-            <p className="text-xs">Expected a Vercel environment variable containing a token that begins with pk.</p>
+            <p className="text-xs">Expected a browser-safe token beginning with pk.</p>
           </div>
         )}
 
@@ -543,22 +626,24 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
           </div>
           <div className="flex gap-2">
             <button type="button" disabled={!waypoints.length} onClick={() => removeWaypoint(waypoints.length - 1)} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-40">Undo last</button>
-            <button type="button" disabled={!waypoints.length} onClick={() => { setWaypoints([]); resetRoute(); setStatus('All flag waypoints cleared.'); }} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-40">Clear flags</button>
+            <button type="button" disabled={!waypoints.length} onClick={() => { patchWalkPlanner({ waypoints: [], status: 'All flag waypoints cleared.' }); resetRoute(); }} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-40">Clear flags</button>
           </div>
         </div>
         {waypoints.length ? <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-2">{waypoints.map((waypoint, index) => <li key={`${waypoint.lat}-${waypoint.lng}-list`} className="rounded-lg bg-slate-50 px-3 py-2"><strong>🚩 {index + 1}</strong> · {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}</li>)}</ol> : null}
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium">Route name<input value={routeName} onChange={(event) => setRouteName(event.target.value)} className="rounded-lg border px-3 py-3 text-base" /></label>
-        <label className="grid gap-2 text-sm font-medium">Random apex fallback: {apexMiles.toFixed(1)} miles<input type="range" min="0.1" max="5" step="0.1" value={apexMiles} onChange={(event) => setApexMiles(Number(event.target.value))} /></label>
+        <label className="grid gap-2 text-sm font-medium">Route name<input value={routeName} onChange={(event) => patchWalkPlanner({ routeName: event.target.value })} className="rounded-lg border px-3 py-3 text-base" /></label>
+        <label className="grid gap-2 text-sm font-medium">Random apex fallback: {apexMiles.toFixed(1)} miles<input type="range" min="0.1" max="5" step="0.1" value={apexMiles} onChange={(event) => patchWalkPlanner({ apexMiles: Number(event.target.value) })} /></label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <button type="button" disabled={routing} onClick={generateStreetRoute} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-50">{routing ? 'Routing streets…' : waypoints.length ? `Route through ${waypoints.length} flag${waypoints.length === 1 ? '' : 's'}` : 'Generate street route'}</button>
+        <button type="button" onClick={generateStreetRoute} className={`rounded-lg px-4 py-3 font-medium text-white ${routing ? 'bg-red-700' : 'bg-slate-900'}`}>{routing ? 'Cancel routing' : waypoints.length ? `Route through ${waypoints.length} flag${waypoints.length === 1 ? '' : 's'}` : 'Generate street route'}</button>
         <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save favorite'}</button>
-        <button type="button" onClick={() => { setApex(null); setWaypoints([]); resetRoute(); setMode('pan'); }} className="rounded-lg border px-4 py-3 font-medium">Clear route</button>
+        <button type="button" onClick={() => { patchWalkPlanner({ apex: null, waypoints: [], mode: 'pan', status: 'Route cleared.' }); resetRoute(); }} className="rounded-lg border px-4 py-3 font-medium">Clear route</button>
       </div>
+
+      {routingError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700" role="alert">{routingError}</p> : null}
 
       {routeSteps.length ? (
         <div className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-700">
@@ -568,7 +653,10 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
       ) : null}
 
       <div>
-        <h3 className="font-semibold">Favorite routes</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Favorite routes</h3>
+          <p className="text-xs text-slate-500">Map token cached this session: {tokenCachedAt ? new Date(tokenCachedAt).toLocaleTimeString() : 'not yet'}</p>
+        </div>
         <div className="mt-3 grid gap-2">
           {favorites.length === 0 ? <p className="text-sm text-slate-600">No account favorites saved yet.</p> : favorites.map((favorite) => (
             <div key={favorite.id} className="rounded-xl border p-3">
