@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Map, {
   GeolocateControl,
+  Layer,
   Marker,
   NavigationControl,
   Source,
-  Layer,
   type MapRef
 } from 'react-map-gl/mapbox';
 
 type Coordinate = { lat: number; lng: number };
+type MapMode = 'pan' | 'start' | 'apex';
 type SavedRoute = {
   id: string;
   name: string;
@@ -30,8 +31,7 @@ type DirectionsPayload = {
   distanceMiles: number;
   durationMinutes: number;
 };
-
-type MapMode = 'pan' | 'start' | 'apex';
+type Props = { initialToken: string };
 
 const EARTH_RADIUS_MILES = 3958.8;
 const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
@@ -101,10 +101,7 @@ function circleFeature(center: Coordinate, miles: number) {
   return {
     type: 'Feature' as const,
     properties: {},
-    geometry: {
-      type: 'Polygon' as const,
-      coordinates: [points]
-    }
+    geometry: { type: 'Polygon' as const, coordinates: [points] }
   };
 }
 
@@ -118,14 +115,18 @@ function boundsForRoute(route: Coordinate[]) {
   ] as [[number, number], [number, number]];
 }
 
-export default function WalkRoutePlanner() {
+export default function WalkRoutePlanner({ initialToken }: Props) {
   const mapRef = useRef<MapRef | null>(null);
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(initialToken);
   const [center, setCenter] = useState<Coordinate>(DEFAULT_CENTER);
   const [start, setStart] = useState<Coordinate | null>(DEFAULT_CENTER);
   const [apex, setApex] = useState<Coordinate | null>(null);
   const [mode, setMode] = useState<MapMode>('pan');
-  const [status, setStatus] = useState('Pan or pinch the map, then choose Set start or Set apex to place route points.');
+  const [status, setStatus] = useState(
+    initialToken
+      ? 'Mapbox token loaded from the production deployment.'
+      : 'Mapbox public token is not available in this deployment.'
+  );
   const [apexMiles, setApexMiles] = useState(1);
   const [routeName, setRouteName] = useState('Neighborhood walk');
   const [route, setRoute] = useState<Coordinate[]>([]);
@@ -136,31 +137,40 @@ export default function WalkRoutePlanner() {
   const [viewFeet, setViewFeet] = useState(DEFAULT_VIEW_FEET);
   const [routing, setRouting] = useState(false);
   const [savingFavorite, setSavingFavorite] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function initialize() {
-      try {
-        const [configResponse, favoritesResponse] = await Promise.all([
-          fetch('/api/maps/config', { cache: 'no-store' }),
-          fetch('/api/walk-routes/favorites', { cache: 'no-store' })
-        ]);
-        const config = await configResponse.json() as { token?: string; error?: string };
-        const favoritePayload = await favoritesResponse.json() as { favorites?: SavedRoute[] };
+      const requests: Promise<Response>[] = [
+        fetch('/api/walk-routes/favorites', { cache: 'no-store' })
+      ];
+      if (!initialToken) requests.push(fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' }));
 
+      try {
+        const responses = await Promise.all(requests);
+        const favoritePayload = await responses[0].json() as { favorites?: SavedRoute[] };
         if (!active) return;
-        if (configResponse.ok && config.token) setToken(config.token);
-        else setStatus(config.error || 'Mapbox token unavailable.');
-        if (favoritesResponse.ok) setFavorites(favoritePayload.favorites ?? []);
+        if (responses[0].ok) setFavorites(favoritePayload.favorites ?? []);
+
+        if (!initialToken && responses[1]) {
+          const config = await responses[1].json() as { token?: string; error?: string };
+          if (responses[1].ok && config.token) {
+            setToken(config.token);
+            setStatus('Mapbox token loaded from the runtime configuration.');
+          } else {
+            setStatus(config.error || 'Mapbox token unavailable.');
+          }
+        }
       } catch {
-        if (active) setStatus('Map configuration could not be loaded.');
+        if (active && !initialToken) setStatus('Map configuration could not be loaded.');
       }
     }
 
     void initialize();
     return () => { active = false; };
-  }, []);
+  }, [initialToken]);
 
   const routeFeature = useMemo(() => ({
     type: 'Feature' as const,
@@ -371,7 +381,11 @@ export default function WalkRoutePlanner() {
 
     const bounds = boundsForRoute(loadedRoute);
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 800 });
-    else mapRef.current?.flyTo({ center: [loadedCenter.lng, loadedCenter.lat], zoom: zoomForFeet(data.viewFeet || DEFAULT_VIEW_FEET, loadedCenter.lat), duration: 700 });
+    else mapRef.current?.flyTo({
+      center: [loadedCenter.lng, loadedCenter.lat],
+      zoom: zoomForFeet(data.viewFeet || DEFAULT_VIEW_FEET, loadedCenter.lat),
+      duration: 700
+    });
   }
 
   return (
@@ -397,10 +411,10 @@ export default function WalkRoutePlanner() {
           <input aria-label="Map view radius in feet" type="range" min={MIN_VIEW_FEET} max={MAX_VIEW_FEET} step={ZOOM_STEP_FEET} value={viewFeet} onChange={(event) => applyViewFeet(Number(event.target.value))} className="min-w-0 flex-1" />
           <button type="button" aria-label="Zoom out by 20 feet" onClick={() => applyViewFeet(viewFeet + ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">−</button>
         </div>
-        <p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · controls change by exactly 20 ft · gestures remain continuous</p>
+        <p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · controls change by exactly 20 ft</p>
       </div>
 
-      <p className="text-sm text-slate-600">{status}</p>
+      <p className="text-sm text-slate-600" role="status">{status}</p>
 
       <div className="relative h-[460px] overflow-hidden rounded-2xl border bg-slate-100">
         {token ? (
@@ -417,6 +431,14 @@ export default function WalkRoutePlanner() {
             touchPitch={false}
             cursor={mode === 'pan' ? 'grab' : 'crosshair'}
             onClick={selectPoint}
+            onLoad={() => {
+              setMapLoaded(true);
+              setStatus('Map loaded. Pan, pinch, or choose route points.');
+            }}
+            onError={(event) => {
+              setMapLoaded(false);
+              setStatus(`Mapbox failed to render: ${event.error?.message || 'unknown map error'}`);
+            }}
             onMoveEnd={(event) => {
               const nextCenter = event.target.getCenter();
               setCenter({ lat: nextCenter.lat, lng: nextCenter.lng });
@@ -440,9 +462,15 @@ export default function WalkRoutePlanner() {
             {start ? <Marker latitude={start.lat} longitude={start.lng} anchor="bottom"><div className="rounded-xl border-2 border-white bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-lg">Start</div></Marker> : null}
             {apex ? <Marker latitude={apex.lat} longitude={apex.lng} anchor="bottom"><div className="rounded-xl border-2 border-white bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 shadow-lg">Apex</div></Marker> : null}
           </Map>
-        ) : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-600">Waiting for the Mapbox public token saved in Vercel.</div>}
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600">
+            <p>Mapbox public token is missing from this Production deployment.</p>
+            <p className="text-xs">Expected a Vercel environment variable containing a token that begins with pk.</p>
+          </div>
+        )}
 
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow">+{viewFeet.toLocaleString()} ft</div>
+        {token && !mapLoaded ? <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow">Loading Mapbox…</div> : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
