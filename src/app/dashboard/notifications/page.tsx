@@ -23,8 +23,8 @@ export default async function NotificationsPage() {
     prisma.walk.findMany({
       where: { OR: [{ requesterId: user.id }, { walkerId: user.id }], status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] } },
       orderBy: { startsAt: 'asc' },
-      take: 8,
-      include: { dog: { select: { name: true, slug: true } } }
+      take: 12,
+      include: { dog: { select: { name: true, slug: true, breed: true } }, requester: { select: { id: true, displayName: true } }, walker: { select: { id: true, displayName: true } } }
     })
   ]).catch(() => [[], [], []] as const);
 
@@ -36,7 +36,7 @@ export default async function NotificationsPage() {
         <div>
           <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Notifications</p>
           <h1 className="text-3xl font-bold">Notifications</h1>
-          <p className="mt-2 text-slate-600">Dog-first alerts for buddy requests, safety status, and active walks.</p>
+          <p className="mt-2 text-slate-600">Dog-first alerts for buddy requests, safety status, and active walks. This page explains every red badge source.</p>
         </div>
         <div className="flex flex-wrap gap-2"><Link href="/dashboard" className="rounded-lg border px-4 py-2">Dashboard</Link><Link href="/dashboard/lost/report" className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white">Lost dog</Link></div>
       </div>
@@ -54,7 +54,7 @@ export default async function NotificationsPage() {
           <div className="mt-4 grid gap-3">
             {incomingRequests.length === 0 ? <p className="text-sm text-slate-600">No pending buddy requests.</p> : incomingRequests.map((request) => {
               const dog = request.sender.dogs[0];
-              return <article key={request.id} className="rounded-xl border p-4"><h3 className="font-semibold">{dog?.name ?? 'Dog profile'}</h3><p className="text-sm text-slate-600">{dog?.breed ?? 'Breed hidden'} · owner hidden</p><Link href="/dashboard/buddies" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Review request</Link></article>;
+              return <article key={request.id} className="rounded-xl border p-4"><h3 className="font-semibold">{dog?.name ?? 'Dog profile'}</h3><p className="text-sm text-slate-600">{dog?.breed ?? 'Breed hidden'} · owner hidden</p><p className="mt-1 text-xs text-slate-500">Source: Buddies tab badge</p><Link href="/dashboard/buddies" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Review request</Link></article>;
             })}
           </div>
         </div>
@@ -63,15 +63,18 @@ export default async function NotificationsPage() {
           <h2 className="text-xl font-semibold">Safety alerts</h2>
           <div className="mt-4 grid gap-3">
             {alertDogs.length === 0 ? <p className="text-sm text-slate-600">No active dog safety alerts.</p> : alertDogs.map((dog) => (
-              <article key={dog.id} className="rounded-xl border p-4"><h3 className="font-semibold">{dog.name}</h3><p className="text-sm text-slate-600">Status: {dog.status}{dog.lastSeenLocation ? ` · ${dog.lastSeenLocation}` : ''}</p><Link href={`/dogs/${dog.slug}`} className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Open profile</Link></article>
+              <article key={dog.id} className="rounded-xl border p-4"><h3 className="font-semibold">{dog.name}</h3><p className="text-sm text-slate-600">Status: {dog.status}{dog.lastSeenLocation ? ` · ${dog.lastSeenLocation}` : ''}</p><p className="mt-1 text-xs text-slate-500">Source: Alerts tab badge</p><Link href={`/dogs/${dog.slug}`} className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Open profile</Link></article>
             ))}
           </div>
         </div>
 
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">Active walks</h2>
+          <h2 className="text-xl font-semibold">Walk invites</h2>
           <div className="mt-4 grid gap-3">
-            {walks.length === 0 ? <p className="text-sm text-slate-600">No active walk alerts.</p> : walks.map((walk) => <article key={walk.id} className="rounded-xl border p-4"><h3 className="font-semibold">{walk.dog.name}</h3><p className="text-sm text-slate-600">{walk.status} · {walk.startsAt.toLocaleString()}</p><Link href="/dashboard/walks" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Open walks</Link></article>)}
+            {walks.length === 0 ? <p className="text-sm text-slate-600">No active walk alerts.</p> : walks.map((walk) => {
+              const invited = walk.walkerId === user.id;
+              return <article key={walk.id} className="rounded-xl border p-4"><h3 className="font-semibold">{walk.dog.name}</h3><p className="text-sm text-slate-600">{invited ? 'Invited to walk' : 'Invite sent'} · {walk.status} · {walk.startsAt.toLocaleString()}</p><p className="text-sm text-slate-600">Dog: {walk.dog.name}{walk.dog.breed ? ` · ${walk.dog.breed}` : ''}</p><p className="mt-1 text-xs text-slate-500">Source: Buddies/Walks badge</p><Link href={`/dogs/${walk.dog.slug}`} className="mt-3 inline-block rounded-lg border px-4 py-2 text-sm font-medium">Dog profile</Link><Link href="/dashboard/walks" className="ml-2 mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Open walks</Link></article>;
+            })}
           </div>
         </div>
       </section>
