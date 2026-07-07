@@ -46,6 +46,7 @@ enum NotificationType {
   BUDDY_REQUEST
   WALK_INVITE
   WALK_STATUS
+  MESSAGE
   DOG_LOST
   DOG_FOUND
   DOG_SIGHTING
@@ -304,6 +305,8 @@ model Notification {
   dogBuddyRequest    DogBuddyRequest?   @relation(fields: [dogBuddyRequestId], references: [id], onDelete: SetNull)
   sightingId         String?
   sighting           Sighting?          @relation(fields: [sightingId], references: [id], onDelete: SetNull)
+  messageId          String?
+  message            Message?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
   readAt             DateTime?
   createdAt          DateTime            @default(now())
 
@@ -312,16 +315,18 @@ model Notification {
   @@index([dogId])
   @@index([walkId])
   @@index([dogBuddyRequestId])
+  @@index([messageId])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  walkId    String
-  walk      Walk     @relation(fields: [walkId], references: [id], onDelete: Cascade)
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
-  body      String
-  createdAt DateTime @default(now())
+  id            String         @id @default(cuid())
+  walkId        String
+  walk          Walk           @relation(fields: [walkId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User           @relation(fields: [senderId], references: [id])
+  body          String
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
 
   @@index([walkId, createdAt])
 }
