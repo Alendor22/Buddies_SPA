@@ -1,8 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Map, {
+  GeolocateControl,
+  Marker,
+  NavigationControl,
+  Source,
+  Layer,
+  type MapRef
+} from 'react-map-gl/mapbox';
 
-type Point = { x: number; y: number };
 type Coordinate = { lat: number; lng: number };
 type SavedRoute = {
   id: string;
@@ -24,14 +31,16 @@ type DirectionsPayload = {
   durationMinutes: number;
 };
 
+type MapMode = 'pan' | 'start' | 'apex';
+
 const EARTH_RADIUS_MILES = 3958.8;
 const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
-const MAP_SIZE = 640;
 const FEET_PER_MILE = 5280;
 const DEFAULT_VIEW_FEET = 500;
 const ZOOM_STEP_FEET = 20;
 const MIN_VIEW_FEET = 40;
 const MAX_VIEW_FEET = 5 * FEET_PER_MILE;
+const ESTIMATED_MAP_WIDTH_PX = 640;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -41,19 +50,16 @@ function normalizeFeet(value: number) {
   return Math.round(clamp(value, MIN_VIEW_FEET, MAX_VIEW_FEET) / ZOOM_STEP_FEET) * ZOOM_STEP_FEET;
 }
 
-function viewMiles(viewFeet: number) {
-  return viewFeet / FEET_PER_MILE;
+function zoomForFeet(viewFeet: number, latitude: number) {
+  const visibleWidthMeters = Math.max(1, viewFeet * 2 * 0.3048);
+  const metersPerPixelAtZoomZero = 156543.03392 * Math.cos(latitude * Math.PI / 180);
+  return clamp(Math.log2((metersPerPixelAtZoomZero * ESTIMATED_MAP_WIDTH_PX) / visibleWidthMeters), 8, 21);
 }
 
-function mapZoomFromFeet(viewFeet: number) {
-  if (viewFeet <= 100) return 18.8;
-  if (viewFeet <= 250) return 17.7;
-  if (viewFeet <= 500) return 16.7;
-  if (viewFeet <= 1000) return 15.7;
-  if (viewFeet <= 2640) return 14.3;
-  if (viewFeet <= 5280) return 13.2;
-  if (viewFeet <= 13200) return 12;
-  return 11;
+function feetForZoom(zoom: number, latitude: number) {
+  const metersPerPixel = (156543.03392 * Math.cos(latitude * Math.PI / 180)) / (2 ** zoom);
+  const visibleWidthFeet = metersPerPixel * ESTIMATED_MAP_WIDTH_PX / 0.3048;
+  return normalizeFeet(visibleWidthFeet / 2);
 }
 
 function destination(start: Coordinate, miles: number, bearingDegrees: number): Coordinate {
@@ -86,58 +92,40 @@ function bearingBetween(start: Coordinate, end: Coordinate) {
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 
-function drawPath(points: Point[]) {
-  return points
-    .map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-    .join(' ');
-}
+function circleFeature(center: Coordinate, miles: number) {
+  const points = Array.from({ length: 65 }, (_, index) => {
+    const point = destination(center, miles, index * (360 / 64));
+    return [point.lng, point.lat];
+  });
 
-function coordinateToPoint(coordinate: Coordinate, center: Coordinate, radiusMiles: number) {
-  const milesPerLatitude = 69;
-  const milesPerLongitude = 69 * Math.cos(center.lat * Math.PI / 180);
   return {
-    x: MAP_SIZE / 2 + ((coordinate.lng - center.lng) * milesPerLongitude / radiusMiles) * (MAP_SIZE / 2),
-    y: MAP_SIZE / 2 - ((coordinate.lat - center.lat) * milesPerLatitude / radiusMiles) * (MAP_SIZE / 2)
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'Polygon' as const,
+      coordinates: [points]
+    }
   };
 }
 
-function pointToCoordinate(point: Point, center: Coordinate, radiusMiles: number): Coordinate {
-  const milesPerLatitude = 69;
-  const milesPerLongitude = 69 * Math.cos(center.lat * Math.PI / 180);
-  const lng = center.lng + (((point.x - MAP_SIZE / 2) / (MAP_SIZE / 2)) * radiusMiles) / milesPerLongitude;
-  const lat = center.lat - (((point.y - MAP_SIZE / 2) / (MAP_SIZE / 2)) * radiusMiles) / milesPerLatitude;
-  return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
-}
-
-function pinLabel(index: number) {
-  return index === 0 ? 'Start' : 'Apex';
-}
-
-function MapFallback({ viewFeet }: { viewFeet: number }) {
-  const blockSize = viewFeet <= 500 ? 32 : viewFeet <= 1000 ? 42 : viewFeet <= 5280 ? 56 : 72;
-  return (
-    <div className="absolute inset-0 overflow-hidden bg-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(14,165,233,.22),transparent_24%),radial-gradient(circle_at_78%_28%,rgba(34,197,94,.18),transparent_22%),radial-gradient(circle_at_56%_78%,rgba(99,102,241,.16),transparent_26%)]" />
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: 'linear-gradient(90deg,rgba(15,23,42,.10) 1px,transparent 1px),linear-gradient(rgba(15,23,42,.10) 1px,transparent 1px)',
-          backgroundSize: `${blockSize}px ${blockSize}px`
-        }}
-      />
-    </div>
-  );
+function boundsForRoute(route: Coordinate[]) {
+  if (!route.length) return null;
+  const lngs = route.map((point) => point.lng);
+  const lats = route.map((point) => point.lat);
+  return [
+    [Math.min(...lngs), Math.min(...lats)],
+    [Math.max(...lngs), Math.max(...lats)]
+  ] as [[number, number], [number, number]];
 }
 
 export default function WalkRoutePlanner() {
-  const mapLayerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapRef | null>(null);
+  const [token, setToken] = useState('');
   const [center, setCenter] = useState<Coordinate>(DEFAULT_CENTER);
   const [start, setStart] = useState<Coordinate | null>(DEFAULT_CENTER);
   const [apex, setApex] = useState<Coordinate | null>(null);
-  const [status, setStatus] = useState('Set the start point, select an apex, then generate a street-routed walking loop.');
-  const [drawnArea, setDrawnArea] = useState<Point[]>([]);
-  const [drawing, setDrawing] = useState(false);
-  const [mode, setMode] = useState<'select' | 'draw'>('select');
+  const [mode, setMode] = useState<MapMode>('pan');
+  const [status, setStatus] = useState('Pan or pinch the map, then choose Set start or Set apex to place route points.');
   const [apexMiles, setApexMiles] = useState(1);
   const [routeName, setRouteName] = useState('Neighborhood walk');
   const [route, setRoute] = useState<Coordinate[]>([]);
@@ -152,31 +140,38 @@ export default function WalkRoutePlanner() {
   useEffect(() => {
     let active = true;
 
-    async function loadFavorites() {
+    async function initialize() {
       try {
-        const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' });
-        const payload = await response.json() as { favorites?: SavedRoute[] };
-        if (active && response.ok) setFavorites(payload.favorites ?? []);
+        const [configResponse, favoritesResponse] = await Promise.all([
+          fetch('/api/maps/config', { cache: 'no-store' }),
+          fetch('/api/walk-routes/favorites', { cache: 'no-store' })
+        ]);
+        const config = await configResponse.json() as { token?: string; error?: string };
+        const favoritePayload = await favoritesResponse.json() as { favorites?: SavedRoute[] };
+
+        if (!active) return;
+        if (configResponse.ok && config.token) setToken(config.token);
+        else setStatus(config.error || 'Mapbox token unavailable.');
+        if (favoritesResponse.ok) setFavorites(favoritePayload.favorites ?? []);
       } catch {
-        if (active) setStatus('Favorite routes could not be loaded. Route planning remains available.');
+        if (active) setStatus('Map configuration could not be loaded.');
       }
     }
 
-    void loadFavorites();
+    void initialize();
     return () => { active = false; };
   }, []);
 
-  const radiusMiles = viewMiles(viewFeet);
-  const mapUrl = useMemo(() => {
-    const params = new URLSearchParams({
-      lat: String(center.lat),
-      lng: String(center.lng),
-      zoom: String(mapZoomFromFeet(viewFeet)),
-      width: String(MAP_SIZE),
-      height: String(MAP_SIZE)
-    });
-    return `/api/maps/static?${params.toString()}`;
-  }, [center, viewFeet]);
+  const routeFeature = useMemo(() => ({
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: route.map((point) => [point.lng, point.lat])
+    }
+  }), [route]);
+
+  const boundaryFeature = useMemo(() => circleFeature(start || center, 5), [start, center]);
 
   function resetRoute() {
     setRoute([]);
@@ -185,13 +180,22 @@ export default function WalkRoutePlanner() {
     setDurationMinutes(null);
   }
 
-  function setView(value: number) {
-    setViewFeet(normalizeFeet(value));
+  function applyViewFeet(value: number) {
+    const next = normalizeFeet(value);
+    setViewFeet(next);
+    const map = mapRef.current;
+    const current = map?.getCenter();
+    const latitude = current?.lat ?? center.lat;
+    map?.flyTo({
+      center: current ? [current.lng, current.lat] : [center.lng, center.lat],
+      zoom: zoomForFeet(next, latitude),
+      duration: 250
+    });
   }
 
   function locate() {
     if (!navigator.geolocation) {
-      setStatus('Location services are unavailable. Select the map points manually.');
+      setStatus('Location services are unavailable. Select a start point on the map.');
       return;
     }
 
@@ -206,50 +210,41 @@ export default function WalkRoutePlanner() {
         setStart(current);
         setApex(null);
         resetRoute();
-        setView(DEFAULT_VIEW_FEET);
-        setStatus('Current location set. Tap the apex or turnaround point.');
+        setViewFeet(DEFAULT_VIEW_FEET);
+        mapRef.current?.flyTo({
+          center: [current.lng, current.lat],
+          zoom: zoomForFeet(DEFAULT_VIEW_FEET, current.lat),
+          duration: 900
+        });
+        setStatus(`Current location set within approximately ${Math.round(position.coords.accuracy)} ft.`);
       },
-      () => setStatus('Location permission was denied. Select the map points manually.'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      () => setStatus('Location permission was denied. Select a start point on the map.'),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
     );
   }
 
-  function pointerPoint(event: React.PointerEvent<HTMLDivElement>) {
-    const bounds = mapLayerRef.current?.getBoundingClientRect();
-    if (!bounds) return null;
-    return {
-      x: clamp(((event.clientX - bounds.left) / bounds.width) * MAP_SIZE, 0, MAP_SIZE),
-      y: clamp(((event.clientY - bounds.top) / bounds.height) * MAP_SIZE, 0, MAP_SIZE)
+  function selectPoint(event: { lngLat: { lat: number; lng: number } }) {
+    if (mode === 'pan') return;
+
+    const coordinate = {
+      lat: Number(event.lngLat.lat.toFixed(6)),
+      lng: Number(event.lngLat.lng.toFixed(6))
     };
-  }
 
-  function pointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    const point = pointerPoint(event);
-    if (!point) return;
-
-    if (mode === 'draw') {
-      setDrawnArea([point]);
-      setDrawing(true);
-      return;
-    }
-
-    const coordinate = pointToCoordinate(point, center, radiusMiles);
-    if (!start) {
+    if (mode === 'start') {
       setStart(coordinate);
-      setStatus('Start point selected. Tap the apex point.');
+      setCenter(coordinate);
+      setApex(null);
+      resetRoute();
+      setMode('pan');
+      setStatus('Start point selected. Choose Set apex to place the turnaround point.');
       return;
     }
 
     setApex(coordinate);
     resetRoute();
+    setMode('pan');
     setStatus('Apex selected. Generate the walking-street route.');
-  }
-
-  function pointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    const point = pointerPoint(event);
-    if (mode === 'draw' && drawing && point) {
-      setDrawnArea((current) => [...current, point].slice(-180));
-    }
   }
 
   async function generateStreetRoute() {
@@ -280,6 +275,9 @@ export default function WalkRoutePlanner() {
       setDistanceMiles(payload.distanceMiles);
       setDurationMinutes(payload.durationMinutes);
       setStatus('Street-routed walking loop generated.');
+
+      const bounds = boundsForRoute(payload.geometry);
+      if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 900 });
     } catch (error) {
       resetRoute();
       setStatus(error instanceof Error ? error.message : 'Street routing failed.');
@@ -295,7 +293,6 @@ export default function WalkRoutePlanner() {
     start,
     apexPoint: apex,
     apexMiles,
-    area: drawnArea,
     route,
     routeSteps,
     distanceMiles,
@@ -345,87 +342,118 @@ export default function WalkRoutePlanner() {
   }
 
   function loadFavorite(saved: SavedRoute) {
-    const data = JSON.parse(saved.routeJson);
+    const data = JSON.parse(saved.routeJson) as {
+      name?: string;
+      center?: Coordinate;
+      start?: Coordinate;
+      apexPoint?: Coordinate;
+      apexMiles?: number;
+      route?: Coordinate[];
+      routeSteps?: string[];
+      distanceMiles?: number;
+      durationMinutes?: number;
+      viewFeet?: number;
+    };
+
+    const loadedRoute = data.route ?? [];
+    const loadedCenter = data.center ?? data.start ?? DEFAULT_CENTER;
     setRouteName(data.name || saved.name);
-    setCenter(data.center || DEFAULT_CENTER);
+    setCenter(loadedCenter);
     setApexMiles(data.apexMiles || 1);
-    setStart(data.start || DEFAULT_CENTER);
+    setStart(data.start || loadedCenter);
     setApex(data.apexPoint || null);
-    setDrawnArea(data.area || []);
-    setRoute(data.route || []);
+    setRoute(loadedRoute);
     setRouteSteps(data.routeSteps || []);
     setDistanceMiles(data.distanceMiles ?? saved.distanceMiles ?? null);
     setDurationMinutes(data.durationMinutes ?? saved.durationMinutes ?? null);
-    setView(data.viewFeet || DEFAULT_VIEW_FEET);
+    setViewFeet(normalizeFeet(data.viewFeet || DEFAULT_VIEW_FEET));
     setStatus(`Loaded favorite route: ${saved.name}.`);
-  }
 
-  const pins = [start, apex].filter(Boolean) as Coordinate[];
-  const routePath = route.length > 1
-    ? route.map((coordinate, index) => {
-        const point = coordinateToPoint(coordinate, center, radiusMiles);
-        return `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-      }).join(' ')
-    : '';
+    const bounds = boundsForRoute(loadedRoute);
+    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 800 });
+    else mapRef.current?.flyTo({ center: [loadedCenter.lng, loadedCenter.lat], zoom: zoomForFeet(data.viewFeet || DEFAULT_VIEW_FEET, loadedCenter.lat), duration: 700 });
+  }
 
   return (
     <section className="grid gap-5 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
       <div>
-        <h2 className="text-xl font-semibold">Walk route planner</h2>
-        <p className="mt-1 text-sm text-slate-600">Generated routes follow walking streets and paths. Favorites are stored with the signed-in account.</p>
+        <h2 className="text-xl font-semibold">Interactive walk route planner</h2>
+        <p className="mt-1 text-sm text-slate-600">Drag, pinch, double-tap, and zoom using standard mobile map gestures. Route geometry follows walking streets and paths.</p>
       </div>
 
       <input type="hidden" name="routeName" value={routeName} />
       <input type="hidden" name="routeJson" value={routeJson} />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <button type="button" onClick={locate} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white">Use current location</button>
-        <button type="button" onClick={() => setMode(mode === 'select' ? 'draw' : 'select')} className="rounded-lg border px-4 py-3 font-medium">Mode: {mode === 'select' ? 'select points' : 'draw area'}</button>
-        <button type="button" onClick={() => { setDrawnArea([]); setApex(null); resetRoute(); }} className="rounded-lg border px-4 py-3 font-medium">Clear</button>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <button type="button" onClick={locate} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white">Current location</button>
+        <button type="button" onClick={() => setMode('pan')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'pan' ? 'bg-slate-100' : ''}`}>Pan map</button>
+        <button type="button" onClick={() => setMode('start')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'start' ? 'bg-slate-100' : ''}`}>Set start</button>
+        <button type="button" onClick={() => setMode('apex')} className={`rounded-lg border px-4 py-3 font-medium ${mode === 'apex' ? 'bg-slate-100' : ''}`}>Set apex</button>
       </div>
 
       <div className="grid gap-3 rounded-xl border bg-slate-50 p-3">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setView(viewFeet - ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">+</button>
-          <input aria-label="Map view scale in feet" type="range" min={MIN_VIEW_FEET} max={MAX_VIEW_FEET} step={ZOOM_STEP_FEET} value={viewFeet} onChange={(event) => setView(Number(event.target.value))} className="min-w-0 flex-1" />
-          <button type="button" onClick={() => setView(viewFeet + ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">−</button>
+          <button type="button" aria-label="Zoom in by 20 feet" onClick={() => applyViewFeet(viewFeet - ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">+</button>
+          <input aria-label="Map view radius in feet" type="range" min={MIN_VIEW_FEET} max={MAX_VIEW_FEET} step={ZOOM_STEP_FEET} value={viewFeet} onChange={(event) => applyViewFeet(Number(event.target.value))} className="min-w-0 flex-1" />
+          <button type="button" aria-label="Zoom out by 20 feet" onClick={() => applyViewFeet(viewFeet + ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">−</button>
         </div>
-        <p className="text-xs font-semibold text-slate-600">View scale: +{viewFeet.toLocaleString()} ft · step: 20 ft · max: 5 mi</p>
+        <p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · controls change by exactly 20 ft · gestures remain continuous</p>
       </div>
 
       <p className="text-sm text-slate-600">{status}</p>
 
-      <div className="relative h-[420px] overflow-hidden rounded-2xl border bg-slate-100">
-        <div
-          ref={mapLayerRef}
-          onPointerDown={pointerDown}
-          onPointerMove={pointerMove}
-          onPointerUp={() => setDrawing(false)}
-          onPointerCancel={() => setDrawing(false)}
-          className="relative h-full w-full"
-          style={{ touchAction: mode === 'draw' ? 'none' : 'pan-x pan-y' }}
-        >
-          <MapFallback viewFeet={viewFeet} />
-          <img src={mapUrl} alt="Street map centered on the selected walk area" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow">+{viewFeet.toLocaleString()} ft</div>
-          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 640 640" preserveAspectRatio="none">
-            <circle cx="320" cy="320" r="310" fill="rgba(14,165,233,.08)" stroke="rgba(2,132,199,.55)" strokeWidth="5" />
-            {drawnArea.length > 1 ? <path d={drawPath(drawnArea)} fill="rgba(14,165,233,.12)" stroke="rgba(15,23,42,.75)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /> : null}
-            {routePath ? <path d={routePath} fill="none" stroke="rgba(2,132,199,.95)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /> : null}
-            {pins.map((coordinate, index) => {
-              const point = coordinateToPoint(coordinate, center, radiusMiles);
-              return <g key={index}><circle cx={point.x} cy={point.y} r="16" fill="#0f172a" /><text x={point.x + 20} y={point.y + 5} fill="#0f172a" fontSize="24" fontWeight="700">{pinLabel(index)}</text></g>;
-            })}
-          </svg>
-        </div>
+      <div className="relative h-[460px] overflow-hidden rounded-2xl border bg-slate-100">
+        {token ? (
+          <Map
+            ref={mapRef}
+            mapboxAccessToken={token}
+            initialViewState={{
+              latitude: center.lat,
+              longitude: center.lng,
+              zoom: zoomForFeet(DEFAULT_VIEW_FEET, center.lat)
+            }}
+            mapStyle="mapbox://styles/mapbox/streets-v12"
+            dragRotate={false}
+            touchPitch={false}
+            cursor={mode === 'pan' ? 'grab' : 'crosshair'}
+            onClick={selectPoint}
+            onMoveEnd={(event) => {
+              const nextCenter = event.target.getCenter();
+              setCenter({ lat: nextCenter.lat, lng: nextCenter.lng });
+              setViewFeet(feetForZoom(event.target.getZoom(), nextCenter.lat));
+            }}
+          >
+            <NavigationControl position="top-right" showCompass={false} />
+            <GeolocateControl position="top-right" trackUserLocation showUserHeading={false} />
+
+            <Source id="walk-boundary" type="geojson" data={boundaryFeature}>
+              <Layer id="walk-boundary-fill" type="fill" paint={{ 'fill-color': '#0ea5e9', 'fill-opacity': 0.04 }} />
+              <Layer id="walk-boundary-line" type="line" paint={{ 'line-color': '#0284c7', 'line-width': 2, 'line-opacity': 0.55 }} />
+            </Source>
+
+            {route.length > 1 ? (
+              <Source id="walk-route" type="geojson" data={routeFeature}>
+                <Layer id="walk-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#0284c7', 'line-width': 7, 'line-opacity': 0.95 }} />
+              </Source>
+            ) : null}
+
+            {start ? <Marker latitude={start.lat} longitude={start.lng} anchor="bottom"><div className="rounded-xl border-2 border-white bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-lg">Start</div></Marker> : null}
+            {apex ? <Marker latitude={apex.lat} longitude={apex.lng} anchor="bottom"><div className="rounded-xl border-2 border-white bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 shadow-lg">Apex</div></Marker> : null}
+          </Map>
+        ) : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-600">Waiting for the Mapbox public token saved in Vercel.</div>}
+
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow">+{viewFeet.toLocaleString()} ft</div>
       </div>
 
-      <label className="grid gap-2 text-sm font-medium">Route name<input value={routeName} onChange={(event) => setRouteName(event.target.value)} className="rounded-lg border px-3 py-3 text-base" /></label>
-      <label className="grid gap-2 text-sm font-medium">Apex distance fallback: {apexMiles.toFixed(1)} miles<input type="range" min="0.1" max="5" step="0.1" value={apexMiles} onChange={(event) => setApexMiles(Number(event.target.value))} /></label>
-
       <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-2 text-sm font-medium">Route name<input value={routeName} onChange={(event) => setRouteName(event.target.value)} className="rounded-lg border px-3 py-3 text-base" /></label>
+        <label className="grid gap-2 text-sm font-medium">Random apex fallback: {apexMiles.toFixed(1)} miles<input type="range" min="0.1" max="5" step="0.1" value={apexMiles} onChange={(event) => setApexMiles(Number(event.target.value))} /></label>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
         <button type="button" disabled={routing} onClick={generateStreetRoute} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-50">{routing ? 'Routing streets…' : 'Generate street route'}</button>
-        <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save favorite route'}</button>
+        <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save favorite'}</button>
+        <button type="button" onClick={() => { setApex(null); resetRoute(); setMode('pan'); }} className="rounded-lg border px-4 py-3 font-medium">Clear route</button>
       </div>
 
       {routeSteps.length ? (
