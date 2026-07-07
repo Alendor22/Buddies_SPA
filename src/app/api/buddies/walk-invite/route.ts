@@ -12,8 +12,10 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
 
   const formData = await request.formData();
-  const senderDogId = String(formData.get('dogId') ?? '').trim();
-  const invitedDogId = String(formData.get('invitedDogId') ?? '').trim();
+  const connection = String(formData.get('connection') ?? '').trim();
+  const [connectionSenderDogId = '', connectionInvitedDogId = ''] = connection.split(':');
+  const senderDogId = String(formData.get('dogId') ?? connectionSenderDogId).trim();
+  const invitedDogId = String(formData.get('invitedDogId') ?? connectionInvitedDogId).trim();
   const legacyEmail = normalizeEmail(String(formData.get('email') ?? ''));
   const startsAtRaw = String(formData.get('startsAt') ?? '').trim();
   const note = String(formData.get('note') ?? '').trim() || null;
