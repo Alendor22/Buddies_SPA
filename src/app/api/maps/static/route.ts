@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getMapboxToken } from '@/lib/mapboxToken';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,7 +24,7 @@ function fallbackSvg(latitude: number, longitude: number, width: number, height:
     <path d="M -40 ${safeHeight * 0.35} L ${safeWidth + 40} ${safeHeight * 0.58}" stroke="#ffffff" stroke-width="38" stroke-linecap="round" opacity="0.9"/>
     <path d="M ${safeWidth * 0.2} -40 L ${safeWidth * 0.62} ${safeHeight + 40}" stroke="#ffffff" stroke-width="28" stroke-linecap="round" opacity="0.82"/>
     <rect x="18" y="18" width="${Math.min(340, safeWidth - 36)}" height="54" rx="12" fill="#ffffff" opacity="0.94"/>
-    <text x="34" y="42" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Street map credentials required</text>
+    <text x="34" y="42" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Street map temporarily unavailable</text>
     <text x="34" y="61" font-family="system-ui, sans-serif" font-size="12" fill="#475569">${latitude.toFixed(6)}, ${longitude.toFixed(6)}</text>
   </svg>`;
 }
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
   const zoom = numberParam(request.nextUrl.searchParams.get('zoom'), 14, 0, 22);
   const width = numberParam(request.nextUrl.searchParams.get('width'), 640, 200, 1280);
   const height = numberParam(request.nextUrl.searchParams.get('height'), 640, 200, 1280);
-  const token = process.env.MAPBOX_ACCESS_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const token = getMapboxToken();
 
   if (!token) {
     return new NextResponse(fallbackSvg(latitude, longitude, width, height), {
