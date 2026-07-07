@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import AppNavigation from '@/components/AppNavigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
