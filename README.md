@@ -1,11 +1,12 @@
 # Buddies SPA V2
 
-Production-oriented scaffold for a dog identity, safety, walking, and social network.
+Production-oriented dog identity, safety, walking, and social network.
 
 ## Stack
 
 - Next.js 15 App Router
 - React 19 + TypeScript
+- Zustand session state tree
 - Tailwind CSS
 - PostgreSQL + Prisma
 - Upstash Redis
@@ -14,17 +15,19 @@ Production-oriented scaffold for a dog identity, safety, walking, and social net
 - Ably WebSockets/realtime
 - Zod validation
 
-## V2 modules
+## Application modules
 
 - Dog and owner profiles
 - QR-based dog identity
 - Public safety profile
 - Lost-dog alerts and live last-seen events
-- Walker discovery and walk requests
+- Dog-to-dog buddy relationships
+- Walking invitations and requests
 - Realtime messaging and presence
+- Mapbox route planning with flag waypoints
 - Map-based nearby activity
 - Media upload adapter for Cloudflare R2
-- Redis-backed caching/rate-limit utilities
+- Redis-backed temporary activity and rate-limit utilities
 
 ## Local setup
 
@@ -43,11 +46,26 @@ Open http://localhost:3000.
 ```bash
 npm run typecheck
 npm run lint
-npm run build
+npm run build:ci
 ```
 
-## Deployment
+## Phase 3 deployment
 
-Deploy the Next.js application to Vercel or another Node-compatible host. Use a managed PostgreSQL provider, Upstash Redis, Cloudflare R2, Mapbox, and Ably.
+Production deploys from `main` to Vercel. GitHub Actions validates the application before the production smoke workflow waits for the exact Vercel commit and verifies readiness.
 
-Latest production deployment trigger: 2026-07-02.
+Health:
+
+```text
+https://buddies.vercel.app/api/health
+https://buddies.vercel.app/api/health?deep=1
+```
+
+Manual production verification:
+
+```bash
+DEPLOYMENT_URL=https://buddies.vercel.app \
+EXPECTED_COMMIT_SHA=<full-git-sha> \
+npm run smoke:production
+```
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for environment variables, release gates, migrations, health semantics, security headers, and rollback procedures.
