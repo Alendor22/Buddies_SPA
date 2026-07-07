@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import DogBuddyRequestControl from '@/components/DogBuddyRequestControl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';
@@ -16,6 +17,8 @@ type SearchParams = {
   walk?: string;
   dog?: string;
   invited?: string;
+  from?: string;
+  to?: string;
 };
 
 type DogSummary = {
@@ -29,9 +32,17 @@ type DogSummary = {
   owner: { city: string | null };
 };
 
+type BuddyUiStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED';
+
+type PairState = {
+  direction: 'OUTGOING' | 'INCOMING';
+  status: BuddyUiStatus;
+  requestId: string;
+};
+
 function pageMessage(params: SearchParams) {
   if (params.walk === 'sent') return `${params.dog ?? 'Your dog'} invited ${params.invited ?? 'a buddy'} to a walk.`;
-  if (params.sent) return 'Dog buddy request sent.';
+  if (params.sent) return `${params.from ?? 'Your dog'} sent ${params.to ?? 'a dog'} a buddy request.`;
   if (params.accepted) return 'Dog buddy request accepted.';
   if (params.declined) return 'Dog buddy request declined.';
   if (params.cancelled) return 'Dog buddy request cancelled.';
@@ -88,20 +99,18 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
   });
   const myDogIds = myDogs.map((dog) => dog.id);
 
-  const [incoming, outgoing, dogBuddyLinks, suggestedDogs, invitations] = await Promise.all([
+  const [requestHistory, dogBuddyLinks, suggestedDogs, invitations] = await Promise.all([
     prisma.dogBuddyRequest.findMany({
-      where: { receiverDogId: { in: myDogIds }, status: 'PENDING' },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        OR: [
+          { receiverDogId: { in: myDogIds } },
+          { senderDogId: { in: myDogIds } }
+        ]
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
       include: {
         senderDog: { select: { id: true, name: true, slug: true, breed: true, status: true, photoUrl: true, ownerId: true, owner: { select: { city: true } } } },
-        receiverDog: { select: { id: true, name: true, slug: true } }
-      }
-    }),
-    prisma.dogBuddyRequest.findMany({
-      where: { senderDogId: { in: myDogIds }, status: 'PENDING' },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        senderDog: { select: { id: true, name: true, slug: true } },
         receiverDog: { select: { id: true, name: true, slug: true, breed: true, status: true, photoUrl: true, ownerId: true, owner: { select: { city: true } } } }
       }
     }),
@@ -140,6 +149,9 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
     })
   ]);
 
+  const incoming = requestHistory.filter((request) => myDogIds.includes(request.receiverDogId) && request.status === 'PENDING');
+  const outgoing = requestHistory.filter((request) => myDogIds.includes(request.senderDogId) && request.status === 'PENDING');
+
   const connectedDogIds = new Set<string>();
   const trustedConnections = dogBuddyLinks.map((link) => {
     const dogAIsMine = myDogIds.includes(link.dogAId);
@@ -149,13 +161,32 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
     return { id: link.id, myDog, otherDog };
   });
 
-  const pendingDogIds = new Set<string>([
-    ...incoming.map((request) => request.senderDogId),
-    ...outgoing.map((request) => request.receiverDogId)
-  ]);
   const suggested = (suggestedDogs as DogSummary[])
-    .filter((dog) => !connectedDogIds.has(dog.id) && !pendingDogIds.has(dog.id))
+    .filter((dog) => !connectedDogIds.has(dog.id))
     .slice(0, 12);
+
+  const requestStatesFor = (receiverDogId: string) => {
+    const states: Record<string, PairState | undefined> = {};
+
+    for (const myDog of myDogs) {
+      const outgoingRequest = requestHistory.find(
+        (request) => request.senderDogId === myDog.id && request.receiverDogId === receiverDogId
+      );
+      const incomingRequest = requestHistory.find(
+        (request) => request.senderDogId === receiverDogId && request.receiverDogId === myDog.id
+      );
+      const request = outgoingRequest ?? incomingRequest;
+      if (!request) continue;
+
+      states[myDog.id] = {
+        direction: outgoingRequest ? 'OUTGOING' : 'INCOMING',
+        status: request.status as BuddyUiStatus,
+        requestId: request.id
+      };
+    }
+
+    return states;
+  };
 
   const incomingInvites = invitations.filter((invite) => invite.invitedDog.ownerId === user.id);
   const sentInvites = invitations.filter((invite) => invite.senderDog.ownerId === user.id);
@@ -165,9 +196,9 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Dog Graph</p>
+          <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Dog Graph</p>
           <h1 className="text-3xl font-bold">Buddies</h1>
-          <p className="mt-2 text-slate-600">Connections, requests, and walk invitations are now linked to specific dog profiles.</p>
+          <p className="mt-2 text-slate-600">Each dog card now retains its own request state and exact sender-to-receiver pair.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={UI_ROUTES.dashboard} className="rounded-lg border px-4 py-2">Dashboard</Link>
@@ -229,7 +260,7 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
               <div className="mt-3 grid gap-3">
                 {outgoing.length === 0 ? <p className="text-sm text-slate-600">No sent requests pending.</p> : outgoing.map((request) => (
                   <article key={request.id} className="rounded-xl border p-4">
-                    <DogIdentity dog={request.receiverDog as DogSummary} caption={`Sent by ${request.senderDog.name}`} />
+                    <DogIdentity dog={request.receiverDog as DogSummary} caption={`${request.senderDog.name} → ${request.receiverDog.name} · REQUEST SENT`} />
                     <form action="/api/dog-buddies/respond" method="post" className="mt-3"><input type="hidden" name="requestId" value={request.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Cancel request</button></form>
                   </article>
                 ))}
@@ -245,11 +276,11 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
             {suggested.length === 0 ? <p className="text-sm text-slate-600">No unmatched dog profiles found.</p> : suggested.map((dog) => (
               <article key={dog.id} className="rounded-xl border p-4">
                 <DogIdentity dog={dog} />
-                <form action="/api/buddies/request" method="post" className="mt-3 grid gap-2">
-                  <input type="hidden" name="receiverDogId" value={dog.id} />
-                  <select name="senderDogId" required className="rounded-lg border px-3 py-2 text-sm">{myDogs.map((myDog) => <option key={myDog.id} value={myDog.id}>{myDog.name} requests {dog.name}</option>)}</select>
-                  <div className="flex gap-2"><input name="note" placeholder="Optional dog-to-dog note" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" /><button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Send</button></div>
-                </form>
+                <DogBuddyRequestControl
+                  receiverDog={{ id: dog.id, name: dog.name }}
+                  senderDogs={myDogs.map((myDog) => ({ id: myDog.id, name: myDog.name }))}
+                  initialStates={requestStatesFor(dog.id)}
+                />
               </article>
             ))}
           </div>
@@ -293,7 +324,7 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Section title="Walking groups"><p className="text-sm text-slate-600">Group persistence follows stabilization of Phase 1 dog relationships, invitations, and notifications.</p></Section>
+        <Section title="Walking groups"><p className="text-sm text-slate-600">Group persistence follows stabilization of Phase 2 dog relationships, invitations, and notifications.</p></Section>
         <Section title="Blocked profiles"><form action="/api/buddies/block" method="post" className="grid gap-3"><input name="email" type="email" placeholder="Owner email for current block workflow" className="rounded-lg border px-3 py-3 text-base" /><input name="reason" placeholder="Optional reason" className="rounded-lg border px-3 py-3 text-base" /><button className="rounded-lg border px-5 py-3 font-medium">Block profile</button></form></Section>
       </section>
     </main>
