@@ -5,6 +5,36 @@ import { parseRoutePlan } from '@/lib/walkRoutes';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+
+  const favorites = await prisma.favoriteRoute.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true,
+      name: true,
+      plan: true,
+      routeDistanceMiles: true,
+      routeDurationMin: true,
+      createdAt: true
+    }
+  });
+
+  return NextResponse.json({
+    favorites: favorites.map((favorite) => ({
+      id: favorite.id,
+      name: favorite.name,
+      routeJson: JSON.stringify(favorite.plan),
+      distanceMiles: favorite.routeDistanceMiles,
+      durationMinutes: favorite.routeDurationMin,
+      createdAt: favorite.createdAt.toISOString()
+    }))
+  });
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
