@@ -13,12 +13,12 @@ export async function POST(request: NextRequest) {
   const dogId = String(formData.get('dogId') ?? '');
   const email = normalizeEmail(String(formData.get('email') ?? ''));
   const startsAtRaw = String(formData.get('startsAt') ?? '');
-  const note = String(formData.get('note') ?? '').trim() || null;
+  const note = String(formData.get('note') ?? '').trim();
 
   if (!dogId || !email || !startsAtRaw) return NextResponse.redirect(new URL('/dashboard/buddies?error=walk-invalid', request.url));
 
   const [dog, receiver] = await Promise.all([
-    prisma.dog.findFirst({ where: { id: dogId, ownerId: user.id }, select: { id: true } }),
+    prisma.dog.findFirst({ where: { id: dogId, ownerId: user.id }, select: { id: true, name: true, breed: true, slug: true } }),
     prisma.user.findUnique({ where: { email }, select: { id: true } })
   ]);
 
@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
   const buddy = await prisma.buddy.findUnique({ where: { userAId_userBId: pair }, select: { id: true } });
   if (!buddy) return NextResponse.redirect(new URL('/dashboard/buddies?error=exists', request.url));
 
+  const inviteNote = [`Walk invite for ${dog.name}${dog.breed ? ` (${dog.breed})` : ''}.`, note ? `Note: ${note}` : null, `Dog profile: /dogs/${dog.slug}`].filter(Boolean).join('\n');
+
   await prisma.walk.create({
     data: {
       dogId,
@@ -35,9 +37,9 @@ export async function POST(request: NextRequest) {
       walkerId: receiver.id,
       startsAt: new Date(startsAtRaw),
       durationMin: 30,
-      notes: note
+      notes: inviteNote
     }
   });
 
-  return NextResponse.redirect(new URL('/dashboard/buddies?walk=sent', request.url));
+  return NextResponse.redirect(new URL(`/dashboard/buddies?walk=sent&dog=${encodeURIComponent(dog.name)}`, request.url));
 }
