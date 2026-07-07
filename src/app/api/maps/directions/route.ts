@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getMapboxToken } from '@/lib/mapboxToken';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,12 +22,19 @@ type MapboxRoute = {
 function validCoordinate(value: unknown): value is Coordinate {
   if (!value || typeof value !== 'object') return false;
   const point = value as Coordinate;
-  return Number.isFinite(point.lng) && Number.isFinite(point.lat) && point.lng >= -180 && point.lng <= 180 && point.lat >= -90 && point.lat <= 90;
+  return Number.isFinite(point.lng)
+    && Number.isFinite(point.lat)
+    && point.lng >= -180
+    && point.lng <= 180
+    && point.lat >= -90
+    && point.lat <= 90;
 }
 
 export async function POST(request: NextRequest) {
-  const token = process.env.MAPBOX_ACCESS_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  if (!token) return NextResponse.json({ error: 'Mapbox access token is not configured.' }, { status: 503 });
+  const token = getMapboxToken();
+  if (!token) {
+    return NextResponse.json({ error: 'Mapbox access token is not configured.' }, { status: 503 });
+  }
 
   const payload = await request.json().catch(() => null) as { coordinates?: unknown } | null;
   const coordinates = Array.isArray(payload?.coordinates) ? payload.coordinates.filter(validCoordinate) : [];
@@ -46,11 +54,17 @@ export async function POST(request: NextRequest) {
     walkway_bias: '0.5'
   });
 
-  const response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/walking/${coordinatePath}?${query.toString()}`, { cache: 'no-store' });
+  const response = await fetch(
+    `https://api.mapbox.com/directions/v5/mapbox/walking/${coordinatePath}?${query.toString()}`,
+    { cache: 'no-store' }
+  );
   const data = await response.json().catch(() => null) as { code?: string; message?: string; routes?: MapboxRoute[] } | null;
 
   if (!response.ok || data?.code !== 'Ok' || !data.routes?.length) {
-    return NextResponse.json({ error: data?.message || 'A walkable street route could not be generated.' }, { status: response.ok ? 422 : response.status });
+    return NextResponse.json(
+      { error: data?.message || 'A walkable street route could not be generated.' },
+      { status: response.ok ? 422 : response.status }
+    );
   }
 
   const route = data.routes[0];
