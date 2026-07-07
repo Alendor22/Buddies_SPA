@@ -6,6 +6,11 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+function optionalNumber(value: FormDataEntryValue | null) {
+  const parsed = Number(String(value ?? '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function reportLostAction(formData: FormData) {
   'use server';
   const user = await getCurrentUser();
@@ -15,13 +20,15 @@ async function reportLostAction(formData: FormData) {
   const lastSeenLocation = String(formData.get('lastSeenLocation') ?? '').trim() || null;
   const lostReward = String(formData.get('lostReward') ?? '').trim() || null;
   const lostNotes = String(formData.get('lostNotes') ?? '').trim() || null;
+  const latitude = optionalNumber(formData.get('latitude'));
+  const longitude = optionalNumber(formData.get('longitude'));
 
   const dog = await prisma.dog.findFirst({ where: { id: dogId, ownerId: user.id }, select: { id: true, slug: true } });
   if (!dog) redirect('/dashboard/lost/report?error=dog');
 
   await prisma.dog.update({
     where: { id: dog.id },
-    data: { status: DogStatus.LOST, lostSince: new Date(), lastSeenLocation, lostReward, lostNotes }
+    data: { status: DogStatus.LOST, lostSince: new Date(), lastSeenLocation, lostReward, lostNotes, latitude, longitude }
   });
 
   redirect(`/dogs/${dog.slug}?lost=1`);
@@ -53,7 +60,7 @@ export default async function ReportLostPage({ searchParams }: { searchParams: P
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Lost Dog Network</p>
       <h1 className="mt-2 text-3xl font-bold">Report lost dog</h1>
-      <p className="mt-2 text-slate-600">Mark a dog as LOST, publish the safety status on its QR profile, and surface the alert in Notifications.</p>
+      <p className="mt-2 text-slate-600">Mark a dog as LOST, publish the safety status on its QR profile, pin a recovery-map flag, and surface the alert in Notifications.</p>
 
       {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Select one of your own dog profiles.</div> : null}
 
@@ -68,6 +75,8 @@ export default async function ReportLostPage({ searchParams }: { searchParams: P
           <form action={reportLostAction} className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
             <label className="grid gap-2 text-sm font-medium">Dog profile<select name="dogId" required className="rounded-lg border px-3 py-3 text-base">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''} · {dog.status}</option>)}</select></label>
             <label className="grid gap-2 text-sm font-medium">Last seen location<input name="lastSeenLocation" placeholder="Street, park, cross streets, or neighborhood" className="rounded-lg border px-3 py-3 text-base" /></label>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium">Latitude<input name="latitude" inputMode="decimal" placeholder="40.685743" className="rounded-lg border px-3 py-3 text-base" /></label><label className="grid gap-2 text-sm font-medium">Longitude<input name="longitude" inputMode="decimal" placeholder="-73.941329" className="rounded-lg border px-3 py-3 text-base" /></label></div>
+            <p className="text-xs text-slate-500">Coordinates are optional, but they place the lost flag more precisely on the public recovery map.</p>
             <label className="grid gap-2 text-sm font-medium">Reward<input name="lostReward" placeholder="Optional reward or contact instruction" className="rounded-lg border px-3 py-3 text-base" /></label>
             <label className="grid gap-2 text-sm font-medium">Notes<textarea name="lostNotes" rows={4} placeholder="Collar, temperament, direction last seen, safety instructions" className="rounded-lg border px-3 py-3 text-base" /></label>
             <button className="rounded-lg bg-red-600 px-5 py-3 font-medium text-white">Activate lost dog alert</button>
