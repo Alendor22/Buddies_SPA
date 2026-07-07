@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 const routeLabels: Record<string, string> = {
   buddyRequests: 'Dog buddy requests',
   walkInvites: 'Walk invitations',
+  messages: 'Messages',
   lostDog: 'Lost dog alerts',
   sightings: 'Sightings',
   records: 'Vet records',
@@ -26,6 +27,7 @@ export default async function NotificationsPage() {
     include: {
       dog: { select: { name: true, slug: true, breed: true } },
       walk: { select: { startsAt: true, status: true, durationMin: true } },
+      message: { select: { body: true, createdAt: true } },
       walkInvitation: {
         select: {
           status: true,
@@ -58,24 +60,27 @@ export default async function NotificationsPage() {
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Notification Center</p>
+          <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Notification Center</p>
           <h1 className="text-3xl font-bold">Notifications</h1>
-          <p className="mt-2 text-slate-600">Every badge maps to a persistent alert, its exact dog relationship, and a specific UI destination.</p>
+          <p className="mt-2 text-slate-600">Every badge maps to a persistent alert, exact dog relationship, and specific UI destination.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2 font-medium">Messages</Link>
           <Link href={UI_ROUTES.dashboard} className="rounded-lg border px-4 py-2">Dashboard</Link>
           <Link href={UI_ROUTES.lostReport} className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white">Lost dog</Link>
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-4">
+      <section className="mt-8 grid gap-4 sm:grid-cols-5">
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Unread</p><p className="mt-2 text-4xl font-bold">{unread.length}</p></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Messages</p><p className="mt-2 text-4xl font-bold">{counts.messages ?? 0}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Dog requests</p><p className="mt-2 text-4xl font-bold">{counts.buddyRequests ?? 0}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Walk invitations</p><p className="mt-2 text-4xl font-bold">{counts.walkInvites ?? 0}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Safety</p><p className="mt-2 text-4xl font-bold">{(counts.lostDog ?? 0) + (counts.sightings ?? 0)}</p></article>
       </section>
 
       <section className="mt-6 flex flex-wrap gap-2">
+        <Link href={UI_ROUTES.messages} className="rounded-full border px-4 py-2 text-sm font-medium">Messages</Link>
         <Link href={UI_ROUTES.buddyRequests} className="rounded-full border px-4 py-2 text-sm font-medium">Dog requests</Link>
         <Link href={UI_ROUTES.walkInvites} className="rounded-full border px-4 py-2 text-sm font-medium">Walk invitations</Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-full border px-4 py-2 text-sm font-medium">Lost dog center</Link>
@@ -85,7 +90,7 @@ export default async function NotificationsPage() {
 
       <section className="mt-8 grid gap-4">
         {notifications.length === 0 ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">No notifications</h2><p className="mt-2 text-slate-600">Dog buddy requests, walk invitations, safety alerts, sightings, and record reminders will appear here.</p></div>
+          <div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">No notifications</h2><p className="mt-2 text-slate-600">Messages, dog requests, walk invitations, safety alerts, sightings, and record reminders will appear here.</p></div>
         ) : notifications.map((notification) => (
           <article key={notification.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${notification.readAt ? 'opacity-70' : 'border-slate-400'}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -96,6 +101,7 @@ export default async function NotificationsPage() {
                 </div>
                 <h2 className="mt-3 text-lg font-semibold">{notification.title}</h2>
                 {notification.body ? <p className="mt-1 text-sm text-slate-600">{notification.body}</p> : null}
+                {notification.message ? <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{notification.message.body}</p> : null}
                 {notification.dogBuddyRequest ? <p className="mt-2 text-sm font-medium text-slate-700">{notification.dogBuddyRequest.senderDog.name} → {notification.dogBuddyRequest.receiverDog.name} · {notification.dogBuddyRequest.status}</p> : null}
                 {notification.walkInvitation ? <p className="mt-2 text-sm font-medium text-slate-700">{notification.walkInvitation.senderDog.name} → {notification.walkInvitation.invitedDog.name} · {notification.walkInvitation.status}</p> : null}
                 {notification.walk ? <p className="mt-1 text-sm text-slate-600">{notification.walk.startsAt.toLocaleString()} · {notification.walk.durationMin} min · {notification.walk.status}</p> : null}
