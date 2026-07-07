@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useRef, useState } from 'react';
 
 type DogOption = {
   id: string;
@@ -32,12 +32,15 @@ type ApiResponse = {
   };
 };
 
+const REQUEST_TIMEOUT_MS = 15000;
+
 export default function DogBuddyRequestControl({ receiverDog, senderDogs, initialStates }: Props) {
   const [senderDogId, setSenderDogId] = useState(senderDogs[0]?.id ?? '');
   const [note, setNote] = useState('');
   const [states, setStates] = useState(initialStates);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const requestSequence = useRef(0);
 
   const selectedSender = useMemo(
     () => senderDogs.find((dog) => dog.id === senderDogId) ?? senderDogs[0],
@@ -53,7 +56,9 @@ export default function DogBuddyRequestControl({ receiverDog, senderDogs, initia
     if (pairState?.direction === 'INCOMING' && pairState.status === 'PENDING') {
       return `Request received · ${receiverDog.name} → ${selectedSender?.name ?? 'Dog'}`;
     }
-    if (pairState?.status === 'ACCEPTED') return `${selectedSender?.name ?? 'Dog'} and ${receiverDog.name} are buddies`;
+    if (pairState?.status === 'ACCEPTED') {
+      return `${selectedSender?.name ?? 'Dog'} and ${receiverDog.name} are buddies`;
+    }
     if (pairState?.status === 'DECLINED' || pairState?.status === 'CANCELLED') {
       return `Send again · ${selectedSender?.name ?? 'Dog'} → ${receiverDog.name}`;
     }
@@ -62,15 +67,21 @@ export default function DogBuddyRequestControl({ receiverDog, senderDogs, initia
 
   const disabled = pending
     || !senderDogId
-    || (pairState?.status === 'PENDING')
+    || pairState?.status === 'PENDING'
     || pairState?.status === 'ACCEPTED';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled || !selectedSender) return;
 
+    const sequence = requestSequence.current + 1;
+    requestSequence.current = sequence;
+    const previousState = states[selectedSender.id];
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     setPending(true);
-    setFeedback('');
+    setFeedback(`Sending ${selectedSender.name}'s request to ${receiverDog.name}…`);
 
     try {
       const formData = new FormData();
@@ -84,12 +95,22 @@ export default function DogBuddyRequestControl({ receiverDog, senderDogs, initia
           Accept: 'application/json',
           'x-buddies-response': 'json'
         },
-        body: formData
+        body: formData,
+        signal: controller.signal,
+        cache: 'no-store'
       });
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('The request service returned an unexpected response. Reload this page and try again.');
+      }
+
       const payload = await response.json() as ApiResponse;
       if (!response.ok || !payload.ok || !payload.request) {
         throw new Error(payload.error || 'Buddy request could not be sent.');
       }
+
+      if (requestSequence.current !== sequence) return;
 
       setStates((current) => ({
         ...current,
@@ -100,11 +121,20 @@ export default function DogBuddyRequestControl({ receiverDog, senderDogs, initia
         }
       }));
       setNote('');
-      setFeedback(`${selectedSender.name}'s request to ${receiverDog.name} was sent.`);
+      setFeedback(`Request sent: ${selectedSender.name} → ${receiverDog.name}.`);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Buddy request could not be sent.');
+      if (requestSequence.current !== sequence) return;
+
+      setStates((current) => ({ ...current, [selectedSender.id]: previousState }));
+      const message = error instanceof DOMException && error.name === 'AbortError'
+        ? 'Request timed out after 15 seconds. Tap the button to retry.'
+        : error instanceof Error
+          ? error.message
+          : 'Buddy request could not be sent.';
+      setFeedback(message);
     } finally {
-      setPending(false);
+      window.clearTimeout(timeout);
+      if (requestSequence.current === sequence) setPending(false);
     }
   }
 
@@ -147,7 +177,7 @@ export default function DogBuddyRequestControl({ receiverDog, senderDogs, initia
         {buttonLabel}
       </button>
 
-      {feedback ? <p className="text-xs font-medium text-slate-600" role="status">{feedback}</p> : null}
+      {feedback ? <p className="text-xs font-medium text-slate-600" role="status" aria-live="polite">{feedback}</p> : null}
     </form>
   );
 }
