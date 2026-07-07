@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { NotificationType } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { dogLostRoute, dogSightingRoute, UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,18 +11,33 @@ async function reportSightingAction(formData: FormData) {
 
   const slug = String(formData.get('slug') ?? '').trim();
   const note = String(formData.get('note') ?? '').trim() || null;
-  const latitudeRaw = String(formData.get('latitude') ?? '').trim();
-  const longitudeRaw = String(formData.get('longitude') ?? '').trim();
+  const latitude = Number(String(formData.get('latitude') ?? '').trim());
+  const longitude = Number(String(formData.get('longitude') ?? '').trim());
 
-  const dog = await prisma.dog.findUnique({ where: { slug }, select: { id: true, slug: true } });
-  if (!dog) redirect('/dogs');
+  const dog = await prisma.dog.findUnique({ where: { slug }, select: { id: true, slug: true, name: true, ownerId: true } });
+  if (!dog) redirect(UI_ROUTES.profiles);
 
-  const latitude = Number(latitudeRaw);
-  const longitude = Number(longitudeRaw);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) redirect(`/dogs/${slug}/sighting?error=location`);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    redirect(`${dogSightingRoute(slug)}?error=location`);
+  }
 
-  await prisma.sighting.create({ data: { dogId: dog.id, note, latitude, longitude } });
-  redirect(`/dogs/${dog.slug}?sighting=1`);
+  await prisma.$transaction(async (tx) => {
+    const sighting = await tx.sighting.create({ data: { dogId: dog.id, note, latitude, longitude } });
+    await tx.notification.create({
+      data: {
+        userId: dog.ownerId,
+        type: NotificationType.DOG_SIGHTING,
+        routeKey: 'sightings',
+        href: dogLostRoute(dog.slug),
+        title: `New sighting reported for ${dog.name}`,
+        body: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}${note ? ` · ${note}` : ''}`,
+        dogId: dog.id,
+        sightingId: sighting.id
+      }
+    });
+  });
+
+  redirect(`${dogLostRoute(dog.slug)}?sighting=1`);
 }
 
 export default async function SightingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ error?: string }> }) {
@@ -33,16 +50,11 @@ export default async function SightingPage({ params, searchParams }: { params: P
     <main className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Sighting Report</p>
       <h1 className="mt-2 text-3xl font-bold">Report sighting</h1>
-      <p className="mt-2 text-slate-600">Submit a last-seen location for {dog.name}. This creates a recovery signal for the owner.</p>
+      <p className="mt-2 text-slate-600">Submit a last-seen location for {dog.name}. The owner receives a persistent alert linked to the recovery map.</p>
 
-      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex gap-4">
-          {dog.photoUrl ? <img src={dog.photoUrl} alt={`${dog.name} profile`} className="h-20 w-20 rounded-2xl object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-3xl">🐶</div>}
-          <div><h2 className="text-xl font-semibold">{dog.name}</h2><p className="text-sm text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p></div>
-        </div>
-      </section>
+      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex gap-4">{dog.photoUrl ? <img src={dog.photoUrl} alt={`${dog.name} profile`} className="h-20 w-20 rounded-2xl object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-3xl">🐶</div>}<div><h2 className="text-xl font-semibold">{dog.name}</h2><p className="text-sm text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p></div></div></section>
 
-      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Latitude and longitude are required. Use current location or enter coordinates.</div> : null}
+      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Enter valid latitude and longitude values.</div> : null}
 
       <form action={reportSightingAction} className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
         <input type="hidden" name="slug" value={dog.slug} />
