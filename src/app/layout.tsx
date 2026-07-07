@@ -10,11 +10,7 @@ export const metadata: Metadata = {
 };
 
 async function getNotificationCount(userId: string) {
-  const [incomingRequests, safetyAlerts] = await Promise.all([
-    prisma.buddyRequest.count({ where: { receiverId: userId, status: 'PENDING' } }),
-    prisma.dog.count({ where: { ownerId: userId, NOT: { status: 'SAFE' } } })
-  ]).catch(() => [0, 0]);
-  return incomingRequests + safetyAlerts;
+  return prisma.notification.count({ where: { userId, readAt: null } }).catch(() => 0);
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
