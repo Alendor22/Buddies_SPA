@@ -1,32 +1,138 @@
+import { DogStatus } from '@prisma/client';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getCurrentUser, slugify } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
-export default async function NewDogPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export const dynamic = 'force-dynamic';
+
+type SearchParams = { error?: string };
+
+function checkbox(value: FormDataEntryValue | null) {
+  return value === 'on' || value === 'true';
+}
+
+function parseOptionalDate(value: string) {
+  if (!value) return null;
+  const date = new Date(`${value}T12:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseOptionalInteger(value: string, min: number, max: number) {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : Number.NaN;
+}
+
+function parseStatus(value: string) {
+  return Object.values(DogStatus).includes(value as DogStatus) ? value as DogStatus : DogStatus.SAFE;
+}
+
+function optionalUrl(value: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function uniqueSlug(name: string) {
+  const base = slugify(name) || 'new-buddy';
+  let slug = base;
+  let suffix = 2;
+
+  while (await prisma.dog.findUnique({ where: { slug }, select: { id: true } })) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+async function createDogAction(formData: FormData) {
+  'use server';
+
+  const user = await getCurrentUser();
+  if (!user) redirect('/auth/login');
+
+  const name = String(formData.get('name') ?? '').trim();
+  const breed = String(formData.get('breed') ?? '').trim();
+  const birthDateRaw = String(formData.get('birthDate') ?? '').trim();
+  const weightRaw = String(formData.get('weightLbs') ?? '').trim();
+  const photoUrlRaw = String(formData.get('photoUrl') ?? '').trim();
+  const birthDate = parseOptionalDate(birthDateRaw);
+  const weightLbs = parseOptionalInteger(weightRaw, 1, 300);
+  const photoUrl = optionalUrl(photoUrlRaw);
+
+  if (!name || name.length > 80) redirect('/dogs/new?error=name');
+  if (birthDateRaw && !birthDate) redirect('/dogs/new?error=date');
+  if (Number.isNaN(weightLbs)) redirect('/dogs/new?error=weight');
+  if (photoUrlRaw && !photoUrl) redirect('/dogs/new?error=url');
+
+  const dog = await prisma.dog.create({
+    data: {
+      ownerId: user.id,
+      name,
+      slug: await uniqueSlug(name),
+      breed: breed.slice(0, 120) || null,
+      birthDate,
+      weightLbs,
+      gender: String(formData.get('gender') ?? '').trim().slice(0, 40) || null,
+      photoUrl,
+      status: parseStatus(String(formData.get('status') ?? 'SAFE')),
+      temperament: String(formData.get('temperament') ?? '').trim().slice(0, 500) || null,
+      medicalNotes: String(formData.get('medicalNotes') ?? '').trim().slice(0, 800) || null,
+      vaccinationNotes: String(formData.get('vaccinationNotes') ?? '').trim().slice(0, 800) || null,
+      emergencyContact: String(formData.get('emergencyContact') ?? '').trim().slice(0, 160) || null,
+      spayedNeutered: checkbox(formData.get('spayedNeutered')),
+      friendlyDogs: checkbox(formData.get('friendlyDogs')),
+      friendlyCats: checkbox(formData.get('friendlyCats')),
+      friendlyChildren: checkbox(formData.get('friendlyChildren'))
+    },
+    select: { slug: true }
+  });
+
+  redirect(`/dogs/${encodeURIComponent(dog.slug)}?created=1`);
+}
+
+function errorMessage(error?: string) {
+  if (error === 'name') return 'Enter a dog name of 80 characters or fewer.';
+  if (error === 'date') return 'Enter a valid birth date.';
+  if (error === 'weight') return 'Weight must be a whole number from 1 to 300 lb.';
+  if (error === 'url') return 'Photo URL must be a valid http or https address.';
+  return error ? 'The profile could not be created. Check the form and retry.' : null;
+}
+
+export default async function NewDogPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const user = await getCurrentUser();
+  if (!user) redirect('/auth/login');
+
   const { error } = await searchParams;
+  const message = errorMessage(error);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies V2.2 Add Dog One-Tap Fix</p>
+          <p className="text-sm font-medium text-slate-500">Buddies dog profile</p>
           <h1 className="mt-1 text-3xl font-bold">Add dog</h1>
-          <p className="mt-2 text-slate-600">Create a public safety profile with identifying details, health notes, and emergency contact information.</p>
+          <p className="mt-2 text-slate-600">Create an account-bound public safety profile with health, compatibility, and emergency details.</p>
         </div>
         <Link href="/dashboard" className="rounded-lg border px-4 py-2">Cancel</Link>
       </div>
 
-      {error ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">The form could not be submitted. Try again.</div>
-      ) : null}
+      {message ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{message}</div> : null}
 
-      <form action="/dogs/new/confirm" method="get" className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
+      <form action={createDogAction} className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
         <section>
           <h2 className="text-xl font-semibold">Core profile</h2>
-          <p className="mt-1 text-sm text-slate-500">Name is optional during mobile testing. Blank names are saved as New Buddy.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium">Name<input name="name" maxLength={80} placeholder="New Buddy" className="rounded-lg border px-3 py-3 text-base" /></label>
+            <label className="grid gap-2 text-sm font-medium">Name<input name="name" maxLength={80} required className="rounded-lg border px-3 py-3 text-base" /></label>
             <label className="grid gap-2 text-sm font-medium">Breed<input name="breed" maxLength={120} className="rounded-lg border px-3 py-3 text-base" /></label>
             <label className="grid gap-2 text-sm font-medium">Birth date<input name="birthDate" type="date" className="rounded-lg border px-3 py-3 text-base" /></label>
-            <label className="grid gap-2 text-sm font-medium">Weight lb<input name="weightLbs" type="number" min="1" max="300" className="rounded-lg border px-3 py-3 text-base" /></label>
+            <label className="grid gap-2 text-sm font-medium">Weight lb<input name="weightLbs" type="number" min="1" max="300" step="1" className="rounded-lg border px-3 py-3 text-base" /></label>
             <label className="grid gap-2 text-sm font-medium">Gender<select name="gender" className="rounded-lg border px-3 py-3 text-base"><option value="">Not specified</option><option value="Female">Female</option><option value="Male">Male</option></select></label>
             <label className="grid gap-2 text-sm font-medium">Safety status<select name="status" defaultValue="SAFE" className="rounded-lg border px-3 py-3 text-base"><option value="SAFE">Safe</option><option value="LOST">Lost</option><option value="FOUND">Found</option></select></label>
           </div>
@@ -46,7 +152,7 @@ export default async function NewDogPage({ searchParams }: { searchParams: Promi
           <label className="flex items-center gap-3"><input name="friendlyChildren" type="checkbox" defaultChecked /> Friendly with children</label>
         </fieldset>
 
-        <button type="submit" formNoValidate className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create dog profile</button>
+        <button type="submit" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create dog profile</button>
       </form>
     </main>
   );
