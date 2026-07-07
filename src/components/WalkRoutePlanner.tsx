@@ -7,9 +7,10 @@ type Coordinate = { lat: number; lng: number };
 type SavedRoute = {
   id: string;
   name: string;
-  apexMiles: number;
   createdAt: string;
   routeJson: string;
+  distanceMiles: number | null;
+  durationMinutes: number | null;
 };
 type DirectionsPayload = {
   geometry: Coordinate[];
@@ -23,7 +24,6 @@ type DirectionsPayload = {
   durationMinutes: number;
 };
 
-const FAVORITES_KEY = 'buddies_walk_favorites_v24';
 const EARTH_RADIUS_MILES = 3958.8;
 const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
 const MAP_SIZE = 640;
@@ -147,13 +147,23 @@ export default function WalkRoutePlanner() {
   const [favorites, setFavorites] = useState<SavedRoute[]>([]);
   const [viewFeet, setViewFeet] = useState(DEFAULT_VIEW_FEET);
   const [routing, setRouting] = useState(false);
+  const [savingFavorite, setSavingFavorite] = useState(false);
 
   useEffect(() => {
-    try {
-      setFavorites(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
-    } catch {
-      setFavorites([]);
+    let active = true;
+
+    async function loadFavorites() {
+      try {
+        const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' });
+        const payload = await response.json() as { favorites?: SavedRoute[] };
+        if (active && response.ok) setFavorites(payload.favorites ?? []);
+      } catch {
+        if (active) setStatus('Favorite routes could not be loaded. Route planning remains available.');
+      }
     }
+
+    void loadFavorites();
+    return () => { active = false; };
   }, []);
 
   const radiusMiles = viewMiles(viewFeet);
@@ -293,38 +303,61 @@ export default function WalkRoutePlanner() {
     viewFeet
   });
 
-  function saveFavorite() {
+  async function saveFavorite() {
     if (!route.length) {
       setStatus('Generate a street route before saving it.');
       return;
     }
 
-    const next = [{
-      id: String(Date.now()),
-      name: routeName,
-      apexMiles,
-      createdAt: new Date().toISOString(),
-      routeJson
-    }, ...favorites].slice(0, 20);
+    setSavingFavorite(true);
+    setStatus('Saving favorite route to your account…');
 
-    setFavorites(next);
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
-    setStatus('Favorite street route saved on this device.');
+    try {
+      const response = await fetch('/api/walk-routes/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routeJson })
+      });
+      const payload = await response.json() as { favorite?: SavedRoute; error?: string };
+      if (!response.ok || !payload.favorite) throw new Error(payload.error || 'Favorite route could not be saved.');
+      setFavorites((current) => [payload.favorite as SavedRoute, ...current].slice(0, 20));
+      setStatus('Favorite route saved to your account.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Favorite route could not be saved.');
+    } finally {
+      setSavingFavorite(false);
+    }
+  }
+
+  async function deleteFavorite(id: string) {
+    try {
+      const response = await fetch('/api/walk-routes/favorites', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('Favorite route could not be removed.');
+      setFavorites((current) => current.filter((favorite) => favorite.id !== id));
+      setStatus('Favorite route removed.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Favorite route could not be removed.');
+    }
   }
 
   function loadFavorite(saved: SavedRoute) {
     const data = JSON.parse(saved.routeJson);
     setRouteName(data.name || saved.name);
     setCenter(data.center || DEFAULT_CENTER);
-    setApexMiles(data.apexMiles || saved.apexMiles);
+    setApexMiles(data.apexMiles || 1);
     setStart(data.start || DEFAULT_CENTER);
     setApex(data.apexPoint || null);
     setDrawnArea(data.area || []);
     setRoute(data.route || []);
     setRouteSteps(data.routeSteps || []);
-    setDistanceMiles(data.distanceMiles ?? null);
-    setDurationMinutes(data.durationMinutes ?? null);
+    setDistanceMiles(data.distanceMiles ?? saved.distanceMiles ?? null);
+    setDurationMinutes(data.durationMinutes ?? saved.durationMinutes ?? null);
     setView(data.viewFeet || DEFAULT_VIEW_FEET);
+    setStatus(`Loaded favorite route: ${saved.name}.`);
   }
 
   const pins = [start, apex].filter(Boolean) as Coordinate[];
@@ -339,7 +372,7 @@ export default function WalkRoutePlanner() {
     <section className="grid gap-5 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
       <div>
         <h2 className="text-xl font-semibold">Walk route planner</h2>
-        <p className="mt-1 text-sm text-slate-600">The map image is delivered through the server map proxy. Generated lines and directions follow walking streets and paths.</p>
+        <p className="mt-1 text-sm text-slate-600">Generated routes follow walking streets and paths. Favorites are stored with the signed-in account.</p>
       </div>
 
       <input type="hidden" name="routeName" value={routeName} />
@@ -392,7 +425,7 @@ export default function WalkRoutePlanner() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button type="button" disabled={routing} onClick={generateStreetRoute} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-50">{routing ? 'Routing streets…' : 'Generate street route'}</button>
-        <button type="button" onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium">Save favorite route</button>
+        <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save favorite route'}</button>
       </div>
 
       {routeSteps.length ? (
@@ -405,7 +438,15 @@ export default function WalkRoutePlanner() {
       <div>
         <h3 className="font-semibold">Favorite routes</h3>
         <div className="mt-3 grid gap-2">
-          {favorites.length === 0 ? <p className="text-sm text-slate-600">No favorites saved on this device yet.</p> : favorites.map((favorite) => <button key={favorite.id} type="button" onClick={() => loadFavorite(favorite)} className="rounded-xl border px-4 py-3 text-left"><span className="block font-medium">{favorite.name}</span><span className="block text-sm text-slate-500">Apex {favorite.apexMiles.toFixed(1)} mi</span></button>)}
+          {favorites.length === 0 ? <p className="text-sm text-slate-600">No account favorites saved yet.</p> : favorites.map((favorite) => (
+            <div key={favorite.id} className="rounded-xl border p-3">
+              <button type="button" onClick={() => loadFavorite(favorite)} className="w-full text-left">
+                <span className="block font-medium">{favorite.name}</span>
+                <span className="block text-sm text-slate-500">{favorite.distanceMiles ? `${favorite.distanceMiles.toFixed(2)} mi` : 'Distance unavailable'}{favorite.durationMinutes ? ` · ${favorite.durationMinutes} min` : ''}</span>
+              </button>
+              <button type="button" onClick={() => deleteFavorite(favorite.id)} className="mt-2 text-xs font-medium text-red-700 underline">Remove favorite</button>
+            </div>
+          ))}
         </div>
       </div>
     </section>
