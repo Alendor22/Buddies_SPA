@@ -8,6 +8,7 @@ export const UI_ROUTES = {
   walks: '/dashboard/walks',
   createWalk: '/dashboard/walks/new',
   walkInvites: '/dashboard/walks#walk-invitations',
+  messages: '/dashboard/messages',
   alerts: '/dashboard/notifications',
   lostReport: '/dashboard/lost/report',
   records: '/dashboard/records',
@@ -34,4 +35,8 @@ export function dogWalkInvitesRoute(slug: string) {
 
 export function dogSightingRoute(slug: string) {
   return `${dogProfileRoute(slug)}/sighting`;
+}
+
+export function walkMessagesRoute(walkId: string) {
+  return `/dashboard/walks/${encodeURIComponent(walkId)}/messages`;
 }
