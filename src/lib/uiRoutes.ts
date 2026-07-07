@@ -9,6 +9,7 @@ export const UI_ROUTES = {
   createWalk: '/dashboard/walks/new',
   walkInvites: '/dashboard/walks#walk-invitations',
   messages: '/dashboard/messages',
+  checkIns: '/dashboard/check-ins',
   alerts: '/dashboard/notifications',
   lostReport: '/dashboard/lost/report',
   records: '/dashboard/records',
