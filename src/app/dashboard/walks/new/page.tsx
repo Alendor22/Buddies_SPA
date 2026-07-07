@@ -3,10 +3,12 @@ import { redirect } from 'next/navigation';
 import WalkRoutePlanner from '@/components/WalkRoutePlanner';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import { UI_ROUTES } from '@/lib/uiRoutes';
 import { parseRoutePlan } from '@/lib/walkRoutes';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function createWalkAction(formData: FormData) {
   'use server';
@@ -53,15 +55,18 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   if (!user) redirect('/auth/login');
   const { error } = await searchParams;
 
-  const dogs = await prisma.dog.findMany({
-    where: { ownerId: user.id },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, name: true, breed: true }
-  });
+  const [dogs, mapboxToken] = await Promise.all([
+    prisma.dog.findMany({
+      where: { ownerId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, breed: true }
+    }),
+    Promise.resolve(getPublicMapboxToken())
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Walk Composer</p>
+      <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Walk Composer</p>
       <h1 className="mt-2 text-3xl font-bold">Create walk</h1>
       <p className="mt-2 text-slate-600">Generate a route snapped to walking streets and save its geometry, directions, distance, and duration.</p>
 
@@ -82,7 +87,7 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
             <label className="grid gap-2 text-sm font-medium">Notes<textarea name="notes" rows={4} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border px-3 py-3 text-base" /></label>
           </section>
 
-          <WalkRoutePlanner />
+          <WalkRoutePlanner initialToken={mapboxToken} />
 
           <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create walk</button>
           <Link href={UI_ROUTES.walks} className="rounded-lg border px-5 py-3 text-center font-medium">Back to Walks</Link>
