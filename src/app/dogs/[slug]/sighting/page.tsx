@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { NotificationType } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { dogLostRoute, dogSightingRoute, UI_ROUTES } from '@/lib/uiRoutes';
+import { dogLostRoute, dogProfileRoute, dogSightingRoute, UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,7 @@ async function reportSightingAction(formData: FormData) {
     });
   });
 
-  redirect(`${dogLostRoute(dog.slug)}?sighting=1`);
+  redirect(`${dogProfileRoute(dog.slug)}?sighting=1#lost-dog`);
 }
 
 export default async function SightingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ error?: string }> }) {
