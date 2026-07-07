@@ -81,41 +81,41 @@ model User {
 }
 
 model Dog {
-  id                       String           @id @default(cuid())
-  ownerId                  String
-  owner                    User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  name                     String
-  slug                     String           @unique
-  publicId                 String?          @default(cuid())
-  breed                    String?
-  birthDate                DateTime?
-  weightLbs                Int?
-  gender                   String?
-  photoUrl                 String?
-  status                   DogStatus        @default(SAFE)
-  temperament              String?
-  medicalNotes             String?
-  vaccinationNotes         String?
-  emergencyContact         String?
-  lostSince                DateTime?
-  lastSeenLocation         String?
-  lostReward               String?
-  lostNotes                String?
-  spayedNeutered           Boolean          @default(false)
-  friendlyDogs             Boolean          @default(true)
-  friendlyCats             Boolean          @default(false)
-  friendlyChildren         Boolean          @default(true)
-  latitude                 Float?
-  longitude                Float?
-  qrScans                  QrScan[]
-  sightings                Sighting[]
-  walks                    Walk[]
-  vetRecords               VetRecord[]
-  sentWalkInvitations      WalkInvitation[] @relation("WalkInviteSenderDog")
-  receivedWalkInvitations  WalkInvitation[] @relation("WalkInviteInvitedDog")
-  notifications            Notification[]
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
+  id                      String           @id @default(cuid())
+  ownerId                 String
+  owner                   User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name                    String
+  slug                    String           @unique
+  publicId                String?          @default(cuid())
+  breed                   String?
+  birthDate               DateTime?
+  weightLbs               Int?
+  gender                  String?
+  photoUrl                String?
+  status                  DogStatus        @default(SAFE)
+  temperament             String?
+  medicalNotes            String?
+  vaccinationNotes        String?
+  emergencyContact        String?
+  lostSince               DateTime?
+  lastSeenLocation        String?
+  lostReward              String?
+  lostNotes               String?
+  spayedNeutered          Boolean          @default(false)
+  friendlyDogs            Boolean          @default(true)
+  friendlyCats            Boolean          @default(false)
+  friendlyChildren        Boolean          @default(true)
+  latitude                Float?
+  longitude               Float?
+  qrScans                 QrScan[]
+  sightings               Sighting[]
+  walks                   Walk[]
+  vetRecords              VetRecord[]
+  sentWalkInvitations     WalkInvitation[] @relation("WalkInviteSenderDog")
+  receivedWalkInvitations WalkInvitation[] @relation("WalkInviteInvitedDog")
+  notifications           Notification[]
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
   @@index([ownerId])
   @@index([status])
@@ -123,17 +123,17 @@ model Dog {
 }
 
 model BuddyRequest {
-  id            String              @id @default(cuid())
+  id            String             @id @default(cuid())
   senderId      String
   receiverId    String
-  sender        User                @relation("SentBuddyRequests", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver      User                @relation("ReceivedBuddyRequests", fields: [receiverId], references: [id], onDelete: Cascade)
-  status        BuddyRequestStatus  @default(PENDING)
+  sender        User               @relation("SentBuddyRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver      User               @relation("ReceivedBuddyRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  status        BuddyRequestStatus @default(PENDING)
   message       String?
   respondedAt   DateTime?
   notifications Notification[]
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@unique([senderId, receiverId])
   @@index([receiverId, status])
@@ -179,22 +179,28 @@ model Sighting {
 }
 
 model Walk {
-  id          String           @id @default(cuid())
-  dogId       String
-  dog         Dog              @relation(fields: [dogId], references: [id], onDelete: Cascade)
-  requesterId String
-  requester   User             @relation("RequesterWalks", fields: [requesterId], references: [id])
-  walkerId    String?
-  walker      User?            @relation("WalkerWalks", fields: [walkerId], references: [id])
-  startsAt    DateTime
-  durationMin Int
-  status      WalkStatus       @default(REQUESTED)
-  notes       String?
-  messages    Message[]
-  invitations WalkInvitation[]
-  notifications Notification[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id                 String           @id @default(cuid())
+  dogId              String
+  dog                Dog              @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  requesterId        String
+  requester          User             @relation("RequesterWalks", fields: [requesterId], references: [id])
+  walkerId           String?
+  walker             User?            @relation("WalkerWalks", fields: [walkerId], references: [id])
+  startsAt           DateTime
+  durationMin        Int
+  status             WalkStatus       @default(REQUESTED)
+  notes              String?
+  routeName          String?
+  routeEngine        String?
+  routeGeometry      Json?
+  routeSteps         Json?
+  routeDistanceMiles Float?
+  routeDurationMin   Int?
+  messages           Message[]
+  invitations        WalkInvitation[]
+  notifications      Notification[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([dogId, startsAt])
   @@index([walkerId, status])
@@ -221,26 +227,26 @@ model WalkInvitation {
 }
 
 model Notification {
-  id               String            @id @default(cuid())
+  id               String          @id @default(cuid())
   userId           String
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   type             NotificationType
   routeKey         String
   href             String
   title            String
   body             String?
   dogId            String?
-  dog              Dog?              @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  dog              Dog?            @relation(fields: [dogId], references: [id], onDelete: SetNull)
   walkId           String?
-  walk             Walk?             @relation(fields: [walkId], references: [id], onDelete: SetNull)
+  walk             Walk?           @relation(fields: [walkId], references: [id], onDelete: SetNull)
   walkInvitationId String?
-  walkInvitation   WalkInvitation?    @relation(fields: [walkInvitationId], references: [id], onDelete: SetNull)
+  walkInvitation   WalkInvitation? @relation(fields: [walkInvitationId], references: [id], onDelete: SetNull)
   buddyRequestId   String?
-  buddyRequest     BuddyRequest?      @relation(fields: [buddyRequestId], references: [id], onDelete: SetNull)
+  buddyRequest     BuddyRequest?   @relation(fields: [buddyRequestId], references: [id], onDelete: SetNull)
   sightingId       String?
-  sighting         Sighting?          @relation(fields: [sightingId], references: [id], onDelete: SetNull)
+  sighting         Sighting?       @relation(fields: [sightingId], references: [id], onDelete: SetNull)
   readAt           DateTime?
-  createdAt        DateTime           @default(now())
+  createdAt        DateTime         @default(now())
 
   @@index([userId, readAt, createdAt])
   @@index([routeKey, createdAt])
