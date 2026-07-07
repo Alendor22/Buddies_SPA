@@ -7,9 +7,37 @@ import { UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
+type RequestResult = {
+  ok: boolean;
+  error?: string;
+  code?: string;
+  request?: {
+    id: string;
+    status: BuddyRequestStatus;
+    senderDogId: string;
+    senderDogName: string;
+    receiverDogId: string;
+    receiverDogName: string;
+  };
+};
+
+function wantsJson(request: NextRequest) {
+  return request.headers.get('x-buddies-response') === 'json'
+    || request.headers.get('accept')?.includes('application/json');
+}
+
+function jsonOrRedirect(request: NextRequest, result: RequestResult, redirectPath: string, status = 200) {
+  if (wantsJson(request)) {
+    return NextResponse.json(result, { status });
+  }
+  return NextResponse.redirect(new URL(redirectPath, request.url));
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
+  if (!user) {
+    return jsonOrRedirect(request, { ok: false, error: 'Authentication required.', code: 'AUTH' }, '/auth/login', 401);
+  }
 
   const formData = await request.formData();
   const senderDogId = String(formData.get('senderDogId') ?? '').trim();
@@ -28,7 +56,12 @@ export async function POST(request: NextRequest) {
       : null;
 
   if (!senderDog || !receiverDog || receiverDog.ownerId === user.id) {
-    return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=invalid`, request.url));
+    return jsonOrRedirect(
+      request,
+      { ok: false, error: 'Choose a valid dog-to-dog request pair.', code: 'INVALID' },
+      `${UI_ROUTES.buddies}?error=invalid`,
+      400
+    );
   }
 
   const pair = orderedDogBuddyPair(senderDog.id, receiverDog.id);
@@ -36,7 +69,14 @@ export async function POST(request: NextRequest) {
     where: { dogAId_dogBId: pair },
     select: { id: true }
   });
-  if (existingBuddy) return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=exists`, request.url));
+  if (existingBuddy) {
+    return jsonOrRedirect(
+      request,
+      { ok: false, error: `${senderDog.name} and ${receiverDog.name} are already buddies.`, code: 'EXISTS' },
+      `${UI_ROUTES.buddies}?error=exists`,
+      409
+    );
+  }
 
   const reverse = await prisma.dogBuddyRequest.findUnique({
     where: {
@@ -45,11 +85,44 @@ export async function POST(request: NextRequest) {
         receiverDogId: senderDog.id
       }
     },
-    select: { status: true }
+    select: { id: true, status: true }
   });
 
   if (reverse?.status === BuddyRequestStatus.PENDING) {
-    return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=respond-first`, request.url));
+    return jsonOrRedirect(
+      request,
+      { ok: false, error: `${receiverDog.name} already sent ${senderDog.name} a request. Review it first.`, code: 'RESPOND_FIRST' },
+      `${UI_ROUTES.buddies}?error=respond-first`,
+      409
+    );
+  }
+
+  const existing = await prisma.dogBuddyRequest.findUnique({
+    where: {
+      senderDogId_receiverDogId: {
+        senderDogId: senderDog.id,
+        receiverDogId: receiverDog.id
+      }
+    },
+    select: { id: true, status: true }
+  });
+
+  if (existing?.status === BuddyRequestStatus.PENDING) {
+    return jsonOrRedirect(
+      request,
+      {
+        ok: true,
+        request: {
+          id: existing.id,
+          status: existing.status,
+          senderDogId: senderDog.id,
+          senderDogName: senderDog.name,
+          receiverDogId: receiverDog.id,
+          receiverDogName: receiverDog.name
+        }
+      },
+      `${UI_ROUTES.buddies}?sent=1&from=${encodeURIComponent(senderDog.name)}&to=${encodeURIComponent(receiverDog.name)}`
+    );
   }
 
   const buddyRequest = await prisma.dogBuddyRequest.upsert({
@@ -71,27 +144,43 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  await prisma.notification.updateMany({
-    where: {
-      userId: receiverDog.ownerId,
-      dogBuddyRequestId: buddyRequest.id,
-      readAt: null
+  await prisma.$transaction([
+    prisma.notification.updateMany({
+      where: {
+        userId: receiverDog.ownerId,
+        dogBuddyRequestId: buddyRequest.id,
+        readAt: null
+      },
+      data: { readAt: new Date() }
+    }),
+    prisma.notification.create({
+      data: {
+        userId: receiverDog.ownerId,
+        type: NotificationType.BUDDY_REQUEST,
+        routeKey: 'buddyRequests',
+        href: UI_ROUTES.buddyRequests,
+        title: `${senderDog.name} sent ${receiverDog.name} a buddy request`,
+        body: note ?? 'Open Buddies to review the dog-to-dog request.',
+        dogId: receiverDog.id,
+        dogBuddyRequestId: buddyRequest.id
+      }
+    })
+  ]);
+
+  return jsonOrRedirect(
+    request,
+    {
+      ok: true,
+      request: {
+        id: buddyRequest.id,
+        status: buddyRequest.status,
+        senderDogId: senderDog.id,
+        senderDogName: senderDog.name,
+        receiverDogId: receiverDog.id,
+        receiverDogName: receiverDog.name
+      }
     },
-    data: { readAt: new Date() }
-  });
-
-  await prisma.notification.create({
-    data: {
-      userId: receiverDog.ownerId,
-      type: NotificationType.BUDDY_REQUEST,
-      routeKey: 'buddyRequests',
-      href: UI_ROUTES.buddyRequests,
-      title: `${senderDog.name} sent ${receiverDog.name} a buddy request`,
-      body: note ?? 'Open Buddies to review the dog-to-dog request.',
-      dogId: receiverDog.id,
-      dogBuddyRequestId: buddyRequest.id
-    }
-  });
-
-  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?sent=1&from=${encodeURIComponent(senderDog.name)}&to=${encodeURIComponent(receiverDog.name)}`, request.url));
+    `${UI_ROUTES.buddies}?sent=1&from=${encodeURIComponent(senderDog.name)}&to=${encodeURIComponent(receiverDog.name)}`,
+    201
+  );
 }
