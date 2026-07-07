@@ -23,33 +23,41 @@ export function checkInsAvailable() {
 }
 
 export async function saveCheckIn(record: ActiveCheckIn, ttlSeconds: number) {
-  if (!redis) throw new Error('Redis is not configured.');
+  const client = redis;
+  if (!client) throw new Error('Redis is not configured.');
+
   await Promise.all([
-    redis.set(keyForDog(record.dogId), record, { ex: ttlSeconds }),
-    redis.sadd(INDEX_KEY, record.dogId)
+    client.set(keyForDog(record.dogId), record, { ex: ttlSeconds }),
+    client.sadd(INDEX_KEY, record.dogId)
   ]);
 }
 
 export async function removeCheckIn(dogId: string) {
-  if (!redis) throw new Error('Redis is not configured.');
+  const client = redis;
+  if (!client) throw new Error('Redis is not configured.');
+
   await Promise.all([
-    redis.del(keyForDog(dogId)),
-    redis.srem(INDEX_KEY, dogId)
+    client.del(keyForDog(dogId)),
+    client.srem(INDEX_KEY, dogId)
   ]);
 }
 
 export async function getCheckIn(dogId: string) {
-  if (!redis) return null;
-  return redis.get<ActiveCheckIn>(keyForDog(dogId));
+  const client = redis;
+  if (!client) return null;
+  return client.get<ActiveCheckIn>(keyForDog(dogId));
 }
 
 export async function listActiveCheckIns() {
-  if (!redis) return [] as ActiveCheckIn[];
+  const client = redis;
+  if (!client) return [] as ActiveCheckIn[];
 
-  const members = await redis.smembers(INDEX_KEY) as string[];
+  const members = await client.smembers(INDEX_KEY) as string[];
   if (!members.length) return [] as ActiveCheckIn[];
 
-  const records = await Promise.all(members.slice(0, 250).map((dogId) => redis.get<ActiveCheckIn>(keyForDog(dogId))));
+  const records = await Promise.all(
+    members.slice(0, 250).map((dogId) => client.get<ActiveCheckIn>(keyForDog(dogId)))
+  );
   const staleIds: string[] = [];
   const now = Date.now();
   const active: ActiveCheckIn[] = [];
@@ -63,7 +71,7 @@ export async function listActiveCheckIns() {
   });
 
   if (staleIds.length) {
-    await Promise.all(staleIds.map((dogId) => redis.srem(INDEX_KEY, dogId)));
+    await Promise.all(staleIds.map((dogId) => client.srem(INDEX_KEY, dogId)));
   }
 
   return active;
