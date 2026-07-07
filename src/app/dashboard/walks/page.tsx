@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { UI_ROUTES } from '@/lib/uiRoutes';
+import { UI_ROUTES, walkMessagesRoute } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,26 +41,12 @@ function routeSummary(walk: RouteSource) {
   }
 
   if (!walk.notes) {
-    return {
-      intro: '',
-      steps: [] as string[],
-      title: walk.routeName || 'Street route',
-      engine: '',
-      distance: '',
-      duration: ''
-    };
+    return { intro: '', steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
   }
 
   const [intro, raw] = walk.notes.split('Route plan:');
   if (!raw) {
-    return {
-      intro: walk.notes,
-      steps: [] as string[],
-      title: walk.routeName || 'Street route',
-      engine: '',
-      distance: '',
-      duration: ''
-    };
+    return { intro: walk.notes, steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
   }
 
   const jsonStart = raw.indexOf('{');
@@ -77,14 +63,7 @@ function routeSummary(walk: RouteSource) {
       duration: typeof parsed.durationMinutes === 'number' ? `${parsed.durationMinutes} min` : ''
     };
   } catch {
-    return {
-      intro: intro.trim(),
-      title,
-      engine: '',
-      steps: ['An older route was saved without current street geometry.'],
-      distance: '',
-      duration: ''
-    };
+    return { intro: intro.trim(), title, engine: '', steps: ['An older route was saved without current street geometry.'], distance: '', duration: '' };
   }
 }
 
@@ -106,20 +85,28 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
 
   const [walks, invitations] = await Promise.all([
     prisma.walk.findMany({
-      where: { OR: [{ requesterId: user.id }, { walkerId: user.id }] },
+      where: {
+        OR: [
+          { requesterId: user.id },
+          { walkerId: user.id },
+          { dog: { ownerId: user.id } },
+          { invitations: { some: { senderDog: { ownerId: user.id } } } },
+          { invitations: { some: { invitedDog: { ownerId: user.id } } } }
+        ]
+      },
       orderBy: { startsAt: 'desc' },
       take: 30,
       include: {
-        dog: { select: { name: true, slug: true, breed: true } }
+        dog: { select: { name: true, slug: true, breed: true } },
+        _count: { select: { messages: true } },
+        notifications: {
+          where: { userId: user.id, routeKey: 'messages', readAt: null },
+          select: { id: true }
+        }
       }
     }),
     prisma.walkInvitation.findMany({
-      where: {
-        OR: [
-          { senderDog: { ownerId: user.id } },
-          { invitedDog: { ownerId: user.id } }
-        ]
-      },
+      where: { OR: [{ senderDog: { ownerId: user.id } }, { invitedDog: { ownerId: user.id } }] },
       orderBy: { createdAt: 'desc' },
       take: 30,
       include: {
@@ -132,16 +119,20 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
 
   const active = walks.filter((walk) => ['REQUESTED', 'ACCEPTED', 'ACTIVE'].includes(walk.status));
   const pendingInvites = invitations.filter((invite) => invite.status === 'PENDING');
+  const unreadMessages = walks.reduce((sum, walk) => sum + walk.notifications.length, 0);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Walks</p>
+          <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Walks</p>
           <h1 className="text-3xl font-bold">Walks</h1>
-          <p className="mt-2 text-slate-600">Manage invitations, street routes, and the requested → accepted → active → completed lifecycle.</p>
+          <p className="mt-2 text-slate-600">Manage invitations, street routes, lifecycle states, and realtime walk conversations.</p>
         </div>
-        <Link href={UI_ROUTES.createWalk} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Create walk</Link>
+        <div className="flex gap-2">
+          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2 font-medium">Messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
+          <Link href={UI_ROUTES.createWalk} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Create walk</Link>
+        </div>
       </div>
 
       {message ? <div className="mt-6 rounded-xl border bg-white p-4 text-sm text-slate-700 shadow-sm">{message}</div> : null}
@@ -150,7 +141,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Total walks</p><p className="mt-2 text-3xl font-bold">{walks.length}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Open</p><p className="mt-2 text-3xl font-bold">{active.length}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Pending invites</p><p className="mt-2 text-3xl font-bold">{pendingInvites.length}</p></article>
-        <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Completed</p><p className="mt-2 text-3xl font-bold">{walks.filter((walk) => walk.status === 'COMPLETED').length}</p></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Unread chat</p><p className="mt-2 text-3xl font-bold">{unreadMessages}</p></article>
       </section>
 
       <section id="walk-invitations" className="mt-8 scroll-mt-24 rounded-2xl border bg-white p-6 shadow-sm">
@@ -166,9 +157,10 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
                     <p className="mt-1 text-sm text-slate-600">{received ? 'Invitation received' : 'Invitation sent'} · {invite.walk.startsAt.toLocaleString()} · {invite.walk.durationMin} min</p>
                     <p className="mt-1 text-sm font-medium">{invite.status}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Link href={`/dogs/${invite.senderDog.slug}#walk-invitations`} className="rounded-lg border px-3 py-2 text-sm">Sender dog</Link>
                     <Link href={`/dogs/${invite.invitedDog.slug}#walk-invitations`} className="rounded-lg border px-3 py-2 text-sm">Invited dog</Link>
+                    <Link href={walkMessagesRoute(invite.walk.id)} className="rounded-lg border px-3 py-2 text-sm">Chat</Link>
                   </div>
                 </div>
                 {received && invite.status === 'PENDING' ? (
@@ -191,6 +183,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
           const canStart = walk.status === 'ACCEPTED';
           const canComplete = walk.status === 'ACTIVE';
           const canCancel = ['REQUESTED', 'ACCEPTED', 'ACTIVE'].includes(walk.status);
+          const unread = walk.notifications.length;
 
           return (
             <article id={`walk-${walk.id}`} key={walk.id} className="scroll-mt-24 rounded-2xl border bg-white p-5 shadow-sm">
@@ -200,7 +193,10 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
                   <p className="mt-1 text-sm text-slate-600">{walk.dog.breed ?? 'Breed not listed'} · {walk.startsAt.toLocaleString()} · {walk.durationMin} min</p>
                   <p className="mt-1 text-sm font-semibold">{walk.status}</p>
                 </div>
-                <Link href={`/dogs/${walk.dog.slug}`} className="rounded-lg border px-4 py-2 text-sm font-medium">Dog profile</Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link href={walkMessagesRoute(walk.id)} className="relative rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Chat · {walk._count.messages}{unread ? <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs">{unread}</span> : null}</Link>
+                  <Link href={`/dogs/${walk.dog.slug}`} className="rounded-lg border px-4 py-2 text-sm font-medium">Dog profile</Link>
+                </div>
               </div>
 
               {summary.intro ? <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{summary.intro}</p> : null}
