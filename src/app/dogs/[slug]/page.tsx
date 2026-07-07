@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import DogBuddiesPanel from '@/components/DogBuddiesPanel';
 import DogWalkInvitations from '@/components/DogWalkInvitations';
 import LostDogMap from '@/components/LostDogMap';
 import { getCurrentUser } from '@/lib/auth';
@@ -52,8 +53,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: { id: true, note: true, latitude: true, longitude: true, createdAt: true }
-      },
-      owner: { select: { displayName: true } }
+      }
     }
   });
 
@@ -81,7 +81,10 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
         <div className="p-6 sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Public dog ID · {dog.publicId ?? dog.id}</p>
           <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-            <div><h1 className="text-4xl font-bold">{dog.name}</h1><p className="mt-2 text-slate-600">{dog.breed ?? 'Breed not listed'} · Owner: {dog.owner.displayName}</p></div>
+            <div>
+              <h1 className="text-4xl font-bold">{dog.name}</h1>
+              <p className="mt-2 text-slate-600">{dog.breed ?? 'Breed not listed'} · {isOwner ? 'Managed by you' : 'Owner details hidden'}</p>
+            </div>
             <Link href={`/dogs/${dog.slug}/qr`} className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Show QR Code</Link>
           </div>
 
@@ -94,6 +97,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
                 <p><strong>Lost since:</strong> {dog.lostSince ? dog.lostSince.toLocaleString() : 'Not provided'}</p>
                 <p><strong>Reward/contact note:</strong> {dog.lostReward ?? 'Not provided'}</p>
                 <p><strong>Notes:</strong> {dog.lostNotes ?? 'No notes provided'}</p>
+                <p><strong>Emergency contact:</strong> {dog.emergencyContact ?? 'Not provided'}</p>
               </div>
               <LostDogMap name={dog.name} lastSeenLocation={dog.lastSeenLocation} latitude={dog.latitude} longitude={dog.longitude} sightings={dog.sightings} />
               <Link href={`/dogs/${dog.slug}/sighting`} className="mt-4 inline-block rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white">Report sighting</Link>
@@ -111,9 +115,10 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
             <div><h2 className="font-semibold">Temperament</h2><p className="mt-1 text-slate-600">{dog.temperament ?? 'Not provided'}</p></div>
             <div><h2 className="font-semibold">Vaccination notes</h2><p className="mt-1 text-slate-600">{dog.vaccinationNotes ?? 'Not provided'}</p></div>
             <div><h2 className="font-semibold">Medical notes</h2><p className="mt-1 text-slate-600">{dog.medicalNotes ?? 'None provided'}</p></div>
-            <div><h2 className="font-semibold">Emergency contact</h2><p className="mt-1 text-slate-600">{dog.emergencyContact ?? 'Not provided'}</p></div>
+            {isOwner ? <div><h2 className="font-semibold">Emergency contact</h2><p className="mt-1 text-slate-600">{dog.emergencyContact ?? 'Not provided'}</p></div> : null}
           </section>
 
+          <DogBuddiesPanel dogId={dog.id} dogName={dog.name} />
           <DogWalkInvitations dogId={dog.id} dogName={dog.name} isOwner={isOwner} />
 
           <section className="mt-7 rounded-xl border p-4">
