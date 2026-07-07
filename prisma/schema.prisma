@@ -54,30 +54,31 @@ enum NotificationType {
 }
 
 model User {
-  id                    String         @id @default(cuid())
-  email                 String         @unique
+  id                    String          @id @default(cuid())
+  email                 String          @unique
   displayName           String
   passwordHash          String?
-  role                  UserRole       @default(OWNER)
+  role                  UserRole        @default(OWNER)
   emailVerifiedAt       DateTime?
   avatarUrl             String?
-  bio                   String?
-  city                  String?
-  phone                 String?
-  latitude              Float?
-  longitude             Float?
-  dogs                  Dog[]
-  sentWalks             Walk[]         @relation("RequesterWalks")
-  assignedWalks         Walk[]         @relation("WalkerWalks")
-  messages              Message[]
-  vetRecords            VetRecord[]
-  notifications         Notification[]
-  sentBuddyRequests     BuddyRequest[] @relation("SentBuddyRequests")
-  receivedBuddyRequests BuddyRequest[] @relation("ReceivedBuddyRequests")
-  buddyLinksA           Buddy[]        @relation("BuddyUserA")
-  buddyLinksB           Buddy[]        @relation("BuddyUserB")
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  bio                    String?
+  city                   String?
+  phone                  String?
+  latitude               Float?
+  longitude              Float?
+  dogs                   Dog[]
+  sentWalks              Walk[]          @relation("RequesterWalks")
+  assignedWalks          Walk[]          @relation("WalkerWalks")
+  messages               Message[]
+  vetRecords             VetRecord[]
+  favoriteRoutes         FavoriteRoute[]
+  notifications          Notification[]
+  sentBuddyRequests      BuddyRequest[]  @relation("SentBuddyRequests")
+  receivedBuddyRequests  BuddyRequest[]  @relation("ReceivedBuddyRequests")
+  buddyLinksA            Buddy[]         @relation("BuddyUserA")
+  buddyLinksB            Buddy[]         @relation("BuddyUserB")
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 }
 
 model Dog {
@@ -90,32 +91,33 @@ model Dog {
   breed                   String?
   birthDate               DateTime?
   weightLbs               Int?
-  gender                  String?
-  photoUrl                String?
-  status                  DogStatus        @default(SAFE)
-  temperament             String?
-  medicalNotes            String?
-  vaccinationNotes        String?
-  emergencyContact        String?
-  lostSince               DateTime?
-  lastSeenLocation        String?
-  lostReward              String?
-  lostNotes               String?
-  spayedNeutered          Boolean          @default(false)
-  friendlyDogs            Boolean          @default(true)
-  friendlyCats            Boolean          @default(false)
-  friendlyChildren        Boolean          @default(true)
-  latitude                Float?
-  longitude               Float?
-  qrScans                 QrScan[]
-  sightings               Sighting[]
-  walks                   Walk[]
-  vetRecords              VetRecord[]
-  sentWalkInvitations     WalkInvitation[] @relation("WalkInviteSenderDog")
-  receivedWalkInvitations WalkInvitation[] @relation("WalkInviteInvitedDog")
-  notifications           Notification[]
-  createdAt               DateTime          @default(now())
-  updatedAt               DateTime          @updatedAt
+  gender                   String?
+  photoUrl                 String?
+  status                   DogStatus        @default(SAFE)
+  temperament              String?
+  medicalNotes             String?
+  vaccinationNotes         String?
+  emergencyContact         String?
+  lostSince                DateTime?
+  lastSeenLocation         String?
+  lostReward               String?
+  lostNotes                String?
+  spayedNeutered           Boolean          @default(false)
+  friendlyDogs             Boolean          @default(true)
+  friendlyCats             Boolean          @default(false)
+  friendlyChildren         Boolean          @default(true)
+  latitude                 Float?
+  longitude                Float?
+  qrScans                  QrScan[]
+  sightings                Sighting[]
+  walks                    Walk[]
+  vetRecords               VetRecord[]
+  favoriteRoutes           FavoriteRoute[]
+  sentWalkInvitations      WalkInvitation[] @relation("WalkInviteSenderDog")
+  receivedWalkInvitations  WalkInvitation[] @relation("WalkInviteInvitedDog")
+  notifications            Notification[]
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 
   @@index([ownerId])
   @@index([status])
@@ -204,6 +206,26 @@ model Walk {
 
   @@index([dogId, startsAt])
   @@index([walkerId, status])
+}
+
+model FavoriteRoute {
+  id                 String   @id @default(cuid())
+  ownerId            String
+  owner              User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  dogId              String?
+  dog                Dog?     @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  name               String
+  routeEngine        String?
+  plan               Json
+  routeGeometry      Json
+  routeSteps         Json?
+  routeDistanceMiles Float?
+  routeDurationMin   Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([ownerId, createdAt])
+  @@index([dogId])
 }
 
 model WalkInvitation {
