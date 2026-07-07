@@ -1,4 +1,5 @@
 import Ably from 'ably';
+import { realtimeChannels } from '@/lib/realtimeChannels';
 
 let client: Ably.Realtime | null = null;
 
@@ -8,9 +9,4 @@ export function getRealtimeClient() {
   return client;
 }
 
-export const channels = {
-  lostDog: (dogId: string) => `dog:${dogId}:lost`,
-  walk: (walkId: string) => `walk:${walkId}`,
-  messages: (walkId: string) => `walk:${walkId}:messages`,
-  nearby: (geohash: string) => `nearby:${geohash}`
-};
+export const channels = realtimeChannels;
