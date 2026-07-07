@@ -8,7 +8,11 @@ export const dynamic = 'force-dynamic';
 
 type WalkAction = 'start' | 'complete' | 'cancel';
 
-function targetStatus(action: WalkAction) {
+function isWalkAction(value: string): value is WalkAction {
+  return value === 'start' || value === 'complete' || value === 'cancel';
+}
+
+function targetStatus(action: WalkAction): WalkStatus {
   if (action === 'start') return WalkStatus.ACTIVE;
   if (action === 'complete') return WalkStatus.COMPLETED;
   return WalkStatus.CANCELLED;
@@ -17,7 +21,9 @@ function targetStatus(action: WalkAction) {
 function canTransition(current: WalkStatus, action: WalkAction) {
   if (action === 'start') return current === WalkStatus.ACCEPTED;
   if (action === 'complete') return current === WalkStatus.ACTIVE;
-  return [WalkStatus.REQUESTED, WalkStatus.ACCEPTED, WalkStatus.ACTIVE].includes(current);
+  return current === WalkStatus.REQUESTED
+    || current === WalkStatus.ACCEPTED
+    || current === WalkStatus.ACTIVE;
 }
 
 function statusTitle(dogName: string, action: WalkAction) {
@@ -32,11 +38,12 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const walkId = String(formData.get('walkId') ?? '').trim();
-  const action = String(formData.get('action') ?? '').trim() as WalkAction;
+  const actionValue = String(formData.get('action') ?? '').trim();
 
-  if (!walkId || !['start', 'complete', 'cancel'].includes(action)) {
+  if (!walkId || !isWalkAction(actionValue)) {
     return NextResponse.redirect(new URL(`${UI_ROUTES.walks}?error=action`, request.url));
   }
+  const action = actionValue;
 
   const walk = await prisma.walk.findUnique({
     where: { id: walkId },
