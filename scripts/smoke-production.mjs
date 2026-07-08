@@ -67,7 +67,9 @@ async function waitForReadyDeployment() {
 async function verifyPublicRoutes() {
   const checks = [
     ['/', [200]],
+    ['/dogs', [200]],
     ['/auth/login', [200]],
+    ['/auth/register', [200]],
     ['/api/health', [200]],
     ['/api/maps/config', [200]]
   ];
@@ -81,9 +83,33 @@ async function verifyPublicRoutes() {
   }
 }
 
+async function verifySecurityHeaders() {
+  const response = await request('/');
+  const expected = {
+    'strict-transport-security': 'max-age=',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'strict-origin-when-cross-origin'
+  };
+
+  for (const [name, expectedValue] of Object.entries(expected)) {
+    const actual = response.headers.get(name) || '';
+    if (!actual.toLowerCase().includes(expectedValue.toLowerCase())) {
+      throw new Error(`Security header ${name} is missing or invalid.`);
+    }
+    console.log(`PASS security header ${name}`);
+  }
+
+  if (response.headers.has('x-powered-by')) {
+    throw new Error('x-powered-by must not be exposed.');
+  }
+  console.log('PASS framework identification header disabled');
+}
+
 try {
   await waitForReadyDeployment();
   await verifyPublicRoutes();
+  await verifySecurityHeaders();
   console.log('Production smoke checks passed.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
