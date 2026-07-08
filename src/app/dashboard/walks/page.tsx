@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES, walkMessagesRoute } from '@/lib/uiRoutes';
+import { walkParticipantWhere } from '@/lib/walkVisibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,16 +16,10 @@ type RouteSource = {
   routeDurationMin: number | null;
 };
 
-type SearchParams = {
-  created?: string;
-  updated?: string;
-  error?: string;
-};
+type SearchParams = { created?: string; updated?: string; error?: string };
 
 function stringSteps(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((step): step is string => typeof step === 'string')
-    : [];
+  return Array.isArray(value) ? value.filter((step): step is string => typeof step === 'string') : [];
 }
 
 function routeSummary(walk: RouteSource) {
@@ -40,20 +35,16 @@ function routeSummary(walk: RouteSource) {
     };
   }
 
-  if (!walk.notes) {
-    return { intro: '', steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
-  }
+  if (!walk.notes) return { intro: '', steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
 
   const [intro, raw] = walk.notes.split('Route plan:');
-  if (!raw) {
-    return { intro: walk.notes, steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
-  }
+  if (!raw) return { intro: walk.notes, steps: [] as string[], title: walk.routeName || 'Street route', engine: '', distance: '', duration: '' };
 
   const jsonStart = raw.indexOf('{');
   const title = jsonStart > 0 ? raw.slice(0, jsonStart).trim() : walk.routeName || 'Street route';
 
   try {
-    const parsed = JSON.parse(raw.slice(jsonStart));
+    const parsed = JSON.parse(raw);
     return {
       intro: intro.trim(),
       title,
@@ -73,6 +64,7 @@ function pageMessage(params: SearchParams) {
   if (params.updated === 'completed') return 'Walk completed.';
   if (params.updated === 'cancelled') return 'Walk cancelled.';
   if (params.error === 'transition') return 'That status change is not valid for the current walk state.';
+  if (params.error === 'unauthorized') return 'Only accepted walk participants can update this walk.';
   if (params.error) return 'The walk could not be updated.';
   return null;
 }
@@ -85,15 +77,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
 
   const [walks, invitations] = await Promise.all([
     prisma.walk.findMany({
-      where: {
-        OR: [
-          { requesterId: user.id },
-          { walkerId: user.id },
-          { dog: { ownerId: user.id } },
-          { invitations: { some: { senderDog: { ownerId: user.id } } } },
-          { invitations: { some: { invitedDog: { ownerId: user.id } } } }
-        ]
-      },
+      where: walkParticipantWhere(user.id),
       orderBy: { startsAt: 'desc' },
       take: 30,
       include: {
@@ -115,7 +99,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
         walk: { select: { id: true, startsAt: true, durationMin: true, status: true } }
       }
     })
-  ]).catch(() => [[], []] as const);
+  ]);
 
   const active = walks.filter((walk) => ['REQUESTED', 'ACCEPTED', 'ACTIVE'].includes(walk.status));
   const pendingInvites = invitations.filter((invite) => invite.status === 'PENDING');
@@ -127,7 +111,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
         <div>
           <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Walks</p>
           <h1 className="text-3xl font-bold">Walks</h1>
-          <p className="mt-2 text-slate-600">Manage invitations, street routes, lifecycle states, and realtime walk conversations.</p>
+          <p className="mt-2 text-slate-600">Manage invitations, street routes, lifecycle states, and accepted-participant conversations.</p>
         </div>
         <div className="flex gap-2">
           <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2 font-medium">Messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
@@ -149,6 +133,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
         <div className="mt-4 grid gap-3">
           {invitations.length === 0 ? <p className="text-sm text-slate-600">No walk invitations yet.</p> : invitations.map((invite) => {
             const received = invite.invitedDog.ownerId === user.id;
+            const canChat = invite.senderDog.ownerId === user.id || invite.status === 'ACCEPTED';
             return (
               <article key={invite.id} className="rounded-xl border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -160,7 +145,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
                   <div className="flex flex-wrap gap-2">
                     <Link href={`/dogs/${invite.senderDog.slug}#walk-invitations`} className="rounded-lg border px-3 py-2 text-sm">Sender dog</Link>
                     <Link href={`/dogs/${invite.invitedDog.slug}#walk-invitations`} className="rounded-lg border px-3 py-2 text-sm">Invited dog</Link>
-                    <Link href={walkMessagesRoute(invite.walk.id)} className="rounded-lg border px-3 py-2 text-sm">Chat</Link>
+                    {canChat ? <Link href={walkMessagesRoute(invite.walk.id)} className="rounded-lg border px-3 py-2 text-sm">Chat</Link> : null}
                   </div>
                 </div>
                 {received && invite.status === 'PENDING' ? (
@@ -200,13 +185,9 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
               </div>
 
               {summary.intro ? <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{summary.intro}</p> : null}
-
               {summary.steps.length ? (
                 <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <div><p className="font-semibold">{summary.title}</p>{summary.engine ? <p className="text-xs text-slate-500">Engine: {summary.engine}</p> : null}</div>
-                    <p>{[summary.distance, summary.duration].filter(Boolean).join(' · ')}</p>
-                  </div>
+                  <div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{summary.title}</p>{summary.engine ? <p className="text-xs text-slate-500">Engine: {summary.engine}</p> : null}</div><p>{[summary.distance, summary.duration].filter(Boolean).join(' · ')}</p></div>
                   <ol className="mt-2 list-decimal space-y-1 pl-5">{summary.steps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}</ol>
                 </div>
               ) : null}
