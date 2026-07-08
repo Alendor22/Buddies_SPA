@@ -7,8 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
-    "build:ci": "prisma generate && next build",
+    "build": "npm run audit:phases && prisma generate && prisma migrate deploy && next build",
+    "build:ci": "npm run audit:phases && prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
