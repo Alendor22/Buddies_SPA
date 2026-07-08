@@ -8,12 +8,12 @@ import { UI_ROUTES } from '@/lib/uiRoutes';
 export const dynamic = 'force-dynamic';
 
 function go(request: NextRequest, query: string) {
-  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?${query}`, request.url));
+  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?${query}`, request.url), 303);
 }
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
+  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url), 303);
 
   const formData = await request.formData();
   const requestId = String(formData.get('requestId') ?? '').trim();
@@ -28,32 +28,36 @@ export async function POST(request: NextRequest) {
   });
 
   if (!buddyRequest) return go(request, 'error=request');
+  if (buddyRequest.status !== BuddyRequestStatus.PENDING) return go(request, 'error=request-resolved');
 
   if (action === 'cancel') {
     if (buddyRequest.senderDog.ownerId !== user.id) return go(request, 'error=unauthorized');
 
-    await prisma.$transaction([
-      prisma.dogBuddyRequest.update({
-        where: { id: requestId },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.dogBuddyRequest.updateMany({
+        where: { id: requestId, status: BuddyRequestStatus.PENDING },
         data: { status: BuddyRequestStatus.CANCELLED, respondedAt: new Date() }
-      }),
-      prisma.notification.updateMany({
+      });
+      if (!result.count) return false;
+      await tx.notification.updateMany({
         where: { dogBuddyRequestId: requestId, readAt: null },
         data: { readAt: new Date() }
-      })
-    ]);
+      });
+      return true;
+    });
 
-    return go(request, 'cancelled=1');
+    return go(request, updated ? 'cancelled=1' : 'error=request-resolved');
   }
 
   if (buddyRequest.receiverDog.ownerId !== user.id) return go(request, 'error=unauthorized');
 
   if (action === 'decline') {
-    await prisma.$transaction(async (tx) => {
-      await tx.dogBuddyRequest.update({
-        where: { id: requestId },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.dogBuddyRequest.updateMany({
+        where: { id: requestId, status: BuddyRequestStatus.PENDING },
         data: { status: BuddyRequestStatus.DECLINED, respondedAt: new Date() }
       });
+      if (!result.count) return false;
       await tx.notification.updateMany({
         where: { dogBuddyRequestId: requestId, readAt: null },
         data: { readAt: new Date() }
@@ -70,20 +74,22 @@ export async function POST(request: NextRequest) {
           dogBuddyRequestId: requestId
         }
       });
+      return true;
     });
 
-    return go(request, 'declined=1');
+    return go(request, updated ? 'declined=1' : 'error=request-resolved');
   }
 
   if (action === 'accept') {
     const dogPair = orderedDogBuddyPair(buddyRequest.senderDog.id, buddyRequest.receiverDog.id);
     const ownerPair = orderedBuddyPair(buddyRequest.senderDog.ownerId, buddyRequest.receiverDog.ownerId);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.dogBuddyRequest.update({
-        where: { id: requestId },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.dogBuddyRequest.updateMany({
+        where: { id: requestId, status: BuddyRequestStatus.PENDING },
         data: { status: BuddyRequestStatus.ACCEPTED, respondedAt: new Date() }
       });
+      if (!result.count) return false;
       await tx.dogBuddy.upsert({
         where: { dogAId_dogBId: dogPair },
         create: dogPair,
@@ -110,9 +116,10 @@ export async function POST(request: NextRequest) {
           dogBuddyRequestId: requestId
         }
       });
+      return true;
     });
 
-    return go(request, 'accepted=1');
+    return go(request, updated ? 'accepted=1' : 'error=request-resolved');
   }
 
   return go(request, 'error=action');
