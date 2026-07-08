@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { NotificationType } from '@prisma/client';
+import { DogStatus, NotificationType } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { dogLostRoute, dogProfileRoute, dogSightingRoute, UI_ROUTES } from '@/lib/uiRoutes';
 
@@ -10,12 +10,16 @@ async function reportSightingAction(formData: FormData) {
   'use server';
 
   const slug = String(formData.get('slug') ?? '').trim();
-  const note = String(formData.get('note') ?? '').trim() || null;
+  const note = String(formData.get('note') ?? '').trim().slice(0, 500) || null;
   const latitude = Number(String(formData.get('latitude') ?? '').trim());
   const longitude = Number(String(formData.get('longitude') ?? '').trim());
 
-  const dog = await prisma.dog.findUnique({ where: { slug }, select: { id: true, slug: true, name: true, ownerId: true } });
+  const dog = await prisma.dog.findUnique({
+    where: { slug },
+    select: { id: true, slug: true, name: true, ownerId: true, status: true }
+  });
   if (!dog) redirect(UI_ROUTES.profiles);
+  if (dog.status !== DogStatus.LOST) redirect(`${dogProfileRoute(dog.slug)}?error=sighting-closed`);
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
     redirect(`${dogSightingRoute(slug)}?error=location`);
@@ -46,6 +50,8 @@ export default async function SightingPage({ params, searchParams }: { params: P
   const dog = await prisma.dog.findUnique({ where: { slug }, select: { name: true, slug: true, status: true, photoUrl: true, breed: true } });
   if (!dog) notFound();
 
+  const alertActive = dog.status === DogStatus.LOST;
+
   return (
     <main className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <p className="text-sm font-medium text-slate-500">Buddies Phase 1 Sighting Report</p>
@@ -56,16 +62,24 @@ export default async function SightingPage({ params, searchParams }: { params: P
 
       {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Enter valid latitude and longitude values.</div> : null}
 
-      <form action={reportSightingAction} className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-        <input type="hidden" name="slug" value={dog.slug} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium">Latitude<input name="latitude" inputMode="decimal" placeholder="40.000000" required className="rounded-lg border px-3 py-3 text-base" /></label>
-          <label className="grid gap-2 text-sm font-medium">Longitude<input name="longitude" inputMode="decimal" placeholder="-74.000000" required className="rounded-lg border px-3 py-3 text-base" /></label>
-        </div>
-        <label className="grid gap-2 text-sm font-medium">Notes<textarea name="note" rows={4} placeholder="Direction seen, condition, collar, nearby landmark" className="rounded-lg border px-3 py-3 text-base" /></label>
-        <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Submit sighting</button>
-        <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-5 py-3 text-center font-medium">Back to profile</Link>
-      </form>
+      {!alertActive ? (
+        <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+          <h2 className="font-semibold">Sighting reports are closed</h2>
+          <p className="mt-2 text-sm">This dog does not currently have an active lost-dog alert.</p>
+          <Link href={`/dogs/${dog.slug}`} className="mt-4 inline-block rounded-lg border border-amber-300 px-4 py-2 font-medium">Back to profile</Link>
+        </section>
+      ) : (
+        <form action={reportSightingAction} className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
+          <input type="hidden" name="slug" value={dog.slug} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium">Latitude<input name="latitude" inputMode="decimal" placeholder="40.000000" required className="rounded-lg border px-3 py-3 text-base" /></label>
+            <label className="grid gap-2 text-sm font-medium">Longitude<input name="longitude" inputMode="decimal" placeholder="-74.000000" required className="rounded-lg border px-3 py-3 text-base" /></label>
+          </div>
+          <label className="grid gap-2 text-sm font-medium">Notes<textarea name="note" rows={4} maxLength={500} placeholder="Direction seen, condition, collar, nearby landmark" className="rounded-lg border px-3 py-3 text-base" /></label>
+          <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Submit sighting</button>
+          <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-5 py-3 text-center font-medium">Back to profile</Link>
+        </form>
+      )}
     </main>
   );
 }
