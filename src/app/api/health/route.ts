@@ -59,10 +59,11 @@ async function databaseCheck() {
     await withTimeout(prisma.$queryRaw`SELECT 1`, CHECK_TIMEOUT_MS);
     return { status: 'healthy' as const, latencyMs: Date.now() - startedAt };
   } catch (error) {
+    console.error('Database readiness check failed.', error);
     return {
       status: 'unhealthy' as const,
       latencyMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message.slice(0, 160) : 'Database check failed'
+      error: 'Database readiness check failed.'
     };
   }
 }
@@ -75,10 +76,11 @@ async function redisCheck() {
     await withTimeout(redis.ping(), CHECK_TIMEOUT_MS);
     return { status: 'healthy' as const, latencyMs: Date.now() - startedAt };
   } catch (error) {
+    console.error('Redis readiness check failed.', error);
     return {
       status: 'unhealthy' as const,
       latencyMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message.slice(0, 160) : 'Redis check failed'
+      error: 'Redis readiness check failed.'
     };
   }
 }
