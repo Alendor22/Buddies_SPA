@@ -38,7 +38,7 @@ const MIN_VIEW_FEET = 40;
 const MAX_VIEW_FEET = 5 * FEET_PER_MILE;
 const ESTIMATED_MAP_WIDTH_PX = 640;
 const MAX_WAYPOINTS = 20;
-const ROUTE_CLIENT_TIMEOUT_MS = 8_000;
+const ROUTE_CLIENT_TIMEOUT_MS = 20_000;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
