@@ -6,16 +6,20 @@ import { dogWalkInvitesRoute, UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
+function go(request: NextRequest, query: string) {
+  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?${query}#walk-invitations`, request.url), 303);
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url));
+  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url), 303);
 
   const formData = await request.formData();
   const invitationId = String(formData.get('invitationId') ?? '').trim();
   const action = String(formData.get('action') ?? '').trim();
 
   if (!invitationId || !['accept', 'decline', 'cancel'].includes(action)) {
-    return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url));
+    return go(request, 'error=walk-invalid');
   }
 
   const invitation = await prisma.walkInvitation.findUnique({
@@ -27,12 +31,13 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  if (!invitation) return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url));
+  if (!invitation) return go(request, 'error=walk-invalid');
+  if (invitation.status !== WalkInvitationStatus.PENDING) return go(request, 'error=walk-resolved');
 
   const isRecipient = invitation.invitedDog.ownerId === user.id;
   const isSender = invitation.senderDog.ownerId === user.id;
   if ((action === 'cancel' && !isSender) || (action !== 'cancel' && !isRecipient)) {
-    return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url));
+    return go(request, 'error=walk-unauthorized');
   }
 
   const invitationStatus = action === 'accept'
@@ -45,12 +50,20 @@ export async function POST(request: NextRequest) {
   const recipientOwnerId = isRecipient ? invitation.senderDog.ownerId : invitation.invitedDog.ownerId;
   const recipientDog = isRecipient ? invitation.senderDog : invitation.invitedDog;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.walkInvitation.update({
-      where: { id: invitation.id },
+  const updated = await prisma.$transaction(async (tx) => {
+    const invitationUpdate = await tx.walkInvitation.updateMany({
+      where: { id: invitation.id, status: WalkInvitationStatus.PENDING },
       data: { status: invitationStatus, respondedAt: new Date() }
     });
-    await tx.walk.update({ where: { id: invitation.walk.id }, data: { status: walkStatus } });
+    if (!invitationUpdate.count) return false;
+
+    await tx.walk.update({
+      where: { id: invitation.walk.id },
+      data: {
+        status: walkStatus,
+        walkerId: action === 'accept' ? invitation.invitedDog.ownerId : null
+      }
+    });
     await tx.notification.updateMany({
       where: { walkInvitationId: invitation.id, userId: user.id, readAt: null },
       data: { readAt: new Date() }
@@ -68,7 +81,9 @@ export async function POST(request: NextRequest) {
         walkInvitationId: invitation.id
       }
     });
+    return true;
   });
 
-  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?${action}=1#walk-invitations`, request.url));
+  if (!updated) return go(request, 'error=walk-resolved');
+  return go(request, `${action}=1`);
 }
