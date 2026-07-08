@@ -8,6 +8,7 @@ export const UI_ROUTES = {
   walks: '/dashboard/walks',
   createWalk: '/dashboard/walks/new',
   walkInvites: '/dashboard/walks#walk-invitations',
+  socialMap: '/dashboard/social-map',
   messages: '/dashboard/messages',
   checkIns: '/dashboard/check-ins',
   alerts: '/dashboard/notifications',
