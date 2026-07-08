@@ -54,6 +54,26 @@ enum NotificationType {
   SYSTEM
 }
 
+enum DogPresenceStatus {
+  NOT_ACTIVE
+  LIKELY_WALKING
+  WALKING
+  PAUSED
+  STALE
+  POSSIBLY_DRIVING
+}
+
+enum MapReportType {
+  FRIENDLY_GROUP
+  LOOSE_DOG
+  AGGRESSIVE_DOG
+  WATER_BOWL
+  POOP_BAG_STATION
+  HAZARD
+  CROWDED_PARK
+  LOST_SIGHTING
+}
+
 model User {
   id                    String          @id @default(cuid())
   email                 String          @unique
@@ -78,6 +98,8 @@ model User {
   receivedBuddyRequests  BuddyRequest[]  @relation("ReceivedBuddyRequests")
   buddyLinksA            Buddy[]         @relation("BuddyUserA")
   buddyLinksB            Buddy[]         @relation("BuddyUserB")
+  dogPresences           DogPresence[]
+  mapReports             MapReport[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 }
@@ -120,6 +142,9 @@ model Dog {
   receivedDogBuddyRequests DogBuddyRequest[]  @relation("ReceivedDogBuddyRequests")
   dogBuddyLinksA           DogBuddy[]         @relation("DogBuddyA")
   dogBuddyLinksB           DogBuddy[]         @relation("DogBuddyB")
+  presences                DogPresence[]
+  routeMemories            RouteMemory[]
+  mapReports               MapReport[]
   notifications            Notification[]
   createdAt                DateTime            @default(now())
   updatedAt                DateTime            @updatedAt
@@ -191,6 +216,81 @@ model DogBuddy {
   @@index([dogBId])
 }
 
+model DogPresence {
+  id               String            @id @default(cuid())
+  dogId            String
+  dog              Dog               @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  ownerId          String
+  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  walkId           String?
+  walk             Walk?             @relation(fields: [walkId], references: [id], onDelete: SetNull)
+  status           DogPresenceStatus @default(LIKELY_WALKING)
+  walkingScore     Int               @default(0)
+  latitude         Float
+  longitude        Float
+  accuracyMeters   Float?
+  speedMph         Float?
+  heading          Float?
+  neighborhoodKey  String?
+  routeMemoryId    String?
+  routeMemory      RouteMemory?      @relation(fields: [routeMemoryId], references: [id], onDelete: SetNull)
+  startedAt        DateTime          @default(now())
+  lastHeartbeatAt  DateTime          @default(now())
+  expiresAt        DateTime
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([dogId, lastHeartbeatAt])
+  @@index([ownerId, lastHeartbeatAt])
+  @@index([neighborhoodKey, status, expiresAt])
+  @@index([latitude, longitude])
+}
+
+model RouteMemory {
+  id                 String        @id @default(cuid())
+  dogId              String
+  dog                Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  name               String
+  neighborhoodKey    String?
+  routeHash          String
+  routeGeometry      Json
+  routeSteps         Json?
+  routeDistanceMiles Float?
+  routeDurationMin   Int?
+  occurrences        Int           @default(1)
+  lastWalkedAt       DateTime      @default(now())
+  confidence         Int           @default(50)
+  presences          DogPresence[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([dogId, routeHash])
+  @@index([dogId, occurrences])
+  @@index([neighborhoodKey, lastWalkedAt])
+}
+
+model MapReport {
+  id              String        @id @default(cuid())
+  reporterId      String
+  reporter        User          @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  dogId           String?
+  dog             Dog?          @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  type            MapReportType
+  title           String
+  body            String?
+  latitude        Float
+  longitude       Float
+  neighborhoodKey String?
+  confirmations   Int           @default(0)
+  expiresAt       DateTime
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([type, expiresAt])
+  @@index([neighborhoodKey, expiresAt])
+  @@index([latitude, longitude])
+}
+
 model QrScan {
   id        String   @id @default(cuid())
   dogId     String
@@ -237,6 +337,7 @@ model Walk {
   messages           Message[]
   invitations        WalkInvitation[]
   notifications      Notification[]
+  presences          DogPresence[]
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
