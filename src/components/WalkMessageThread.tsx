@@ -18,6 +18,8 @@ type WalkMessageThreadProps = {
   initialMessages: MessageItem[];
 };
 
+const SEND_TIMEOUT_MS = 20000;
+
 function isMessageItem(value: unknown): value is MessageItem {
   if (!value || typeof value !== 'object') return false;
   const message = value as Partial<MessageItem>;
@@ -155,15 +157,28 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
     const nextBody = body.trim();
     if (!nextBody || sending) return;
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
     setSending(true);
     setStatus('Sending…');
 
     try {
       const response = await fetch(`/api/walks/${walkId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: nextBody })
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ body: nextBody }),
+        signal: controller.signal,
+        cache: 'no-store'
       });
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('The message service returned an unexpected response. Reload and try again.');
+      }
+
       const payload = await response.json() as { message?: MessageItem; error?: string };
       if (!response.ok || !payload.message) throw new Error(payload.error || 'Message could not be sent.');
 
@@ -171,8 +186,14 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
       setBody('');
       setStatus('Sent.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Message could not be sent.');
+      const message = error instanceof DOMException && error.name === 'AbortError'
+        ? 'Message timed out. Tap Send message to retry.'
+        : error instanceof Error
+          ? error.message
+          : 'Message could not be sent.';
+      setStatus(message);
     } finally {
+      window.clearTimeout(timeout);
       setSending(false);
     }
   }
@@ -181,7 +202,7 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
     <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
       <div className="border-b bg-slate-50 px-4 py-3 sm:px-6">
         <p className="text-sm font-semibold text-slate-900">{onlineLabel}</p>
-        <p className="mt-1 text-xs text-slate-500">{status}</p>
+        <p className="mt-1 text-xs text-slate-500" role="status" aria-live="polite">{status}</p>
       </div>
 
       <div className="max-h-[58vh] min-h-[360px] overflow-y-auto px-4 py-5 sm:px-6">
@@ -205,7 +226,7 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
         <textarea id="walk-message" value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} rows={3} placeholder={`Message as ${currentLabel}`} className="w-full rounded-xl border px-3 py-3 text-base" />
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">{body.length}/2000</p>
-          <button disabled={sending || !body.trim()} className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white disabled:opacity-50">{sending ? 'Sending…' : 'Send message'}</button>
+          <button type="submit" disabled={sending || !body.trim()} className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white disabled:opacity-50">{sending ? 'Sending…' : 'Send message'}</button>
         </div>
       </form>
     </section>
