@@ -29,12 +29,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   });
   const dogIds = dogs.map((dog) => dog.id);
 
-  const [dogBuddyCount, incomingBuddyCount, unreadMessages, activeCheckIns] = await Promise.all([
+  const [dogBuddyCount, incomingBuddyCount, unreadMessages, activeCheckIns, activeDogPresences] = await Promise.all([
     prisma.dogBuddy.count({ where: { OR: [{ dogAId: { in: dogIds } }, { dogBId: { in: dogIds } }] } }),
     prisma.dogBuddyRequest.count({ where: { receiverDogId: { in: dogIds }, status: 'PENDING' } }),
     prisma.notification.count({ where: { userId: user.id, routeKey: 'messages', readAt: null } }),
-    listActiveCheckIns()
-  ]).catch(() => [0, 0, 0, []] as const);
+    listActiveCheckIns(),
+    prisma.dogPresence.count({ where: { expiresAt: { gt: new Date() } } })
+  ]).catch(() => [0, 0, 0, [], 0] as const);
 
   const myActiveCheckIns = Array.isArray(activeCheckIns)
     ? activeCheckIns.filter((checkIn) => checkIn.ownerId === user.id).length
@@ -51,7 +52,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={UI_ROUTES.addProfile} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link>
-          <Link href={UI_ROUTES.checkIns} className="rounded-lg border px-4 py-2">Check-ins</Link>
+          <Link href={UI_ROUTES.socialMap} className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-cyan-900">Social Map</Link>
           <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2">Messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
           <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-2">Buddies</Link>
         </div>
@@ -64,11 +65,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Dog buddies</p><p className="mt-2 text-3xl font-bold">{dogBuddyCount}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Requests</p><p className="mt-2 text-3xl font-bold">{incomingBuddyCount}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Unread chat</p><p className="mt-2 text-3xl font-bold">{unreadMessages}</p></article>
-        <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">My check-ins</p><p className="mt-2 text-3xl font-bold">{myActiveCheckIns}</p></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Active dogs</p><p className="mt-2 text-3xl font-bold">{activeDogPresences}</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">Safety alerts</p><p className="mt-2 text-3xl font-bold">{lostCount}</p></article>
       </section>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mt-8 grid gap-4 md:grid-cols-4">
+        <Link href={UI_ROUTES.socialMap} className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm"><h2 className="text-xl font-semibold text-cyan-950">Social Map</h2><p className="mt-2 text-sm text-cyan-900">View active dogs, buddy halos, live reports, heat activity, and route memory.</p></Link>
         <Link href={UI_ROUTES.checkIns} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Nearby activity</h2><p className="mt-2 text-sm text-slate-600">Check dogs into parks and discover active dogs on the Mapbox map.</p></Link>
         <Link href={UI_ROUTES.messages} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Walk messages</h2><p className="mt-2 text-sm text-slate-600">Open persisted realtime walk conversations and presence.</p></Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Safety network</h2><p className="mt-2 text-sm text-slate-600">Report a lost dog, map the last-seen point, and alert trusted buddies.</p></Link>
