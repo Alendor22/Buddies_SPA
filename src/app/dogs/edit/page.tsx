@@ -5,11 +5,11 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MobileDogEditPage({ searchParams }: { searchParams: Promise<{ slug?: string; saved?: string }> }) {
+export default async function MobileDogEditPage({ searchParams }: { searchParams: Promise<{ slug?: string; saved?: string; error?: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const { slug, saved } = await searchParams;
+  const { slug, saved, error } = await searchParams;
   if (!slug) notFound();
 
   const dog = await prisma.dog.findFirst({ where: { slug, ownerId: user.id } });
@@ -29,6 +29,7 @@ export default async function MobileDogEditPage({ searchParams }: { searchParams
       </div>
 
       {saved ? <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800">Changes saved.</div> : null}
+      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">One or more values were invalid. Review the name, date, weight, URL, and coordinates.</div> : null}
 
       <form action="/api/dogs/manage" method="post" className="mt-6 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
         <input type="hidden" name="id" value={dog.id} />
