@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { heatLevel, neighborhoodKey } from '@/lib/socialMap';
-import { orderedDogBuddyPair } from '@/lib/buddies';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,18 +24,12 @@ export async function GET(request: NextRequest) {
   const key = latitude && longitude ? neighborhoodKey(latitude, longitude) : undefined;
   const now = new Date();
 
-  const userDogs = await prisma.dog.findMany({
-    where: { ownerId: user.id },
-    select: { id: true }
-  });
+  const userDogs = await prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } });
   const userDogIds = userDogs.map((dog) => dog.id);
 
   const [presences, reports, routeMemories] = await Promise.all([
     prisma.dogPresence.findMany({
-      where: {
-        expiresAt: { gt: now },
-        ...(key ? { neighborhoodKey: key } : {})
-      },
+      where: { expiresAt: { gt: now }, ...(key ? { neighborhoodKey: key } : {}) },
       orderBy: { lastHeartbeatAt: 'desc' },
       take: 100,
       include: {
@@ -45,10 +38,7 @@ export async function GET(request: NextRequest) {
       }
     }),
     prisma.mapReport.findMany({
-      where: {
-        expiresAt: { gt: now },
-        ...(key ? { neighborhoodKey: key } : {})
-      },
+      where: { expiresAt: { gt: now }, ...(key ? { neighborhoodKey: key } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: { dog: { select: { name: true, slug: true, photoUrl: true } } }
@@ -65,9 +55,10 @@ export async function GET(request: NextRequest) {
   const buddyPairs = activeDogIds.length && userDogIds.length
     ? await prisma.dogBuddy.findMany({
         where: {
-          OR: userDogIds.flatMap((dogId) => activeDogIds.map((activeDogId) => ({
-            dogAId_dogBId: orderedDogBuddyPair(dogId, activeDogId)
-          })))
+          OR: [
+            { dogAId: { in: userDogIds }, dogBId: { in: activeDogIds } },
+            { dogAId: { in: activeDogIds }, dogBId: { in: userDogIds } }
+          ]
         },
         select: { dogAId: true, dogBId: true }
       })
@@ -77,7 +68,8 @@ export async function GET(request: NextRequest) {
   const heatCells = Array.from(
     presences.reduce((cells, presence) => {
       const cellKey = neighborhoodKey(presence.latitude, presence.longitude);
-      const current = cells.get(cellKey) ?? { key: cellKey, latitude: Number(cellKey.split(',')[0]), longitude: Number(cellKey.split(',')[1]), activeDogs: 0, buddies: 0 };
+      const [cellLatitude, cellLongitude] = cellKey.split(',').map(Number);
+      const current = cells.get(cellKey) ?? { key: cellKey, latitude: cellLatitude, longitude: cellLongitude, activeDogs: 0, buddies: 0 };
       current.activeDogs += 1;
       if (buddyDogIds.has(presence.dogId)) current.buddies += 1;
       cells.set(cellKey, current);
