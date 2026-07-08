@@ -19,9 +19,18 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
 
-  const latitude = numberParam(request.nextUrl.searchParams.get('lat')) ?? user.latitude;
-  const longitude = numberParam(request.nextUrl.searchParams.get('lng')) ?? user.longitude;
-  const key = latitude && longitude ? neighborhoodKey(latitude, longitude) : undefined;
+  const userWithLocation = user as typeof user & {
+    latitude?: number | null;
+    longitude?: number | null;
+    neighborhoodKey?: string | null;
+  };
+
+  const latitude = numberParam(request.nextUrl.searchParams.get('lat')) ?? userWithLocation.latitude;
+  const longitude = numberParam(request.nextUrl.searchParams.get('lng')) ?? userWithLocation.longitude;
+  const key =
+    latitude != null && longitude != null
+      ? neighborhoodKey(latitude, longitude)
+      : userWithLocation.neighborhoodKey ?? undefined;
   const now = new Date();
 
   const userDogs = await prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } });
@@ -78,7 +87,7 @@ export async function GET(request: NextRequest) {
   ).map((cell) => ({ ...cell, level: heatLevel(cell.activeDogs) }));
 
   return NextResponse.json({
-    center: latitude && longitude ? { latitude, longitude, neighborhoodKey: key } : null,
+    center: latitude != null && longitude != null ? { latitude, longitude, neighborhoodKey: key } : null,
     activeDogs: presences.map((presence) => ({
       id: presence.id,
       dogId: presence.dogId,
