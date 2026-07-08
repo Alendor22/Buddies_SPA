@@ -21,7 +21,9 @@ function targetStatus(action: WalkAction) {
 function canTransition(current: WalkStatus, action: WalkAction) {
   if (action === 'start') return current === WalkStatus.ACCEPTED;
   if (action === 'complete') return current === WalkStatus.ACTIVE;
-  return [WalkStatus.REQUESTED, WalkStatus.ACCEPTED, WalkStatus.ACTIVE].includes(current);
+  return current === WalkStatus.REQUESTED
+    || current === WalkStatus.ACCEPTED
+    || current === WalkStatus.ACTIVE;
 }
 
 function statusTitle(dogName: string, action: WalkAction) {
