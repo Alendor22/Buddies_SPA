@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { prisma } from '@/lib/db';
 
 export default async function DogWalkInvitations({ dogId, dogName, isOwner }: { dogId: string; dogName: string; isOwner: boolean }) {
+  if (!isOwner) return null;
+
   const [received, sent] = await Promise.all([
     prisma.walkInvitation.findMany({
       where: { invitedDogId: dogId },
@@ -21,7 +23,7 @@ export default async function DogWalkInvitations({ dogId, dogName, isOwner }: { 
         walk: { select: { startsAt: true, durationMin: true } }
       }
     })
-  ]).catch(() => [[], []] as const);
+  ]);
 
   return (
     <section id="walk-invitations" className="mt-7 scroll-mt-24 rounded-xl border p-4">
@@ -36,7 +38,7 @@ export default async function DogWalkInvitations({ dogId, dogName, isOwner }: { 
                 <p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.walk.durationMin} min · {invite.status}</p>
                 {invite.message ? <p className="mt-1 text-sm text-slate-700">{invite.message}</p> : null}
                 <Link href={`/dogs/${invite.senderDog.slug}`} className="mt-2 inline-block text-sm font-medium underline">Open {invite.senderDog.name}</Link>
-                {isOwner && invite.status === 'PENDING' ? <div className="mt-3 flex gap-2"><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="accept" /><button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Accept</button></form><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="decline" /><button className="rounded-lg border px-3 py-2 text-sm font-medium">Decline</button></form></div> : null}
+                {invite.status === 'PENDING' ? <div className="mt-3 flex gap-2"><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="accept" /><button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Accept</button></form><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="decline" /><button className="rounded-lg border px-3 py-2 text-sm font-medium">Decline</button></form></div> : null}
               </article>
             ))}
           </div>
@@ -50,7 +52,7 @@ export default async function DogWalkInvitations({ dogId, dogName, isOwner }: { 
                 <p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.status}</p>
                 {invite.message ? <p className="mt-1 text-sm text-slate-700">{invite.message}</p> : null}
                 <Link href={`/dogs/${invite.invitedDog.slug}`} className="mt-2 inline-block text-sm font-medium underline">Open {invite.invitedDog.name}</Link>
-                {isOwner && invite.status === 'PENDING' ? <form action="/api/walk-invitations/respond" method="post" className="mt-3"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-3 py-2 text-sm font-medium">Cancel invite</button></form> : null}
+                {invite.status === 'PENDING' ? <form action="/api/walk-invitations/respond" method="post" className="mt-3"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-3 py-2 text-sm font-medium">Cancel invite</button></form> : null}
               </article>
             ))}
           </div>
