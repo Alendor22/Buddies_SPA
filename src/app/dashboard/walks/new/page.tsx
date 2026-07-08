@@ -10,37 +10,50 @@ import { parseRoutePlan } from '@/lib/walkRoutes';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function defaultStartTimeValue() {
+  const date = new Date(Date.now() + 5 * 60_000);
+  date.setSeconds(0, 0);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function parseStartTime(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return new Date(Date.now() + 5 * 60_000);
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? new Date(Date.now() + 5 * 60_000) : parsed;
+}
+
 async function createWalkAction(formData: FormData) {
   'use server';
 
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const dogId = String(formData.get('dogId') ?? '').trim();
+  const requestedDogId = String(formData.get('dogId') ?? '').trim();
   const startsAtRaw = String(formData.get('startsAt') ?? '').trim();
   const durationMin = Number(formData.get('durationMin') ?? 30);
   const notes = String(formData.get('notes') ?? '').trim().slice(0, 1000);
   const routeName = String(formData.get('routeName') ?? '').trim().slice(0, 120);
   const routePlan = parseRoutePlan(String(formData.get('routeJson') ?? '').trim());
-  const startsAt = new Date(startsAtRaw);
+  const startsAt = parseStartTime(startsAtRaw);
   const earliestAllowed = Date.now() - 5 * 60_000;
 
-  if (
-    !dogId
-    || !startsAtRaw
-    || Number.isNaN(startsAt.getTime())
-    || startsAt.getTime() < earliestAllowed
-    || !Number.isFinite(durationMin)
-  ) {
-    redirect(`${UI_ROUTES.createWalk}?error=invalid`);
-  }
+  const dog = await prisma.dog.findFirst({
+    where: requestedDogId ? { id: requestedDogId, ownerId: user.id } : { ownerId: user.id },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true }
+  });
 
-  const dog = await prisma.dog.findFirst({ where: { id: dogId, ownerId: user.id }, select: { id: true } });
   if (!dog) redirect(`${UI_ROUTES.createWalk}?error=dog`);
+
+  if (startsAt.getTime() < earliestAllowed || !Number.isFinite(durationMin)) {
+    redirect(`${UI_ROUTES.createWalk}?error=time`);
+  }
 
   await prisma.walk.create({
     data: {
-      dogId,
+      dogId: dog.id,
       requesterId: user.id,
       startsAt,
       durationMin: Math.max(10, Math.min(240, Math.round(durationMin))),
@@ -71,13 +84,21 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
     Promise.resolve(getPublicMapboxToken())
   ]);
 
+  const errorMessage = error === 'dog'
+    ? 'Unable to create the walk. Select one of your dog profiles.'
+    : error === 'time'
+      ? 'Unable to create the walk. Enter a current or future start time.'
+      : error
+        ? 'Unable to create the walk. Confirm the dog profile and start time, then retry.'
+        : null;
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Walk Composer</p>
       <h1 className="mt-2 text-3xl font-bold">Create walk</h1>
       <p className="mt-2 text-slate-600">Generate a route snapped to walking streets and save its geometry, directions, distance, and duration.</p>
 
-      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Unable to create the walk. Select one of your dogs and enter a current or future start time.</div> : null}
+      {errorMessage ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div> : null}
 
       {dogs.length === 0 ? (
         <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
@@ -88,8 +109,8 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
       ) : (
         <form action={createWalkAction} className="mt-8 grid gap-5">
           <section className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-            <label className="grid gap-2 text-sm font-medium">Dog profile<select name="dogId" required className="rounded-lg border px-3 py-3 text-base">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}</select></label>
-            <label className="grid gap-2 text-sm font-medium">Start time<input name="startsAt" type="datetime-local" required className="rounded-lg border px-3 py-3 text-base" /></label>
+            <label className="grid gap-2 text-sm font-medium">Dog profile<select name="dogId" required defaultValue={dogs[0]?.id} className="rounded-lg border px-3 py-3 text-base">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}</select></label>
+            <label className="grid gap-2 text-sm font-medium">Start time<input name="startsAt" type="datetime-local" required defaultValue={defaultStartTimeValue()} className="rounded-lg border px-3 py-3 text-base" /></label>
             <label className="grid gap-2 text-sm font-medium">Duration<select name="durationMin" defaultValue="30" className="rounded-lg border px-3 py-3 text-base"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label>
             <label className="grid gap-2 text-sm font-medium">Notes<textarea name="notes" rows={4} maxLength={1000} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border px-3 py-3 text-base" /></label>
           </section>
