@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES, walkMessagesRoute } from '@/lib/uiRoutes';
+import { walkParticipantWhere } from '@/lib/walkVisibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,15 +12,7 @@ export default async function MessagesPage() {
   if (!user) redirect('/auth/login');
 
   const walks = await prisma.walk.findMany({
-    where: {
-      OR: [
-        { requesterId: user.id },
-        { walkerId: user.id },
-        { dog: { ownerId: user.id } },
-        { invitations: { some: { senderDog: { ownerId: user.id } } } },
-        { invitations: { some: { invitedDog: { ownerId: user.id } } } }
-      ]
-    },
+    where: walkParticipantWhere(user.id),
     orderBy: { updatedAt: 'desc' },
     take: 50,
     include: {
@@ -40,7 +33,7 @@ export default async function MessagesPage() {
         <div>
           <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Messaging</p>
           <h1 className="mt-1 text-3xl font-bold">Messages</h1>
-          <p className="mt-2 text-slate-600">Walk conversations with persisted history and live updates.</p>
+          <p className="mt-2 text-slate-600">Walk conversations with persisted history, accepted-participant access, and live updates.</p>
         </div>
         <div className="flex gap-2"><Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2">Walks</Link><Link href={UI_ROUTES.dashboard} className="rounded-lg border px-4 py-2">Dashboard</Link></div>
       </div>
@@ -52,7 +45,7 @@ export default async function MessagesPage() {
 
       <section className="mt-8 grid gap-3">
         {walks.length === 0 ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">No walk conversations</h2><p className="mt-2 text-slate-600">A thread becomes available when a walk is created or accepted.</p><Link href={UI_ROUTES.createWalk} className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Create walk</Link></div>
+          <div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">No walk conversations</h2><p className="mt-2 text-slate-600">A thread becomes available when you create a walk or accept a walk invitation.</p><Link href={UI_ROUTES.createWalk} className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Create walk</Link></div>
         ) : walks.map((walk) => {
           const lastMessage = walk.messages[0];
           const unread = walk.notifications.length;
