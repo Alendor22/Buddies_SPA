@@ -5,6 +5,7 @@ import DogCheckInForm from '@/components/DogCheckInForm';
 import { getCurrentUser } from '@/lib/auth';
 import { checkInsAvailable, getCheckIn, listActiveCheckIns, removeCheckIn } from '@/lib/checkIns';
 import { prisma } from '@/lib/db';
+import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import { UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
@@ -19,9 +20,7 @@ async function endCheckInAction(formData: FormData) {
   if (!dogId) redirect('/dashboard/check-ins?error=dog');
 
   const current = await getCheckIn(dogId);
-  if (!current || current.ownerId !== user.id) {
-    redirect('/dashboard/check-ins?error=check-in');
-  }
+  if (!current || current.ownerId !== user.id) redirect('/dashboard/check-ins?error=check-in');
 
   await removeCheckIn(dogId);
   redirect('/dashboard/check-ins?ended=1');
@@ -56,13 +55,12 @@ export default async function CheckInsPage({ searchParams }: { searchParams: Pro
 
   const checkIns = activeRecords.flatMap((record) => {
     const dog = dogById.get(record.dogId);
-    if (!dog) return [];
-    return [{ ...record, dog }];
+    return dog ? [{ ...record, dog }] : [];
   });
 
   const centerLatitude = checkIns[0]?.latitude ?? profile?.latitude ?? 40.685743;
   const centerLongitude = checkIns[0]?.longitude ?? profile?.longitude ?? -73.941329;
-  const mapToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.MAPBOX_ACCESS_TOKEN || '';
+  const mapToken = getPublicMapboxToken();
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -85,7 +83,7 @@ export default async function CheckInsPage({ searchParams }: { searchParams: Pro
       <section className="mt-8 grid gap-6 lg:grid-cols-[360px_1fr]">
         <DogCheckInForm dogs={dogs} />
         <CheckInMapClient
-          token={mapToken.startsWith('pk.') ? mapToken : ''}
+          token={mapToken}
           centerLatitude={centerLatitude}
           centerLongitude={centerLongitude}
           points={checkIns.map((checkIn) => ({
