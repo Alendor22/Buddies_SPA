@@ -1,3 +1,4 @@
+import { WalkInvitationStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
 export async function getWalkAccess(walkId: string, userId: string) {
@@ -17,13 +18,20 @@ export async function getWalkAccess(walkId: string, userId: string) {
   if (!walk) return null;
 
   const participantIds = new Set<string>([walk.requesterId, walk.dog.ownerId]);
-  if (walk.walkerId) participantIds.add(walk.walkerId);
-
   const labels = new Map<string, string>();
   labels.set(walk.requesterId, walk.dog.name);
   labels.set(walk.dog.ownerId, walk.dog.name);
 
-  for (const invitation of walk.invitations) {
+  const acceptedInvitations = walk.invitations.filter(
+    (invitation) => invitation.status === WalkInvitationStatus.ACCEPTED
+  );
+  const acceptedWalkerIds = new Set(acceptedInvitations.map((invitation) => invitation.invitedDog.ownerId));
+
+  if (walk.walkerId && (!walk.invitations.length || acceptedWalkerIds.has(walk.walkerId))) {
+    participantIds.add(walk.walkerId);
+  }
+
+  for (const invitation of acceptedInvitations) {
     participantIds.add(invitation.senderDog.ownerId);
     participantIds.add(invitation.invitedDog.ownerId);
     labels.set(invitation.senderDog.ownerId, invitation.senderDog.name);
