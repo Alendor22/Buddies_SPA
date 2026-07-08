@@ -7,6 +7,8 @@ import { UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
 
+const SIDE_EFFECT_TIMEOUT_MS = 2500;
+
 type RequestResult = {
   ok: boolean;
   error?: string;
@@ -31,6 +33,22 @@ function jsonOrRedirect(request: NextRequest, result: RequestResult, redirectPat
     return NextResponse.json(result, { status });
   }
   return NextResponse.redirect(new URL(redirectPath, request.url));
+}
+
+async function runBestEffort(task: Promise<unknown>) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      task,
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, SIDE_EFFECT_TIMEOUT_MS);
+      })
+    ]);
+  } catch (error) {
+    console.error('Buddy request notification side effect failed.', error);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -125,6 +143,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Persist the primary action first. Notification maintenance is secondary and
+  // must not keep the request button waiting indefinitely on a serverless call.
   const buddyRequest = await prisma.dogBuddyRequest.upsert({
     where: {
       senderDogId_receiverDogId: {
@@ -144,7 +164,7 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  await prisma.$transaction([
+  await runBestEffort(prisma.$transaction([
     prisma.notification.updateMany({
       where: {
         userId: receiverDog.ownerId,
@@ -165,7 +185,7 @@ export async function POST(request: NextRequest) {
         dogBuddyRequestId: buddyRequest.id
       }
     })
-  ]);
+  ]));
 
   return jsonOrRedirect(
     request,
