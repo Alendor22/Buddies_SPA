@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { realtimeChannels } from '@/lib/realtimeChannels';
+import { walkParticipantWhere } from '@/lib/walkVisibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +16,7 @@ export async function GET() {
 
   const [walks, dogs] = await Promise.all([
     prisma.walk.findMany({
-      where: {
-        OR: [
-          { requesterId: user.id },
-          { walkerId: user.id },
-          { dog: { ownerId: user.id } },
-          { invitations: { some: { senderDog: { ownerId: user.id } } } },
-          { invitations: { some: { invitedDog: { ownerId: user.id } } } }
-        ]
-      },
+      where: walkParticipantWhere(user.id),
       select: { id: true }
     }),
     prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } })
