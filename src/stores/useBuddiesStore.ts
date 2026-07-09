@@ -65,7 +65,7 @@ type BuddiesStore = {
 };
 
 export const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
-export const DEFAULT_VIEW_FEET = 500;
+export const DEFAULT_VIEW_FEET = 1000;
 
 const defaultWalkPlanner = (): WalkPlannerState => ({
   token: '',
@@ -75,7 +75,7 @@ const defaultWalkPlanner = (): WalkPlannerState => ({
   apex: null,
   waypoints: [],
   mode: 'pan',
-  status: 'Select Add flag, then tap the map to plot waypoints.',
+  status: 'Short press the map to set Start. Long press to add a waypoint.',
   apexMiles: 1,
   routeName: 'Neighborhood walk',
   route: [],
@@ -167,7 +167,7 @@ export const useBuddiesStore = create<BuddiesStore>()(
       })
     }),
     {
-      name: 'buddies-session-state-v1',
+      name: 'buddies-session-state-v2',
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
       partialize: (state) => ({
@@ -187,7 +187,8 @@ export const useBuddiesStore = create<BuddiesStore>()(
           ...currentState,
           walkPlanner: {
             ...currentState.walkPlanner,
-            ...(persisted.walkPlanner ?? {})
+            ...(persisted.walkPlanner ?? {}),
+            viewFeet: persisted.walkPlanner?.viewFeet === 500 ? DEFAULT_VIEW_FEET : (persisted.walkPlanner?.viewFeet ?? DEFAULT_VIEW_FEET)
           },
           buddyRequests: {}
         };
