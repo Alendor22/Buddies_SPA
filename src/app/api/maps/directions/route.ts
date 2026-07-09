@@ -4,8 +4,9 @@ import { getMapboxToken } from '@/lib/mapboxToken';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const SEGMENT_TIMEOUT_MS = 8_000;
+const SEGMENT_TIMEOUT_MS = 12_000;
 const MAX_COORDINATES = 25;
+const WALKING_PROFILE = 'mapbox/walking';
 
 type Coordinate = { lng: number; lat: number };
 
@@ -27,6 +28,11 @@ type MapboxResponse = {
   code?: string;
   message?: string;
   routes?: MapboxRoute[];
+};
+
+type SegmentResult = {
+  index: number;
+  route: MapboxRoute;
 };
 
 function validCoordinate(value: unknown): value is Coordinate {
@@ -62,7 +68,7 @@ function loopCoordinates(points: Coordinate[]) {
   return sameCoordinate(first, last) ? points : [...points, first];
 }
 
-async function fetchSegment(start: Coordinate, end: Coordinate, token: string) {
+async function fetchSegment(start: Coordinate, end: Coordinate, token: string, index: number): Promise<SegmentResult> {
   const coordinatePath = `${start.lng.toFixed(6)},${start.lat.toFixed(6)};${end.lng.toFixed(6)},${end.lat.toFixed(6)}`;
   const query = new URLSearchParams({
     access_token: token,
@@ -72,19 +78,20 @@ async function fetchSegment(start: Coordinate, end: Coordinate, token: string) {
     steps: 'true',
     language: 'en',
     continue_straight: 'false',
-    radiuses: 'unlimited;unlimited'
+    radiuses: '50;50',
+    approaches: 'unrestricted;unrestricted'
   });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
 
   try {
-    const response = await fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/walking/${coordinatePath}?${query.toString()}`,
+    let response = await fetch(
+      `https://api.mapbox.com/directions/v5/${WALKING_PROFILE}/${coordinatePath}?${query.toString()}`,
       { cache: 'no-store', signal: controller.signal, headers: { Accept: 'application/json' } }
     );
 
-    const raw = await response.text();
+    let raw = await response.text();
     let data: MapboxResponse | null = null;
     try {
       data = raw ? JSON.parse(raw) as MapboxResponse : null;
@@ -92,11 +99,25 @@ async function fetchSegment(start: Coordinate, end: Coordinate, token: string) {
       data = null;
     }
 
-    if (!response.ok || data?.code !== 'Ok' || !data.routes?.length) {
-      throw new Error(data?.message || `Mapbox returned ${response.status} while snapping this segment to streets.`);
+    if ((!response.ok || data?.code !== 'Ok' || !data.routes?.length) && data?.code === 'NoSegment') {
+      query.set('radiuses', 'unlimited;unlimited');
+      response = await fetch(
+        `https://api.mapbox.com/directions/v5/${WALKING_PROFILE}/${coordinatePath}?${query.toString()}`,
+        { cache: 'no-store', signal: controller.signal, headers: { Accept: 'application/json' } }
+      );
+      raw = await response.text();
+      try {
+        data = raw ? JSON.parse(raw) as MapboxResponse : null;
+      } catch {
+        data = null;
+      }
     }
 
-    return data.routes[0];
+    if (!response.ok || data?.code !== 'Ok' || !data.routes?.length) {
+      throw new Error(data?.message || `Mapbox returned ${response.status} while snapping segment ${index + 1} to streets.`);
+    }
+
+    return { index, route: data.routes[0] };
   } finally {
     clearTimeout(timeout);
   }
@@ -106,9 +127,7 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now();
   const token = getMapboxToken();
 
-  if (!token) {
-    return noStoreJson({ error: 'Mapbox access token is not configured.' }, 503);
-  }
+  if (!token) return noStoreJson({ error: 'Mapbox access token is not configured.' }, 503);
 
   const payload = await request.json().catch(() => null) as { coordinates?: unknown } | null;
   const submitted = Array.isArray(payload?.coordinates)
@@ -120,18 +139,20 @@ export async function POST(request: NextRequest) {
   }
 
   const coordinates = loopCoordinates(submitted);
-  const geometry: Coordinate[] = [];
-  const steps: Array<{ instruction: string; street: string | null; distanceFeet: number; durationSeconds: number }> = [];
-  let distanceMeters = 0;
-  let durationSeconds = 0;
+  const segments = coordinates.slice(0, -1).map((point, index) => fetchSegment(point, coordinates[index + 1], token, index));
 
   try {
-    for (let index = 0; index < coordinates.length - 1; index += 1) {
-      const segment = await fetchSegment(coordinates[index], coordinates[index + 1], token);
-      const segmentGeometry = segment.geometry?.coordinates ?? [];
+    const segmentResults = (await Promise.all(segments)).sort((a, b) => a.index - b.index);
+    const geometry: Coordinate[] = [];
+    const steps: Array<{ instruction: string; street: string | null; distanceFeet: number; durationSeconds: number }> = [];
+    let distanceMeters = 0;
+    let durationSeconds = 0;
 
+    for (const segmentResult of segmentResults) {
+      const segment = segmentResult.route;
+      const segmentGeometry = segment.geometry?.coordinates ?? [];
       if (segmentGeometry.length < 2) {
-        return noStoreJson({ error: 'Mapbox returned a segment without usable street geometry.', code: 'EMPTY_GEOMETRY', segment: index + 1 }, 422);
+        return noStoreJson({ error: 'Mapbox returned a segment without usable street geometry.', code: 'EMPTY_GEOMETRY', segment: segmentResult.index + 1 }, 422);
       }
 
       const mappedGeometry = segmentGeometry.map(([lng, lat]) => ({ lng, lat }));
@@ -152,6 +173,7 @@ export async function POST(request: NextRequest) {
       distanceMiles: Number((distanceMeters / 1609.344).toFixed(2)),
       durationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
       waypointCount: Math.max(0, coordinates.length - 2),
+      segmentCount: segmentResults.length,
       looped: true,
       elapsedMs: Date.now() - startedAt
     });
@@ -159,7 +181,7 @@ export async function POST(request: NextRequest) {
     const timedOut = error instanceof Error && error.name === 'AbortError';
     return noStoreJson({
       error: timedOut
-        ? 'Street snapping timed out on one route segment. Move the nearest flag closer to a mapped street and retry.'
+        ? 'Street snapping timed out while matching one segment. Move that segment closer to visible streets or use fewer waypoints.'
         : error instanceof Error
           ? error.message
           : 'The street-routing service could not be reached. Retry the route.',
