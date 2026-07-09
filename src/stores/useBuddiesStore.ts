@@ -65,7 +65,7 @@ type BuddiesStore = {
 };
 
 export const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
-export const DEFAULT_VIEW_FEET = 1000;
+export const DEFAULT_VIEW_FEET = 20000;
 
 const defaultWalkPlanner = (): WalkPlannerState => ({
   token: '',
@@ -115,7 +115,7 @@ export const useBuddiesStore = create<BuddiesStore>()(
       clearBuddyRequest: (key) => set((state) => { const next = { ...state.buddyRequests }; delete next[key]; return { buddyRequests: next }; })
     }),
     {
-      name: 'buddies-session-state-v3',
+      name: 'buddies-session-state-v4',
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
       partialize: (state) => ({ walkPlanner: { ...state.walkPlanner, favorites: [], routingState: 'idle' as const, routingError: null, savingFavorite: false, mapLoaded: false }, buddyRequests: {} }),
