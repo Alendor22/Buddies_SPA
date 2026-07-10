@@ -5,6 +5,7 @@ import UnifiedWalkWorkspace from '@/components/map/UnifiedWalkWorkspace';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getPublicMapboxToken } from '@/lib/mapboxToken';
+import { neighborhoodKey } from '@/lib/socialMap';
 import { UI_ROUTES } from '@/lib/uiRoutes';
 import { parseRoutePlan } from '@/lib/walkRoutes';
 
@@ -73,17 +74,23 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   if (!user) redirect('/auth/login');
   const { error } = await searchParams;
   const now = new Date();
+  const heatCutoff = new Date(now.getTime() - 15 * 60_000);
 
   const [dogs, mapboxToken, activeDogsRaw, reportsRaw, memoriesRaw] = await Promise.all([
     prisma.dog.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, breed: true } }),
     Promise.resolve(getPublicMapboxToken()),
     prisma.dogPresence.findMany({
-      where: { expiresAt: { gt: now } },
+      where: { expiresAt: { gt: now }, lastHeartbeatAt: { gte: heatCutoff } },
       orderBy: { lastHeartbeatAt: 'desc' },
-      take: 60,
-      include: { dog: { select: { id: true, name: true, breed: true } } }
+      take: 100,
+      include: { dog: { select: { id: true, name: true, slug: true, breed: true } } }
     }),
-    prisma.mapReport.findMany({ where: { expiresAt: { gt: now } }, orderBy: { createdAt: 'desc' }, take: 30, select: { id: true, title: true, type: true } }),
+    prisma.mapReport.findMany({
+      where: { expiresAt: { gt: now } },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: { id: true, title: true, type: true, latitude: true, longitude: true }
+    }),
     prisma.routeMemory.findMany({ where: { dog: { ownerId: user.id } }, orderBy: [{ occurrences: 'desc' }, { lastWalkedAt: 'desc' }], take: 8, include: { dog: { select: { name: true } } } })
   ]);
 
@@ -105,12 +112,38 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   const activeDogs = activeDogsRaw.map((presence) => ({
     id: presence.id,
     dogName: presence.dog.name,
+    dogSlug: presence.dog.slug,
+    avatar: presence.dog.name.slice(0, 2).toUpperCase(),
     breed: presence.dog.breed,
     status: presence.status,
     walkingScore: presence.walkingScore,
-    isBuddy: buddyIds.has(presence.dogId)
+    isBuddy: buddyIds.has(presence.dogId),
+    device_loc: {
+      lat: presence.latitude,
+      lng: presence.longitude,
+      accuracyMeters: presence.accuracyMeters,
+      speedMph: presence.speedMph,
+      heading: presence.heading,
+      altitude: null,
+      timestamp: presence.lastHeartbeatAt.toISOString()
+    }
   }));
-  const reports = reportsRaw.map((report) => ({ id: report.id, title: report.title, type: report.type }));
+
+  const heatCells = Array.from(activeDogsRaw.reduce((cells, presence) => {
+    const key = neighborhoodKey(presence.latitude, presence.longitude);
+    const [latitude, longitude] = key.split(',').map(Number);
+    const ageMinutes = Math.max(0, (now.getTime() - presence.lastHeartbeatAt.getTime()) / 60_000);
+    const recencyWeight = Math.max(0.05, 1 - ageMinutes / 15);
+    const confidenceWeight = Math.max(0.1, Math.min(1, presence.walkingScore / 100));
+    const current = cells.get(key) ?? { key, latitude, longitude, activeDogs: 0, buddies: 0, weight: 0 };
+    current.activeDogs += 1;
+    if (buddyIds.has(presence.dogId)) current.buddies += 1;
+    current.weight = Math.min(1, current.weight + recencyWeight * confidenceWeight);
+    cells.set(key, current);
+    return cells;
+  }, new Map<string, { key: string; latitude: number; longitude: number; activeDogs: number; buddies: number; weight: number }>()).values());
+
+  const reports = reportsRaw.map((report) => ({ id: report.id, title: report.title, type: report.type, latitude: report.latitude, longitude: report.longitude }));
   const routeMemories = memoriesRaw.map((route) => ({ id: route.id, name: route.name, dogName: route.dog.name, occurrences: route.occurrences, confidence: route.confidence }));
 
   const errorMessage = error === 'dog'
@@ -157,6 +190,7 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
         walkDetails={walkDetails}
         actions={actions}
         activeDogs={activeDogs}
+        heatCells={heatCells}
         reports={reports}
         routeMemories={routeMemories}
       />
