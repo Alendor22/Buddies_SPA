@@ -1,12 +1,54 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
-import Map, { GeolocateControl, Layer, Marker, NavigationControl, Source, type MapRef } from 'react-map-gl/mapbox';
-import { DEFAULT_CENTER, DEFAULT_VIEW_FEET, type Coordinate, type SavedRoute, useBuddiesStore } from '@/stores/useBuddiesStore';
+import Map, {
+  GeolocateControl,
+  Layer,
+  Marker,
+  NavigationControl,
+  Source,
+  type MapRef
+} from 'react-map-gl/mapbox';
+import LiveMapLayers, {
+  type ActiveDogMapItem,
+  type HeatCellMapItem,
+  type ReportMapItem
+} from '@/components/map/LiveMapLayers';
+import {
+  DEFAULT_CENTER,
+  DEFAULT_VIEW_FEET,
+  type Coordinate,
+  type SavedRoute,
+  useBuddiesStore
+} from '@/stores/useBuddiesStore';
 
-type DirectionsPayload = { geometry: Coordinate[]; steps: Array<{ instruction: string; street: string | null; distanceFeet: number; durationSeconds: number }>; distanceMiles: number; durationMinutes: number };
-type MapPressEvent = { lngLat: { lat: number; lng: number }; preventDefault?: () => void; originalEvent?: { preventDefault?: () => void } };
-type Props = { initialToken: string };
+type DirectionsPayload = {
+  geometry: Coordinate[];
+  steps: Array<{
+    instruction: string;
+    street: string | null;
+    distanceFeet: number;
+    durationSeconds: number;
+  }>;
+  distanceMiles: number;
+  durationMinutes: number;
+};
+
+type MapPressEvent = {
+  lngLat: { lat: number; lng: number };
+  preventDefault?: () => void;
+  originalEvent?: { preventDefault?: () => void };
+};
+
+type Props = {
+  initialToken: string;
+  activeDogs?: ActiveDogMapItem[];
+  heatCells?: HeatCellMapItem[];
+  reports?: ReportMapItem[];
+  showRadar?: boolean;
+  showHeat?: boolean;
+  showReports?: boolean;
+};
 
 const EARTH_RADIUS_MILES = 3958.8;
 const FEET_PER_MILE = 5280;
@@ -20,20 +62,107 @@ const LONG_PRESS_MS = 650;
 const TOUCH_MOVE_CANCEL_PX = 12;
 const MAX_RANDOM_LOOP_MILES = 1;
 
-function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(max, value)); }
-function normalizeFeet(value: number) { return Math.round(clamp(value, MIN_VIEW_FEET, MAX_VIEW_FEET) / ZOOM_STEP_FEET) * ZOOM_STEP_FEET; }
-function zoomForFeet(viewFeet: number, latitude: number) { const visibleWidthMeters = Math.max(1, viewFeet * 2 * 0.3048); const metersPerPixelAtZoomZero = 156543.03392 * Math.cos(latitude * Math.PI / 180); return clamp(Math.log2((metersPerPixelAtZoomZero * ESTIMATED_MAP_WIDTH_PX) / visibleWidthMeters), 8, 21); }
-function feetForZoom(zoom: number, latitude: number) { const metersPerPixel = (156543.03392 * Math.cos(latitude * Math.PI / 180)) / (2 ** zoom); return normalizeFeet((metersPerPixel * ESTIMATED_MAP_WIDTH_PX / 0.3048) / 2); }
-function destination(start: Coordinate, miles: number, bearingDegrees: number): Coordinate { const bearing = bearingDegrees * Math.PI / 180; const lat1 = start.lat * Math.PI / 180; const lng1 = start.lng * Math.PI / 180; const distance = miles / EARTH_RADIUS_MILES; const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance) + Math.cos(lat1) * Math.sin(distance) * Math.cos(bearing)); const lng2 = lng1 + Math.atan2(Math.sin(bearing) * Math.sin(distance) * Math.cos(lat1), Math.cos(distance) - Math.sin(lat1) * Math.sin(lat2)); return { lat: Number((lat2 * 180 / Math.PI).toFixed(6)), lng: Number((lng2 * 180 / Math.PI).toFixed(6)) }; }
-function bearingBetween(start: Coordinate, end: Coordinate) { const lat1 = start.lat * Math.PI / 180; const lat2 = end.lat * Math.PI / 180; const deltaLng = (end.lng - start.lng) * Math.PI / 180; const y = Math.sin(deltaLng) * Math.cos(lat2); const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng); return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360; }
-function distanceScore(a: Coordinate, b: Coordinate) { return Math.abs(a.lat - b.lat) + Math.abs(a.lng - b.lng); }
-function midpoint(a: Coordinate, b: Coordinate): Coordinate { return { lat: Number(((a.lat + b.lat) / 2).toFixed(6)), lng: Number(((a.lng + b.lng) / 2).toFixed(6)) }; }
-function circleFeature(center: Coordinate, miles: number) { const points = Array.from({ length: 65 }, (_, index) => { const point = destination(center, miles, index * (360 / 64)); return [point.lng, point.lat]; }); return { type: 'Feature' as const, properties: {}, geometry: { type: 'Polygon' as const, coordinates: [points] } }; }
-function boundsForRoute(route: Coordinate[]) { if (!route.length) return null; const lngs = route.map((point) => point.lng); const lats = route.map((point) => point.lat); return [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]] as [[number, number], [number, number]]; }
-function pointFromEvent(event: MapPressEvent): Coordinate { return { lat: Number(event.lngLat.lat.toFixed(6)), lng: Number(event.lngLat.lng.toFixed(6)) }; }
-function formatStep(step: { instruction: string; distanceFeet: number }) { return `${step.instruction}${step.distanceFeet ? ` · ${step.distanceFeet.toLocaleString()} ft` : ''}`; }
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
 
-export default function WalkRoutePlanner({ initialToken }: Props) {
+function normalizeFeet(value: number) {
+  return Math.round(clamp(value, MIN_VIEW_FEET, MAX_VIEW_FEET) / ZOOM_STEP_FEET) * ZOOM_STEP_FEET;
+}
+
+function zoomForFeet(viewFeet: number, latitude: number) {
+  const visibleWidthMeters = Math.max(1, viewFeet * 2 * 0.3048);
+  const metersPerPixelAtZoomZero = 156543.03392 * Math.cos(latitude * Math.PI / 180);
+  return clamp(Math.log2((metersPerPixelAtZoomZero * ESTIMATED_MAP_WIDTH_PX) / visibleWidthMeters), 8, 21);
+}
+
+function feetForZoom(zoom: number, latitude: number) {
+  const metersPerPixel = (156543.03392 * Math.cos(latitude * Math.PI / 180)) / (2 ** zoom);
+  return normalizeFeet((metersPerPixel * ESTIMATED_MAP_WIDTH_PX / 0.3048) / 2);
+}
+
+function destination(start: Coordinate, miles: number, bearingDegrees: number): Coordinate {
+  const bearing = bearingDegrees * Math.PI / 180;
+  const lat1 = start.lat * Math.PI / 180;
+  const lng1 = start.lng * Math.PI / 180;
+  const distance = miles / EARTH_RADIUS_MILES;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(distance)
+      + Math.cos(lat1) * Math.sin(distance) * Math.cos(bearing)
+  );
+  const lng2 = lng1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(distance) * Math.cos(lat1),
+    Math.cos(distance) - Math.sin(lat1) * Math.sin(lat2)
+  );
+  return {
+    lat: Number((lat2 * 180 / Math.PI).toFixed(6)),
+    lng: Number((lng2 * 180 / Math.PI).toFixed(6))
+  };
+}
+
+function bearingBetween(start: Coordinate, end: Coordinate) {
+  const lat1 = start.lat * Math.PI / 180;
+  const lat2 = end.lat * Math.PI / 180;
+  const deltaLng = (end.lng - start.lng) * Math.PI / 180;
+  const y = Math.sin(deltaLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2)
+    - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+  return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+function distanceScore(a: Coordinate, b: Coordinate) {
+  return Math.abs(a.lat - b.lat) + Math.abs(a.lng - b.lng);
+}
+
+function midpoint(a: Coordinate, b: Coordinate): Coordinate {
+  return {
+    lat: Number(((a.lat + b.lat) / 2).toFixed(6)),
+    lng: Number(((a.lng + b.lng) / 2).toFixed(6))
+  };
+}
+
+function circleFeature(center: Coordinate, miles: number) {
+  const points = Array.from({ length: 65 }, (_, index) => {
+    const point = destination(center, miles, index * (360 / 64));
+    return [point.lng, point.lat];
+  });
+  return {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: { type: 'Polygon' as const, coordinates: [points] }
+  };
+}
+
+function boundsForRoute(route: Coordinate[]) {
+  if (!route.length) return null;
+  const lngs = route.map((point) => point.lng);
+  const lats = route.map((point) => point.lat);
+  return [
+    [Math.min(...lngs), Math.min(...lats)],
+    [Math.max(...lngs), Math.max(...lats)]
+  ] as [[number, number], [number, number]];
+}
+
+function pointFromEvent(event: MapPressEvent): Coordinate {
+  return {
+    lat: Number(event.lngLat.lat.toFixed(6)),
+    lng: Number(event.lngLat.lng.toFixed(6))
+  };
+}
+
+function formatStep(step: { instruction: string; distanceFeet: number }) {
+  return `${step.instruction}${step.distanceFeet ? ` · ${step.distanceFeet.toLocaleString()} ft` : ''}`;
+}
+
+export default function WalkRoutePlanner({
+  initialToken,
+  activeDogs = [],
+  heatCells = [],
+  reports = [],
+  showRadar = true,
+  showHeat = true,
+  showReports = true
+}: Props) {
   const mapRef = useRef<MapRef | null>(null);
   const routeAbortRef = useRef<AbortController | null>(null);
   const ignoreNextClickRef = useRef(false);
@@ -43,49 +172,366 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
   const [draggingHandle, setDraggingHandle] = useState<string | null>(null);
   const [snapPreviewRoute, setSnapPreviewRoute] = useState<Coordinate[]>([]);
   const { walkPlanner, hydrateMapToken, patchWalkPlanner, resetRoute } = useBuddiesStore();
-  const { token: cachedToken, tokenCachedAt, center, start, apex, waypoints, status, apexMiles, routeName, route, routeSteps, distanceMiles, durationMinutes, favorites, viewFeet, routingState, routingError, savingFavorite, mapLoaded, mapUpdatedAt } = walkPlanner;
+  const {
+    token: cachedToken,
+    tokenCachedAt,
+    center,
+    start,
+    apex,
+    waypoints,
+    status,
+    apexMiles,
+    routeName,
+    route,
+    routeSteps,
+    distanceMiles,
+    durationMinutes,
+    favorites,
+    viewFeet,
+    routingState,
+    routingError,
+    savingFavorite,
+    mapLoaded,
+    mapUpdatedAt
+  } = walkPlanner;
   const token = initialToken || cachedToken;
   const routing = routingState === 'routing';
   const editPoints = useMemo(() => [start || center, ...waypoints], [center, start, waypoints]);
-  const tempLoopPoints = useMemo(() => editPoints.length ? [...editPoints, editPoints[0]] : [], [editPoints]);
+  const tempLoopPoints = useMemo(
+    () => editPoints.length ? [...editPoints, editPoints[0]] : [],
+    [editPoints]
+  );
 
-  useEffect(() => { let active = true; async function initialize() { await useBuddiesStore.persist.rehydrate(); if (!active) return; const latest = useBuddiesStore.getState().walkPlanner; if (latest.viewFeet < DEFAULT_VIEW_FEET || latest.apexMiles > MAX_RANDOM_LOOP_MILES) patchWalkPlanner({ viewFeet: Math.max(latest.viewFeet, DEFAULT_VIEW_FEET), apexMiles: latest.apexMiles > MAX_RANDOM_LOOP_MILES ? 0.5 : latest.apexMiles }); if (initialToken) hydrateMapToken(initialToken); else if (!latest.token) { try { const response = await fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' }); const payload = await response.json() as { token?: string; error?: string }; if (active && response.ok && payload.token) hydrateMapToken(payload.token); else if (active) patchWalkPlanner({ status: payload.error || 'Mapbox token unavailable.' }); } catch { if (active) patchWalkPlanner({ status: 'Map configuration could not be loaded.' }); } } try { const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' }); const payload = await response.json() as { favorites?: SavedRoute[] }; if (active && response.ok) patchWalkPlanner({ favorites: payload.favorites ?? [] }); } catch {} } void initialize(); return () => { active = false; routeAbortRef.current?.abort(); if (touchTimerRef.current) clearTimeout(touchTimerRef.current); if (revealTimerRef.current) clearInterval(revealTimerRef.current); }; }, [hydrateMapToken, initialToken, patchWalkPlanner]);
+  useEffect(() => {
+    let active = true;
+    async function initialize() {
+      await useBuddiesStore.persist.rehydrate();
+      if (!active) return;
+      const latest = useBuddiesStore.getState().walkPlanner;
+      if (latest.viewFeet < DEFAULT_VIEW_FEET || latest.apexMiles > MAX_RANDOM_LOOP_MILES) {
+        patchWalkPlanner({
+          viewFeet: Math.max(latest.viewFeet, DEFAULT_VIEW_FEET),
+          apexMiles: latest.apexMiles > MAX_RANDOM_LOOP_MILES ? 0.5 : latest.apexMiles
+        });
+      }
+      if (initialToken) hydrateMapToken(initialToken);
+      else if (!latest.token) {
+        try {
+          const response = await fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' });
+          const payload = await response.json() as { token?: string; error?: string };
+          if (active && response.ok && payload.token) hydrateMapToken(payload.token);
+          else if (active) patchWalkPlanner({ status: payload.error || 'Mapbox token unavailable.' });
+        } catch {
+          if (active) patchWalkPlanner({ status: 'Map configuration could not be loaded.' });
+        }
+      }
+      try {
+        const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' });
+        const payload = await response.json() as { favorites?: SavedRoute[] };
+        if (active && response.ok) patchWalkPlanner({ favorites: payload.favorites ?? [] });
+      } catch {}
+    }
+    void initialize();
+    return () => {
+      active = false;
+      routeAbortRef.current?.abort();
+      if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+      if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+    };
+  }, [hydrateMapToken, initialToken, patchWalkPlanner]);
 
-  const routeFeature = useMemo(() => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: route.map((point) => [point.lng, point.lat]) } }), [route]);
-  const snapPreviewFeature = useMemo(() => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: snapPreviewRoute.map((point) => [point.lng, point.lat]) } }), [snapPreviewRoute]);
-  const tempRouteFeature = useMemo(() => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: tempLoopPoints.map((point) => [point.lng, point.lat]) } }), [tempLoopPoints]);
+  const routeFeature = useMemo(() => ({
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: route.map((point) => [point.lng, point.lat])
+    }
+  }), [route]);
+
+  const snapPreviewFeature = useMemo(() => ({
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: snapPreviewRoute.map((point) => [point.lng, point.lat])
+    }
+  }), [snapPreviewRoute]);
+
+  const tempRouteFeature = useMemo(() => ({
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: tempLoopPoints.map((point) => [point.lng, point.lat])
+    }
+  }), [tempLoopPoints]);
+
   const boundaryFeature = useMemo(() => circleFeature(start || center, 5), [start, center]);
-  const routeHandles = useMemo(() => tempLoopPoints.slice(0, -1).map((point, index) => ({ id: `segment-${index}`, index, point: midpoint(point, tempLoopPoints[index + 1]) })), [tempLoopPoints]);
+  const routeHandles = useMemo(() => tempLoopPoints.slice(0, -1).map((point, index) => ({
+    id: `segment-${index}`,
+    index,
+    point: midpoint(point, tempLoopPoints[index + 1])
+  })), [tempLoopPoints]);
 
-  function applyViewFeet(value: number) { const next = normalizeFeet(value); patchWalkPlanner({ viewFeet: next }); const map = mapRef.current; const current = map?.getCenter(); const latitude = current?.lat ?? center.lat; map?.flyTo({ center: current ? [current.lng, current.lat] : [center.lng, center.lat], zoom: zoomForFeet(next, latitude), duration: 250 }); }
-  function setStartPoint(coordinate: Coordinate) { setSnapPreviewRoute([]); patchWalkPlanner({ center: coordinate, start: coordinate, apex: null, status: 'Start point fixed. Long press the map to add waypoints. The dotted loop is temporary until snapped to streets.', routingState: 'plotting', routingError: null }); resetRoute(); }
-  function addWaypoint(coordinate: Coordinate) { if (waypoints.length >= MAX_WAYPOINTS) { patchWalkPlanner({ status: `Maximum of ${MAX_WAYPOINTS} flag waypoints reached.` }); return; } setSnapPreviewRoute([]); patchWalkPlanner({ waypoints: [...waypoints, coordinate], apex: null, routingState: 'plotting', routingError: null, status: `Waypoint ${waypoints.length + 1} added. Drag dotted-route handles to reshape the temporary route.` }); resetRoute(); }
-  function updateWaypoint(index: number, coordinate: Coordinate) { setSnapPreviewRoute([]); patchWalkPlanner({ waypoints: waypoints.map((point, pointIndex) => pointIndex === index ? coordinate : point), routingState: 'plotting', routingError: null, status: `Waypoint ${index + 1} moved. Snap route to streets when ready.` }); resetRoute(); }
-  function insertWaypointAfter(segmentIndex: number, coordinate: Coordinate) { const next = [...waypoints]; next.splice(segmentIndex, 0, coordinate); setSnapPreviewRoute([]); patchWalkPlanner({ waypoints: next.slice(0, MAX_WAYPOINTS), routingState: 'plotting', routingError: null, status: 'Temporary route handle moved. A waypoint was inserted so the route can bend toward that street.' }); resetRoute(); }
-  function repositionNearest(coordinate: Coordinate) { const candidates = [...(start ? [{ type: 'start' as const, index: -1, point: start }] : []), ...waypoints.map((point, index) => ({ type: 'waypoint' as const, index, point }))]; const nearest = candidates.sort((a, b) => distanceScore(a.point, coordinate) - distanceScore(b.point, coordinate))[0]; if (!nearest || nearest.type === 'start') { setStartPoint(coordinate); patchWalkPlanner({ status: 'Start point repositioned. Dotted route updated.' }); return; } updateWaypoint(nearest.index, coordinate); }
-  function locate() { if (!navigator.geolocation) { patchWalkPlanner({ status: 'Location services are unavailable. Short press the map to set Start.' }); return; } patchWalkPlanner({ status: 'Requesting current location…' }); navigator.geolocation.getCurrentPosition((position) => { const current = { lat: Number(position.coords.latitude.toFixed(6)), lng: Number(position.coords.longitude.toFixed(6)) }; setStartPoint(current); mapRef.current?.flyTo({ center: [current.lng, current.lat], zoom: zoomForFeet(DEFAULT_VIEW_FEET, current.lat), duration: 900 }); }, () => patchWalkPlanner({ status: 'Location permission was denied. Short press the map to set Start.' }), { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }); }
-  function handleShortPress(event: MapPressEvent) { if (ignoreNextClickRef.current) { ignoreNextClickRef.current = false; return; } setStartPoint(pointFromEvent(event)); }
-  function handleLongPress(event: MapPressEvent) { event.preventDefault?.(); event.originalEvent?.preventDefault?.(); ignoreNextClickRef.current = true; addWaypoint(pointFromEvent(event)); }
-  function handleDoubleTap(event: MapPressEvent) { event.preventDefault?.(); event.originalEvent?.preventDefault?.(); ignoreNextClickRef.current = true; repositionNearest(pointFromEvent(event)); }
-  function coordinateFromClientPoint(x: number, y: number): Coordinate | null { const map = mapRef.current?.getMap(); const container = map?.getContainer(); if (!map || !container) return null; const rect = container.getBoundingClientRect(); const lngLat = map.unproject([x - rect.left, y - rect.top]); return { lat: Number(lngLat.lat.toFixed(6)), lng: Number(lngLat.lng.toFixed(6)) }; }
-  function clearTouchTimer() { if (touchTimerRef.current) clearTimeout(touchTimerRef.current); touchTimerRef.current = null; }
-  function handleTouchStart(event: TouchEvent<HTMLDivElement>) { if (event.touches.length !== 1) return; const touch = event.touches[0]; touchStartRef.current = { x: touch.clientX, y: touch.clientY }; clearTouchTimer(); touchTimerRef.current = setTimeout(() => { const point = touchStartRef.current; const coordinate = point ? coordinateFromClientPoint(point.x, point.y) : null; if (!coordinate) return; ignoreNextClickRef.current = true; addWaypoint(coordinate); touchTimerRef.current = null; }, LONG_PRESS_MS); }
-  function handleTouchMove(event: TouchEvent<HTMLDivElement>) { const startPoint = touchStartRef.current; if (!startPoint || !event.touches.length) return; const touch = event.touches[0]; const moved = Math.hypot(touch.clientX - startPoint.x, touch.clientY - startPoint.y); if (moved > TOUCH_MOVE_CANCEL_PX) clearTouchTimer(); }
-  function handleTouchEnd() { clearTouchTimer(); touchStartRef.current = null; }
-  function removeWaypoint(index: number) { setSnapPreviewRoute([]); patchWalkPlanner({ waypoints: waypoints.filter((_, waypointIndex) => waypointIndex !== index), status: `Waypoint ${index + 1} removed.` }); resetRoute(); }
-  function clearRoute() { setSnapPreviewRoute([]); patchWalkPlanner({ apex: null, waypoints: [], route: [], routeSteps: [], distanceMiles: null, durationMinutes: null, routingState: 'idle', routingError: null, viewFeet: DEFAULT_VIEW_FEET, apexMiles: 0.5, status: 'Route cleared. Short press to set Start, long press to add waypoints.' }); }
-  function cancelRouting() { routeAbortRef.current?.abort(); routeAbortRef.current = null; patchWalkPlanner({ routingState: 'cancelled', routingError: null, status: 'Street routing cancelled.' }); }
+  function applyViewFeet(value: number) {
+    const next = normalizeFeet(value);
+    patchWalkPlanner({ viewFeet: next });
+    const map = mapRef.current;
+    const current = map?.getCenter();
+    const latitude = current?.lat ?? center.lat;
+    map?.flyTo({
+      center: current ? [current.lng, current.lat] : [center.lng, center.lat],
+      zoom: zoomForFeet(next, latitude),
+      duration: 250
+    });
+  }
+
+  function setStartPoint(coordinate: Coordinate) {
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      center: coordinate,
+      start: coordinate,
+      apex: null,
+      status: 'Start fixed. Long press to add flags. The dotted route remains editable until routed.',
+      routingState: 'plotting',
+      routingError: null
+    });
+    resetRoute();
+  }
+
+  function addWaypoint(coordinate: Coordinate) {
+    if (waypoints.length >= MAX_WAYPOINTS) {
+      patchWalkPlanner({ status: `Maximum of ${MAX_WAYPOINTS} flag waypoints reached.` });
+      return;
+    }
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      waypoints: [...waypoints, coordinate],
+      apex: null,
+      routingState: 'plotting',
+      routingError: null,
+      status: `Flag ${waypoints.length + 1} added. Drag handles to choose alternate streets.`
+    });
+    resetRoute();
+  }
+
+  function updateWaypoint(index: number, coordinate: Coordinate) {
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      waypoints: waypoints.map((point, pointIndex) => pointIndex === index ? coordinate : point),
+      routingState: 'plotting',
+      routingError: null,
+      status: `Flag ${index + 1} moved. Route again when ready.`
+    });
+    resetRoute();
+  }
+
+  function insertWaypointAfter(segmentIndex: number, coordinate: Coordinate) {
+    const next = [...waypoints];
+    next.splice(segmentIndex, 0, coordinate);
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      waypoints: next.slice(0, MAX_WAYPOINTS),
+      routingState: 'plotting',
+      routingError: null,
+      status: 'Alternate-street shaping point inserted.'
+    });
+    resetRoute();
+  }
+
+  function repositionNearest(coordinate: Coordinate) {
+    const candidates = [
+      ...(start ? [{ type: 'start' as const, index: -1, point: start }] : []),
+      ...waypoints.map((point, index) => ({ type: 'waypoint' as const, index, point }))
+    ];
+    const nearest = candidates.sort(
+      (a, b) => distanceScore(a.point, coordinate) - distanceScore(b.point, coordinate)
+    )[0];
+    if (!nearest || nearest.type === 'start') {
+      setStartPoint(coordinate);
+      return;
+    }
+    updateWaypoint(nearest.index, coordinate);
+  }
+
+  function locate() {
+    if (!navigator.geolocation) {
+      patchWalkPlanner({ status: 'Location services are unavailable.' });
+      return;
+    }
+    patchWalkPlanner({ status: 'Requesting current location…' });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const current = {
+          lat: Number(position.coords.latitude.toFixed(6)),
+          lng: Number(position.coords.longitude.toFixed(6))
+        };
+        setStartPoint(current);
+        mapRef.current?.flyTo({
+          center: [current.lng, current.lat],
+          zoom: zoomForFeet(DEFAULT_VIEW_FEET, current.lat),
+          duration: 900
+        });
+      },
+      () => patchWalkPlanner({ status: 'Location permission was denied. Tap the map to set Start.' }),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+    );
+  }
+
+  function handleShortPress(event: MapPressEvent) {
+    if (ignoreNextClickRef.current) {
+      ignoreNextClickRef.current = false;
+      return;
+    }
+    setStartPoint(pointFromEvent(event));
+  }
+
+  function handleLongPress(event: MapPressEvent) {
+    event.preventDefault?.();
+    event.originalEvent?.preventDefault?.();
+    ignoreNextClickRef.current = true;
+    addWaypoint(pointFromEvent(event));
+  }
+
+  function handleDoubleTap(event: MapPressEvent) {
+    event.preventDefault?.();
+    event.originalEvent?.preventDefault?.();
+    ignoreNextClickRef.current = true;
+    repositionNearest(pointFromEvent(event));
+  }
+
+  function coordinateFromClientPoint(x: number, y: number): Coordinate | null {
+    const map = mapRef.current?.getMap();
+    const container = map?.getContainer();
+    if (!map || !container) return null;
+    const rect = container.getBoundingClientRect();
+    const lngLat = map.unproject([x - rect.left, y - rect.top]);
+    return {
+      lat: Number(lngLat.lat.toFixed(6)),
+      lng: Number(lngLat.lng.toFixed(6))
+    };
+  }
+
+  function clearTouchTimer() {
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = null;
+  }
+
+  function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    clearTouchTimer();
+    touchTimerRef.current = setTimeout(() => {
+      const point = touchStartRef.current;
+      const coordinate = point ? coordinateFromClientPoint(point.x, point.y) : null;
+      if (!coordinate) return;
+      ignoreNextClickRef.current = true;
+      addWaypoint(coordinate);
+      touchTimerRef.current = null;
+    }, LONG_PRESS_MS);
+  }
+
+  function handleTouchMove(event: TouchEvent<HTMLDivElement>) {
+    const initial = touchStartRef.current;
+    if (!initial || !event.touches.length) return;
+    const touch = event.touches[0];
+    if (Math.hypot(touch.clientX - initial.x, touch.clientY - initial.y) > TOUCH_MOVE_CANCEL_PX) {
+      clearTouchTimer();
+    }
+  }
+
+  function handleTouchEnd() {
+    clearTouchTimer();
+    touchStartRef.current = null;
+  }
+
+  function removeWaypoint(index: number) {
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      waypoints: waypoints.filter((_, waypointIndex) => waypointIndex !== index),
+      status: `Flag ${index + 1} removed.`
+    });
+    resetRoute();
+  }
+
+  function clearRoute() {
+    setSnapPreviewRoute([]);
+    patchWalkPlanner({
+      apex: null,
+      waypoints: [],
+      route: [],
+      routeSteps: [],
+      distanceMiles: null,
+      durationMinutes: null,
+      routingState: 'idle',
+      routingError: null,
+      viewFeet: DEFAULT_VIEW_FEET,
+      apexMiles: 0.5,
+      status: 'Route cleared. Tap to set Start; long press to add flags.'
+    });
+  }
+
+  function cancelRouting() {
+    routeAbortRef.current?.abort();
+    routeAbortRef.current = null;
+    patchWalkPlanner({ routingState: 'cancelled', routingError: null, status: 'Driving route cancelled.' });
+  }
 
   async function fetchDirectMapboxRoute(coordinates: Coordinate[]): Promise<DirectionsPayload> {
-    if (!token) throw new Error('Mapbox token is unavailable for direct street snapping.');
-    const coordinatePath = coordinates.map((point) => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`).join(';');
-    const query = new URLSearchParams({ access_token: token, alternatives: 'false', geometries: 'geojson', overview: 'full', steps: 'true', language: 'en', continue_straight: 'false', radiuses: coordinates.map(() => 'unlimited').join(';') });
-    const response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/walking/${coordinatePath}?${query.toString()}`, { cache: 'no-store' });
-    const data = await response.json() as { code?: string; message?: string; routes?: Array<{ distance: number; duration: number; geometry: { coordinates: [number, number][] }; legs: Array<{ steps: Array<{ name?: string; distance?: number; duration?: number; maneuver?: { instruction?: string } }> }> }> };
+    if (!token) throw new Error('Mapbox token is unavailable for direct routing.');
+    const coordinatePath = coordinates
+      .map((point) => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`)
+      .join(';');
+    const query = new URLSearchParams({
+      access_token: token,
+      alternatives: 'false',
+      geometries: 'geojson',
+      overview: 'full',
+      steps: 'true',
+      language: 'en',
+      continue_straight: 'false',
+      radiuses: coordinates.map(() => 'unlimited').join(';')
+    });
+    const response = await fetch(
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatePath}?${query.toString()}`,
+      { cache: 'no-store' }
+    );
+    const data = await response.json() as {
+      code?: string;
+      message?: string;
+      routes?: Array<{
+        distance: number;
+        duration: number;
+        geometry: { coordinates: [number, number][] };
+        legs: Array<{
+          steps: Array<{
+            name?: string;
+            distance?: number;
+            duration?: number;
+            maneuver?: { instruction?: string };
+          }>;
+        }>;
+      }>;
+    };
     const routeData = data.routes?.[0];
-    if (!response.ok || data.code !== 'Ok' || !routeData) throw new Error(data.message || 'Direct Mapbox street snapping failed.');
-    const steps = routeData.legs.flatMap((leg) => leg.steps ?? []).map((step) => ({ instruction: step.maneuver?.instruction || (step.name ? `Continue on ${step.name}` : 'Continue on the route'), street: step.name || null, distanceFeet: Math.round((step.distance || 0) * 3.28084), durationSeconds: Math.round(step.duration || 0) }));
-    return { geometry: routeData.geometry.coordinates.map(([lng, lat]) => ({ lng, lat })), steps, distanceMiles: Number((routeData.distance / 1609.344).toFixed(2)), durationMinutes: Math.max(1, Math.round(routeData.duration / 60)) };
+    if (!response.ok || data.code !== 'Ok' || !routeData) {
+      throw new Error(data.message || 'Direct Mapbox driving route failed.');
+    }
+    const steps = routeData.legs.flatMap((leg) => leg.steps ?? []).map((step) => ({
+      instruction: step.maneuver?.instruction
+        || (step.name ? `Continue on ${step.name}` : 'Continue on the route'),
+      street: step.name || null,
+      distanceFeet: Math.round((step.distance || 0) * 3.28084),
+      durationSeconds: Math.round(step.duration || 0)
+    }));
+    return {
+      geometry: routeData.geometry.coordinates.map(([lng, lat]) => ({ lng, lat })),
+      steps,
+      distanceMiles: Number((routeData.distance / 1609.344).toFixed(2)),
+      durationMinutes: Math.max(1, Math.round(routeData.duration / 60))
+    };
   }
 
   function animateSnapCompletion(payload: DirectionsPayload, selectedApex: Coordinate | null) {
@@ -95,7 +541,11 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
     const chunkSize = Math.max(2, Math.ceil(geometry.length / 40));
     let cursor = chunkSize;
     setSnapPreviewRoute(geometry.slice(0, cursor));
-    patchWalkPlanner({ routingState: 'routing', routingError: null, status: 'Street snap complete. Confirming route from Start to finish…' });
+    patchWalkPlanner({
+      routingState: 'routing',
+      routingError: null,
+      status: 'Driving route complete. Confirming Start → flags → Start…'
+    });
     revealTimerRef.current = setInterval(() => {
       cursor = Math.min(geometry.length, cursor + chunkSize);
       setSnapPreviewRoute(geometry.slice(0, cursor));
@@ -104,7 +554,16 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
         revealTimerRef.current = null;
         setTimeout(() => {
           setSnapPreviewRoute([]);
-          patchWalkPlanner({ apex: waypoints.length ? null : selectedApex, route: geometry, routeSteps: payload.steps.map(formatStep), distanceMiles: payload.distanceMiles, durationMinutes: payload.durationMinutes, routingState: 'success', routingError: null, status: `Street route snapped through ${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'} and looped back to Start.` });
+          patchWalkPlanner({
+            apex: waypoints.length ? null : selectedApex,
+            route: geometry,
+            routeSteps: payload.steps.map(formatStep),
+            distanceMiles: payload.distanceMiles,
+            durationMinutes: payload.durationMinutes,
+            routingState: 'success',
+            routingError: null,
+            status: `Driving route follows ${waypoints.length} flag${waypoints.length === 1 ? '' : 's'} and returns to Start.`
+          });
           const bounds = boundsForRoute(geometry);
           if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 900 });
         }, 250);
@@ -113,20 +572,54 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
   }
 
   async function generateStreetRoute() {
-    if (routing) { cancelRouting(); return; }
+    if (routing) {
+      cancelRouting();
+      return;
+    }
     const base = start || center;
     let selectedApex = apex;
     let coordinates: Coordinate[];
-    if (waypoints.length) coordinates = [base, ...waypoints, base]; else { const safeMiles = clamp(apexMiles || 0.5, 0.1, MAX_RANDOM_LOOP_MILES); const outboundBearing = apex ? bearingBetween(base, apex) : Math.random() * 360; selectedApex = apex || destination(base, safeMiles, outboundBearing); const returnWaypoint = destination(selectedApex, Math.max(0.05, safeMiles * 0.3), outboundBearing + 135 + Math.random() * 90); coordinates = [base, selectedApex, returnWaypoint, base]; }
-    const controller = new AbortController(); routeAbortRef.current = controller; const timeout = window.setTimeout(() => controller.abort(), ROUTE_CLIENT_TIMEOUT_MS); patchWalkPlanner({ routingState: 'routing', routingError: null, status: `Snapping ${coordinates.length - 1} temporary segment${coordinates.length === 2 ? '' : 's'} to nearest walkable streets…` });
+    if (waypoints.length) {
+      coordinates = [base, ...waypoints, base];
+    } else {
+      const safeMiles = clamp(apexMiles || 0.5, 0.1, MAX_RANDOM_LOOP_MILES);
+      const outboundBearing = apex ? bearingBetween(base, apex) : Math.random() * 360;
+      selectedApex = apex || destination(base, safeMiles, outboundBearing);
+      const returnWaypoint = destination(
+        selectedApex,
+        Math.max(0.05, safeMiles * 0.3),
+        outboundBearing + 135 + Math.random() * 90
+      );
+      coordinates = [base, selectedApex, returnWaypoint, base];
+    }
+
+    const controller = new AbortController();
+    routeAbortRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), ROUTE_CLIENT_TIMEOUT_MS);
+    patchWalkPlanner({
+      routingState: 'routing',
+      routingError: null,
+      status: `Routing ${coordinates.length - 1} ordered driving segment${coordinates.length === 2 ? '' : 's'}…`
+    });
+
     try {
       let payload: DirectionsPayload & { error?: string };
       try {
-        const response = await fetch('/api/maps/directions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coordinates }), signal: controller.signal, cache: 'no-store' });
+        const response = await fetch('/api/maps/directions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ coordinates }),
+          signal: controller.signal,
+          cache: 'no-store'
+        });
         payload = await response.json() as DirectionsPayload & { error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Server street snapping failed.');
+        if (!response.ok) throw new Error(payload.error || 'Server driving route failed.');
       } catch {
-        patchWalkPlanner({ routingState: 'routing', routingError: null, status: 'Server snap was slow. Retrying direct Mapbox street snap…' });
+        patchWalkPlanner({
+          routingState: 'routing',
+          routingError: null,
+          status: 'Server route was slow. Retrying direct Mapbox driving route…'
+        });
         payload = await fetchDirectMapboxRoute(coordinates);
       }
       window.clearTimeout(timeout);
@@ -138,38 +631,341 @@ export default function WalkRoutePlanner({ initialToken }: Props) {
       const timedOut = error instanceof DOMException && error.name === 'AbortError';
       resetRoute();
       setSnapPreviewRoute([]);
-      patchWalkPlanner({ routingState: timedOut ? 'timeout' : 'error', routingError: timedOut ? 'Street routing exceeded 75 seconds. Try fewer waypoints or move points closer to mapped streets.' : error instanceof Error ? error.message : 'Street routing failed.', status: timedOut ? 'Street routing timed out.' : 'Street routing failed.' });
+      patchWalkPlanner({
+        routingState: timedOut ? 'timeout' : 'error',
+        routingError: timedOut
+          ? 'Driving route exceeded 75 seconds. Try fewer shaping points.'
+          : error instanceof Error ? error.message : 'Driving route failed.',
+        status: timedOut ? 'Driving route timed out.' : 'Driving route failed.'
+      });
     }
   }
 
-  const routeJson = JSON.stringify({ name: routeName, routeEngine: 'mapbox/directions-walking', center, start, apexPoint: apex, waypoints, apexMiles, route, routeSteps, distanceMiles, durationMinutes, viewFeet, mapUpdatedAt });
-  async function saveFavorite() { if (!route.length) { patchWalkPlanner({ status: 'Generate a street route before saving it.' }); return; } patchWalkPlanner({ savingFavorite: true, status: 'Saving favorite route to your account…' }); try { const response = await fetch('/api/walk-routes/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routeJson }) }); const payload = await response.json() as { favorite?: SavedRoute; error?: string }; if (!response.ok || !payload.favorite) throw new Error(payload.error || 'Favorite route could not be saved.'); patchWalkPlanner({ favorites: [payload.favorite, ...favorites].slice(0, 20), savingFavorite: false, status: 'Favorite route saved to your account.' }); } catch (error) { patchWalkPlanner({ savingFavorite: false, status: error instanceof Error ? error.message : 'Favorite route could not be saved.' }); } }
-  async function deleteFavorite(id: string) { try { const response = await fetch('/api/walk-routes/favorites', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (!response.ok) throw new Error('Favorite route could not be removed.'); patchWalkPlanner({ favorites: favorites.filter((favorite) => favorite.id !== id), status: 'Favorite route removed.' }); } catch (error) { patchWalkPlanner({ status: error instanceof Error ? error.message : 'Favorite route could not be removed.' }); } }
-  function loadFavorite(saved: SavedRoute) { const data = JSON.parse(saved.routeJson) as { name?: string; center?: Coordinate; start?: Coordinate; apexPoint?: Coordinate; waypoints?: Coordinate[]; apexMiles?: number; route?: Coordinate[]; routeSteps?: string[]; distanceMiles?: number; durationMinutes?: number; viewFeet?: number }; const loadedRoute = data.route ?? []; const loadedCenter = data.center ?? data.start ?? DEFAULT_CENTER; patchWalkPlanner({ routeName: data.name || saved.name, center: loadedCenter, apexMiles: data.apexMiles || 0.5, start: data.start || loadedCenter, apex: data.apexPoint || null, waypoints: Array.isArray(data.waypoints) ? data.waypoints.slice(0, MAX_WAYPOINTS) : [], route: loadedRoute, routeSteps: data.routeSteps || [], distanceMiles: data.distanceMiles ?? saved.distanceMiles ?? null, durationMinutes: data.durationMinutes ?? saved.durationMinutes ?? null, viewFeet: normalizeFeet(data.viewFeet || DEFAULT_VIEW_FEET), routingState: loadedRoute.length ? 'success' : 'idle', routingError: null, status: `Loaded favorite route: ${saved.name}.` }); const bounds = boundsForRoute(loadedRoute); if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 800 }); else mapRef.current?.flyTo({ center: [loadedCenter.lng, loadedCenter.lat], zoom: zoomForFeet(data.viewFeet || DEFAULT_VIEW_FEET, loadedCenter.lat), duration: 700 }); }
+  const routeJson = JSON.stringify({
+    name: routeName,
+    routeEngine: 'mapbox/directions-driving',
+    center,
+    start,
+    apexPoint: apex,
+    waypoints,
+    apexMiles,
+    route,
+    routeSteps,
+    distanceMiles,
+    durationMinutes,
+    viewFeet,
+    mapUpdatedAt
+  });
 
-  return <section className="grid gap-5 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
-    <div><h2 className="text-xl font-semibold">Interactive walk route planner</h2><p className="mt-1 text-sm text-slate-600">Dotted line is temporary. Short press sets Start. Long press adds a waypoint. Drag dotted-route handles to bend the temp route, then snap it to nearest streets.</p></div>
-    <input type="hidden" name="routeName" value={routeName} /><input type="hidden" name="routeJson" value={routeJson} />
-    <div className="grid gap-2 sm:grid-cols-4"><button type="button" onClick={locate} className="rounded-lg bg-slate-900 px-4 py-3 font-medium text-white">Use current location</button><button type="button" onClick={generateStreetRoute} className={`rounded-lg px-4 py-3 font-medium text-white ${routing ? 'bg-red-700' : 'bg-slate-900'}`}>{routing ? 'Cancel routing' : 'Snap route to streets'}</button><button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border px-4 py-3 font-medium disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save favorite'}</button><button type="button" onClick={clearRoute} className="rounded-lg border px-4 py-3 font-medium">Clear route</button></div>
-    <div className="grid gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex items-center gap-3"><button type="button" aria-label="Zoom in by 20 feet" onClick={() => applyViewFeet(viewFeet - ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">+</button><input aria-label="Map view radius in feet" type="range" min={MIN_VIEW_FEET} max={MAX_VIEW_FEET} step={ZOOM_STEP_FEET} value={viewFeet} onChange={(event) => applyViewFeet(Number(event.target.value))} className="min-w-0 flex-1" /><button type="button" aria-label="Zoom out by 20 feet" onClick={() => applyViewFeet(viewFeet + ZOOM_STEP_FEET)} className="h-11 w-11 rounded-lg border bg-white text-xl font-bold">−</button></div><p className="text-xs font-semibold text-slate-600">View radius: +{viewFeet.toLocaleString()} ft · session snapshot {mapUpdatedAt ? new Date(mapUpdatedAt).toLocaleTimeString() : 'not saved'}</p></div>
-    <p className="text-sm text-slate-600" role="status">{status}</p>
-    <div className="relative h-[460px] touch-none overflow-hidden rounded-2xl border bg-slate-100" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd}>
-      {token ? <Map id="walk-planner-map" ref={mapRef} reuseMaps mapboxAccessToken={token} initialViewState={{ latitude: center.lat, longitude: center.lng, zoom: zoomForFeet(viewFeet, center.lat) }} mapStyle="mapbox://styles/mapbox/streets-v12" dragRotate={false} touchPitch={false} doubleClickZoom={false} cursor="crosshair" onClick={handleShortPress} onContextMenu={handleLongPress} onDblClick={handleDoubleTap} onLoad={() => { const latest = useBuddiesStore.getState().walkPlanner; mapRef.current?.jumpTo({ center: [latest.center.lng, latest.center.lat], zoom: zoomForFeet(Math.max(latest.viewFeet, DEFAULT_VIEW_FEET), latest.center.lat) }); patchWalkPlanner({ mapLoaded: true, viewFeet: Math.max(latest.viewFeet, DEFAULT_VIEW_FEET), apexMiles: latest.apexMiles > MAX_RANDOM_LOOP_MILES ? 0.5 : latest.apexMiles, status: 'Map loaded. Short press sets Start; long press drops waypoints; drag route handles to bend the temp route.' }); }} onError={(event) => patchWalkPlanner({ mapLoaded: false, status: `Mapbox failed to render: ${event.error?.message || 'unknown map error'}` })} onMoveEnd={(event) => { const nextCenter = event.target.getCenter(); patchWalkPlanner({ center: { lat: nextCenter.lat, lng: nextCenter.lng }, viewFeet: Math.max(DEFAULT_VIEW_FEET, feetForZoom(event.target.getZoom(), nextCenter.lat)) }); }}>
-        <NavigationControl position="top-right" showCompass={false} /><GeolocateControl position="top-right" trackUserLocation showUserHeading={false} />
-        <Source id="walk-boundary" type="geojson" data={boundaryFeature}><Layer id="walk-boundary-fill" type="fill" paint={{ 'fill-color': '#0ea5e9', 'fill-opacity': 0.04 }} /><Layer id="walk-boundary-line" type="line" paint={{ 'line-color': '#0284c7', 'line-width': 2, 'line-opacity': 0.55 }} /></Source>
-        {tempLoopPoints.length > 1 ? <Source id="temp-route" type="geojson" data={tempRouteFeature}><Layer id="temp-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#f59e0b', 'line-width': draggingHandle ? 6 : 4, 'line-dasharray': [1.5, 1.5], 'line-opacity': draggingHandle ? 1 : 0.8 }} /></Source> : null}
-        {snapPreviewRoute.length > 1 ? <Source id="snap-preview-route" type="geojson" data={snapPreviewFeature}><Layer id="snap-preview-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#0284c7', 'line-width': 6, 'line-dasharray': [0.8, 1.2], 'line-opacity': 0.98 }} /></Source> : null}
-        {route.length > 1 ? <Source id="walk-route" type="geojson" data={routeFeature}><Layer id="walk-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#0284c7', 'line-width': 7, 'line-opacity': 0.95 }} /></Source> : null}
-        {start ? <Marker latitude={start.lat} longitude={start.lng} anchor="bottom" draggable onDragStart={() => setDraggingHandle('start')} onDragEnd={(event) => { setDraggingHandle(null); setStartPoint(pointFromEvent(event)); }}><button type="button" className={`rounded-xl border-2 border-white bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-lg ${draggingHandle === 'start' ? 'animate-pulse' : ''}`}>Start</button></Marker> : null}
-        {waypoints.map((waypoint, index) => <Marker key={`${waypoint.lat}-${waypoint.lng}-${index}`} latitude={waypoint.lat} longitude={waypoint.lng} anchor="bottom" draggable onDragStart={() => setDraggingHandle(`waypoint-${index}`)} onDragEnd={(event) => { setDraggingHandle(null); updateWaypoint(index, pointFromEvent(event)); }}><button type="button" onClick={(event) => { event.stopPropagation(); removeWaypoint(index); }} className={`relative flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-amber-500 text-2xl shadow-lg ${draggingHandle === `waypoint-${index}` ? 'animate-pulse' : ''}`} title={`Waypoint ${index + 1}. Tap to remove, drag to move.`}><span aria-hidden="true">🚩</span><span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-bold text-white">{index + 1}</span></button></Marker>)}
-        {routeHandles.map((handle) => <Marker key={handle.id} latitude={handle.point.lat} longitude={handle.point.lng} anchor="center" draggable onDragStart={() => { setDraggingHandle(handle.id); patchWalkPlanner({ status: 'Temporary route handle picked up. Drag it toward the desired street.' }); }} onDragEnd={(event) => { setDraggingHandle(null); insertWaypointAfter(handle.index, pointFromEvent(event)); }}><button type="button" className={`grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-blue-500 text-xs font-black text-white shadow-lg ${draggingHandle === handle.id ? 'animate-pulse ring-4 ring-blue-300' : ''}`} title="Drag to bend the temporary route">↕</button></Marker>)}
-      </Map> : <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600"><p>Mapbox public token is missing from this Production deployment.</p><p className="text-xs">Expected a browser-safe token beginning with pk.</p></div>}
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow">+{viewFeet.toLocaleString()} ft</div>{token && !mapLoaded ? <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow">Loading Mapbox…</div> : null}
-    </div>
-    <section className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Temporary route points</h3><p className="text-sm text-slate-600">Start plus {waypoints.length} waypoint{waypoints.length === 1 ? '' : 's'}. Dotted route loops back to Start and can be changed before snapping.</p></div><button type="button" disabled={!waypoints.length} onClick={() => removeWaypoint(waypoints.length - 1)} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-40">Undo last waypoint</button></div>{waypoints.length ? <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-2">{waypoints.map((waypoint, index) => <li key={`${waypoint.lat}-${waypoint.lng}-list`} className="rounded-lg bg-slate-50 px-3 py-2"><strong>🚩 {index + 1}</strong> · {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}</li>)}</ol> : null}</section>
-    <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium">Route name<input value={routeName} onChange={(event) => patchWalkPlanner({ routeName: event.target.value })} className="rounded-lg border px-3 py-3 text-base" /></label><label className="grid gap-2 text-sm font-medium">Random loop fallback: {clamp(apexMiles || 0.5, 0.1, MAX_RANDOM_LOOP_MILES).toFixed(1)} miles<input type="range" min="0.1" max={MAX_RANDOM_LOOP_MILES} step="0.1" value={clamp(apexMiles || 0.5, 0.1, MAX_RANDOM_LOOP_MILES)} onChange={(event) => patchWalkPlanner({ apexMiles: Number(event.target.value) })} /></label></div>
-    {routingError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700" role="alert">{routingError}</p> : null}
-    {routeSteps.length ? <div className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-700"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">Street route</p><p>{distanceMiles?.toFixed(2)} mi · {durationMinutes} min</p></div><ol className="mt-2 list-decimal space-y-1 pl-5">{routeSteps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}</ol></div> : null}
-    <div><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Favorite routes</h3><p className="text-xs text-slate-500">Map token cached this session: {tokenCachedAt ? new Date(tokenCachedAt).toLocaleTimeString() : 'not yet'}</p></div><div className="mt-3 grid gap-2">{favorites.length === 0 ? <p className="text-sm text-slate-600">No account favorites saved yet.</p> : favorites.map((favorite) => <div key={favorite.id} className="rounded-xl border p-3"><button type="button" onClick={() => loadFavorite(favorite)} className="w-full text-left"><span className="block font-medium">{favorite.name}</span><span className="block text-sm text-slate-500">{favorite.distanceMiles ? `${favorite.distanceMiles.toFixed(2)} mi` : 'Distance unavailable'}{favorite.durationMinutes ? ` · ${favorite.durationMinutes} min` : ''}</span></button><button type="button" onClick={() => deleteFavorite(favorite.id)} className="mt-2 text-xs font-medium text-red-700 underline">Remove favorite</button></div>)}</div></div>
-  </section>;
+  async function saveFavorite() {
+    if (!route.length) {
+      patchWalkPlanner({ status: 'Generate a driving route before saving it.' });
+      return;
+    }
+    patchWalkPlanner({ savingFavorite: true, status: 'Saving favorite route…' });
+    try {
+      const response = await fetch('/api/walk-routes/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routeJson })
+      });
+      const payload = await response.json() as { favorite?: SavedRoute; error?: string };
+      if (!response.ok || !payload.favorite) {
+        throw new Error(payload.error || 'Favorite route could not be saved.');
+      }
+      patchWalkPlanner({
+        favorites: [payload.favorite, ...favorites].slice(0, 20),
+        savingFavorite: false,
+        status: 'Favorite route saved.'
+      });
+    } catch (error) {
+      patchWalkPlanner({
+        savingFavorite: false,
+        status: error instanceof Error ? error.message : 'Favorite route could not be saved.'
+      });
+    }
+  }
+
+  async function deleteFavorite(id: string) {
+    try {
+      const response = await fetch('/api/walk-routes/favorites', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('Favorite route could not be removed.');
+      patchWalkPlanner({
+        favorites: favorites.filter((favorite) => favorite.id !== id),
+        status: 'Favorite route removed.'
+      });
+    } catch (error) {
+      patchWalkPlanner({
+        status: error instanceof Error ? error.message : 'Favorite route could not be removed.'
+      });
+    }
+  }
+
+  function loadFavorite(saved: SavedRoute) {
+    const data = JSON.parse(saved.routeJson) as {
+      name?: string;
+      center?: Coordinate;
+      start?: Coordinate;
+      apexPoint?: Coordinate;
+      waypoints?: Coordinate[];
+      apexMiles?: number;
+      route?: Coordinate[];
+      routeSteps?: string[];
+      distanceMiles?: number;
+      durationMinutes?: number;
+      viewFeet?: number;
+    };
+    const loadedRoute = data.route ?? [];
+    const loadedCenter = data.center ?? data.start ?? DEFAULT_CENTER;
+    patchWalkPlanner({
+      routeName: data.name || saved.name,
+      center: loadedCenter,
+      apexMiles: data.apexMiles || 0.5,
+      start: data.start || loadedCenter,
+      apex: data.apexPoint || null,
+      waypoints: Array.isArray(data.waypoints) ? data.waypoints.slice(0, MAX_WAYPOINTS) : [],
+      route: loadedRoute,
+      routeSteps: data.routeSteps || [],
+      distanceMiles: data.distanceMiles ?? saved.distanceMiles ?? null,
+      durationMinutes: data.durationMinutes ?? saved.durationMinutes ?? null,
+      viewFeet: normalizeFeet(data.viewFeet || DEFAULT_VIEW_FEET),
+      routingState: loadedRoute.length ? 'success' : 'idle',
+      routingError: null,
+      status: `Loaded favorite route: ${saved.name}.`
+    });
+    const bounds = boundsForRoute(loadedRoute);
+    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 55, duration: 800 });
+    else mapRef.current?.flyTo({
+      center: [loadedCenter.lng, loadedCenter.lat],
+      zoom: zoomForFeet(data.viewFeet || DEFAULT_VIEW_FEET, loadedCenter.lat),
+      duration: 700
+    });
+  }
+
+  return (
+    <section className="grid gap-5 bg-transparent p-0">
+      <input type="hidden" name="routeName" value={routeName} />
+      <input type="hidden" name="routeJson" value={routeJson} />
+
+      <div className="grid gap-2 sm:grid-cols-4">
+        <button type="button" onClick={locate} className="rounded-lg bg-slate-950/50 px-4 py-3 font-medium text-white backdrop-blur">Use location</button>
+        <button type="button" onClick={generateStreetRoute} className={`rounded-lg px-4 py-3 font-medium text-white backdrop-blur ${routing ? 'bg-red-700/60' : 'bg-slate-950/50'}`}>{routing ? 'Cancel routing' : 'Route to streets'}</button>
+        <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save route'}</button>
+        <button type="button" onClick={clearRoute} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur">Clear route</button>
+      </div>
+
+      <p className="rounded-lg bg-white/50 px-3 py-2 text-sm text-slate-800 backdrop-blur" role="status">{status}</p>
+
+      <div
+        className="relative h-[min(68vh,720px)] min-h-[460px] touch-none overflow-hidden rounded-2xl border border-white/30 bg-slate-100"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        {token ? (
+          <Map
+            id="walk-planner-map"
+            ref={mapRef}
+            reuseMaps
+            mapboxAccessToken={token}
+            initialViewState={{
+              latitude: center.lat,
+              longitude: center.lng,
+              zoom: zoomForFeet(viewFeet, center.lat)
+            }}
+            mapStyle="mapbox://styles/mapbox/streets-v12"
+            dragRotate={false}
+            touchPitch={false}
+            doubleClickZoom={false}
+            cursor="crosshair"
+            onClick={handleShortPress}
+            onContextMenu={handleLongPress}
+            onDblClick={handleDoubleTap}
+            onLoad={() => {
+              const latest = useBuddiesStore.getState().walkPlanner;
+              mapRef.current?.jumpTo({
+                center: [latest.center.lng, latest.center.lat],
+                zoom: zoomForFeet(Math.max(latest.viewFeet, DEFAULT_VIEW_FEET), latest.center.lat)
+              });
+              patchWalkPlanner({
+                mapLoaded: true,
+                viewFeet: Math.max(latest.viewFeet, DEFAULT_VIEW_FEET),
+                apexMiles: latest.apexMiles > MAX_RANDOM_LOOP_MILES ? 0.5 : latest.apexMiles,
+                status: 'Map loaded. Tap Start, long press flags, drag handles for alternate streets.'
+              });
+            }}
+            onError={(event) => patchWalkPlanner({
+              mapLoaded: false,
+              status: `Mapbox failed to render: ${event.error?.message || 'unknown map error'}`
+            })}
+            onMoveEnd={(event) => {
+              const nextCenter = event.target.getCenter();
+              patchWalkPlanner({
+                center: { lat: nextCenter.lat, lng: nextCenter.lng },
+                viewFeet: Math.max(DEFAULT_VIEW_FEET, feetForZoom(event.target.getZoom(), nextCenter.lat))
+              });
+            }}
+          >
+            <NavigationControl position="top-right" showCompass={false} />
+            <GeolocateControl position="top-right" trackUserLocation showUserHeading={false} />
+
+            <LiveMapLayers
+              activeDogs={activeDogs}
+              heatCells={heatCells}
+              reports={reports}
+              showRadar={showRadar}
+              showHeat={showHeat}
+              showReports={showReports}
+            />
+
+            <Source id="walk-boundary" type="geojson" data={boundaryFeature}>
+              <Layer id="walk-boundary-fill" type="fill" paint={{ 'fill-color': '#0ea5e9', 'fill-opacity': 0.04 }} />
+              <Layer id="walk-boundary-line" type="line" paint={{ 'line-color': '#0284c7', 'line-width': 2, 'line-opacity': 0.55 }} />
+            </Source>
+
+            {tempLoopPoints.length > 1 ? (
+              <Source id="temp-route" type="geojson" data={tempRouteFeature}>
+                <Layer id="temp-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#f59e0b', 'line-width': draggingHandle ? 6 : 4, 'line-dasharray': [1.5, 1.5], 'line-opacity': draggingHandle ? 1 : 0.8 }} />
+              </Source>
+            ) : null}
+
+            {snapPreviewRoute.length > 1 ? (
+              <Source id="snap-preview-route" type="geojson" data={snapPreviewFeature}>
+                <Layer id="snap-preview-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#0284c7', 'line-width': 6, 'line-dasharray': [0.8, 1.2], 'line-opacity': 0.98 }} />
+              </Source>
+            ) : null}
+
+            {route.length > 1 ? (
+              <Source id="walk-route" type="geojson" data={routeFeature}>
+                <Layer id="walk-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': '#0284c7', 'line-width': 7, 'line-opacity': 0.95 }} />
+              </Source>
+            ) : null}
+
+            {start ? (
+              <Marker
+                latitude={start.lat}
+                longitude={start.lng}
+                anchor="bottom"
+                draggable
+                onDragStart={() => setDraggingHandle('start')}
+                onDragEnd={(event) => {
+                  setDraggingHandle(null);
+                  setStartPoint(pointFromEvent(event));
+                }}
+              >
+                <button type="button" className={`rounded-xl border-2 border-white bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-lg ${draggingHandle === 'start' ? 'animate-pulse' : ''}`}>Start</button>
+              </Marker>
+            ) : null}
+
+            {waypoints.map((waypoint, index) => (
+              <Marker
+                key={`${waypoint.lat}-${waypoint.lng}-${index}`}
+                latitude={waypoint.lat}
+                longitude={waypoint.lng}
+                anchor="bottom"
+                draggable
+                onDragStart={() => setDraggingHandle(`waypoint-${index}`)}
+                onDragEnd={(event) => {
+                  setDraggingHandle(null);
+                  updateWaypoint(index, pointFromEvent(event));
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeWaypoint(index);
+                  }}
+                  className={`relative flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-amber-500 text-2xl shadow-lg ${draggingHandle === `waypoint-${index}` ? 'animate-pulse' : ''}`}
+                  title={`Flag ${index + 1}. Tap to remove, drag to move.`}
+                >
+                  <span aria-hidden="true">🚩</span>
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-bold text-white">{index + 1}</span>
+                </button>
+              </Marker>
+            ))}
+
+            {routeHandles.map((handle) => (
+              <Marker
+                key={handle.id}
+                latitude={handle.point.lat}
+                longitude={handle.point.lng}
+                anchor="center"
+                draggable
+                onDragStart={() => {
+                  setDraggingHandle(handle.id);
+                  patchWalkPlanner({ status: 'Route handle selected. Drag it toward the alternate street.' });
+                }}
+                onDragEnd={(event) => {
+                  setDraggingHandle(null);
+                  insertWaypointAfter(handle.index, pointFromEvent(event));
+                }}
+              >
+                <button type="button" className={`grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-blue-500 text-xs font-black text-white shadow-lg ${draggingHandle === handle.id ? 'animate-pulse ring-4 ring-blue-300' : ''}`} title="Drag to bend the temporary route">↕</button>
+              </Marker>
+            ))}
+          </Map>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600">
+            <p>Mapbox public token is missing from this Production deployment.</p>
+            <p className="text-xs">Expected a browser-safe token beginning with pk.</p>
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-white/50 px-3 py-1 text-xs font-semibold shadow backdrop-blur">+{viewFeet.toLocaleString()} ft</div>
+        {token && !mapLoaded ? <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/50 px-3 py-1 text-xs font-semibold shadow backdrop-blur">Loading Mapbox…</div> : null}
+      </div>
+
+      <section className="rounded-xl border border-white/40 bg-white/50 p-4 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Temporary route points</h3>
+            <p className="text-sm text-slate-600">Start plus {waypoints.length} flag{waypoints.length === 1 ? '' : 's'}; the final leg returns to Start.</p>
+          </div>
+          <button type="button" disabled={!waypoints.length} onClick={() => removeWaypoint(waypoints.length - 1)} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-40">Undo last flag</button>
+        </div>
+      </section>
+
+      <label className="grid gap-2 text-sm font-medium">Route name
+        <input value={routeName} onChange={(event) => patchWalkPlanner({ routeName: event.target.value })} className="rounded-lg border bg-white/70 px-3 py-3 text-base backdrop-blur" />
+      </label>
+
+      {routingError ? <p className="rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm font-medium text-red-700 backdrop-blur" role="alert">{routingError}</p> : null}
+
+      {routeSteps.length ? (
+        <div className="rounded-xl border bg-white/60 p-4 text-sm text-slate-700 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold">Driving route</p>
+            <p>{distanceMiles?.toFixed(2)} mi · {durationMinutes} min</p>
+          </div>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            {routeSteps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}
+          </ol>
+        </div>
+      ) : null}
+
+      <div className="rounded-xl bg-white/50 p-4 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Favorite routes</h3>
+          <p className="text-xs text-slate-500">Token cached: {tokenCachedAt ? new Date(tokenCachedAt).toLocaleTimeString() : 'not yet'}</p>
+        </div>
+        <div className="mt-3 grid gap-2">
+          {favorites.length === 0 ? <p className="text-sm text-slate-600">No account favorites saved yet.</p> : favorites.map((favorite) => (
+            <div key={favorite.id} className="rounded-xl border bg-white/60 p-3">
+              <button type="button" onClick={() => loadFavorite(favorite)} className="w-full text-left">
+                <span className="block font-medium">{favorite.name}</span>
+                <span className="block text-sm text-slate-500">{favorite.distanceMiles ? `${favorite.distanceMiles.toFixed(2)} mi` : 'Distance unavailable'}{favorite.durationMinutes ? ` · ${favorite.durationMinutes} min` : ''}</span>
+              </button>
+              <button type="button" onClick={() => deleteFavorite(favorite.id)} className="mt-2 text-xs font-medium text-red-700 underline">Remove favorite</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
