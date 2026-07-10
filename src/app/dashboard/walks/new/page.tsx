@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import WalkRoutePlanner from '@/components/WalkRoutePlanner';
+import UnifiedWalkWorkspace from '@/components/map/UnifiedWalkWorkspace';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getPublicMapboxToken } from '@/lib/mapboxToken';
@@ -46,10 +47,7 @@ async function createWalkAction(formData: FormData) {
   });
 
   if (!dog) redirect(`${UI_ROUTES.createWalk}?error=dog`);
-
-  if (startsAt.getTime() < earliestAllowed || !Number.isFinite(durationMin)) {
-    redirect(`${UI_ROUTES.createWalk}?error=time`);
-  }
+  if (startsAt.getTime() < earliestAllowed || !Number.isFinite(durationMin)) redirect(`${UI_ROUTES.createWalk}?error=time`);
 
   await prisma.walk.create({
     data: {
@@ -74,15 +72,46 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
   const { error } = await searchParams;
+  const now = new Date();
 
-  const [dogs, mapboxToken] = await Promise.all([
-    prisma.dog.findMany({
-      where: { ownerId: user.id },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, breed: true }
+  const [dogs, mapboxToken, activeDogsRaw, reportsRaw, memoriesRaw] = await Promise.all([
+    prisma.dog.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, breed: true } }),
+    Promise.resolve(getPublicMapboxToken()),
+    prisma.dogPresence.findMany({
+      where: { expiresAt: { gt: now } },
+      orderBy: { lastHeartbeatAt: 'desc' },
+      take: 60,
+      include: { dog: { select: { id: true, name: true, breed: true } } }
     }),
-    Promise.resolve(getPublicMapboxToken())
+    prisma.mapReport.findMany({ where: { expiresAt: { gt: now } }, orderBy: { createdAt: 'desc' }, take: 30, select: { id: true, title: true, type: true } }),
+    prisma.routeMemory.findMany({ where: { dog: { ownerId: user.id } }, orderBy: [{ occurrences: 'desc' }, { lastWalkedAt: 'desc' }], take: 8, include: { dog: { select: { name: true } } } })
   ]);
+
+  const userDogIds = dogs.map((dog) => dog.id);
+  const activeDogIds = activeDogsRaw.map((presence) => presence.dogId);
+  const buddyLinks = userDogIds.length && activeDogIds.length
+    ? await prisma.dogBuddy.findMany({
+        where: {
+          OR: [
+            { dogAId: { in: userDogIds }, dogBId: { in: activeDogIds } },
+            { dogAId: { in: activeDogIds }, dogBId: { in: userDogIds } }
+          ]
+        },
+        select: { dogAId: true, dogBId: true }
+      })
+    : [];
+  const buddyIds = new Set(buddyLinks.flatMap((link) => [link.dogAId, link.dogBId]));
+
+  const activeDogs = activeDogsRaw.map((presence) => ({
+    id: presence.id,
+    dogName: presence.dog.name,
+    breed: presence.dog.breed,
+    status: presence.status,
+    walkingScore: presence.walkingScore,
+    isBuddy: buddyIds.has(presence.dogId)
+  }));
+  const reports = reportsRaw.map((report) => ({ id: report.id, title: report.title, type: report.type }));
+  const routeMemories = memoriesRaw.map((route) => ({ id: route.id, name: route.name, dogName: route.dog.name, occurrences: route.occurrences, confidence: route.confidence }));
 
   const errorMessage = error === 'dog'
     ? 'Unable to create the walk. Select one of your dog profiles.'
@@ -92,35 +121,45 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
         ? 'Unable to create the walk. Confirm the dog profile and start time, then retry.'
         : null;
 
-  return (
-    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <p className="text-sm font-medium text-slate-500">Buddies Phase 2 Walk Composer</p>
-      <h1 className="mt-2 text-3xl font-bold">Create walk</h1>
-      <p className="mt-2 text-slate-600">Generate a route snapped to walking streets and save its geometry, directions, distance, and duration.</p>
-
-      {errorMessage ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div> : null}
-
-      {dogs.length === 0 ? (
-        <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">No profiles yet</h2>
+  if (dogs.length === 0) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-semibold">No profiles yet</h1>
           <p className="mt-2 text-slate-600">Create a dog profile before creating a walk.</p>
           <Link href={UI_ROUTES.addProfile} className="mt-5 inline-block rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Add Profile</Link>
         </section>
-      ) : (
-        <form action={createWalkAction} className="mt-8 grid gap-5">
-          <section className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-            <label className="grid gap-2 text-sm font-medium">Dog profile<select name="dogId" required defaultValue={dogs[0]?.id} className="rounded-lg border px-3 py-3 text-base">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}</select></label>
-            <label className="grid gap-2 text-sm font-medium">Start time<input name="startsAt" type="datetime-local" required defaultValue={defaultStartTimeValue()} className="rounded-lg border px-3 py-3 text-base" /></label>
-            <label className="grid gap-2 text-sm font-medium">Duration<select name="durationMin" defaultValue="30" className="rounded-lg border px-3 py-3 text-base"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label>
-            <label className="grid gap-2 text-sm font-medium">Notes<textarea name="notes" rows={4} maxLength={1000} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border px-3 py-3 text-base" /></label>
-          </section>
+      </main>
+    );
+  }
 
-          <WalkRoutePlanner initialToken={mapboxToken} />
+  const walkDetails = (
+    <section className="grid gap-4 text-slate-950">
+      {errorMessage ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div> : null}
+      <label className="grid gap-2 text-sm font-medium text-white">Dog profile<select name="dogId" required defaultValue={dogs[0]?.id} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}</select></label>
+      <label className="grid gap-2 text-sm font-medium text-white">Start time<input name="startsAt" type="datetime-local" required defaultValue={defaultStartTimeValue()} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" /></label>
+      <label className="grid gap-2 text-sm font-medium text-white">Duration<select name="durationMin" defaultValue="30" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label>
+      <label className="grid gap-2 text-sm font-medium text-white">Notes<textarea name="notes" rows={4} maxLength={1000} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" /></label>
+    </section>
+  );
 
-          <button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Create walk</button>
-          <Link href={UI_ROUTES.walks} className="rounded-lg border px-5 py-3 text-center font-medium">Back to Walks</Link>
-        </form>
-      )}
-    </main>
+  const actions = (
+    <div className="grid gap-2">
+      <button className="rounded-lg bg-white px-5 py-3 font-medium text-slate-950">Create walk</button>
+      <Link href={UI_ROUTES.walks} className="rounded-lg border border-white/30 px-5 py-3 text-center font-medium text-white">Back to Walks</Link>
+    </div>
+  );
+
+  return (
+    <form action={createWalkAction}>
+      <UnifiedWalkWorkspace
+        planner={<WalkRoutePlanner initialToken={mapboxToken} />}
+        walkDetails={walkDetails}
+        actions={actions}
+        activeDogs={activeDogs}
+        reports={reports}
+        routeMemories={routeMemories}
+      />
+    </form>
   );
 }
