@@ -48,7 +48,9 @@ async function createWalkAction(formData: FormData) {
   });
 
   if (!dog) redirect(`${UI_ROUTES.createWalk}?error=dog`);
-  if (startsAt.getTime() < earliestAllowed || !Number.isFinite(durationMin)) redirect(`${UI_ROUTES.createWalk}?error=time`);
+  if (startsAt.getTime() < earliestAllowed || !Number.isFinite(durationMin)) {
+    redirect(`${UI_ROUTES.createWalk}?error=time`);
+  }
 
   await prisma.walk.create({
     data: {
@@ -69,7 +71,11 @@ async function createWalkAction(formData: FormData) {
   redirect(`${UI_ROUTES.walks}?created=1`);
 }
 
-export default async function NewWalkPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function NewWalkPage({
+  searchParams
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
   const { error } = await searchParams;
@@ -77,7 +83,11 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   const heatCutoff = new Date(now.getTime() - 15 * 60_000);
 
   const [dogs, mapboxToken, activeDogsRaw, reportsRaw, memoriesRaw] = await Promise.all([
-    prisma.dog.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, breed: true } }),
+    prisma.dog.findMany({
+      where: { ownerId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, breed: true }
+    }),
     Promise.resolve(getPublicMapboxToken()),
     prisma.dogPresence.findMany({
       where: { expiresAt: { gt: now }, lastHeartbeatAt: { gte: heatCutoff } },
@@ -91,7 +101,12 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
       take: 30,
       select: { id: true, title: true, type: true, latitude: true, longitude: true }
     }),
-    prisma.routeMemory.findMany({ where: { dog: { ownerId: user.id } }, orderBy: [{ occurrences: 'desc' }, { lastWalkedAt: 'desc' }], take: 8, include: { dog: { select: { name: true } } } })
+    prisma.routeMemory.findMany({
+      where: { dog: { ownerId: user.id } },
+      orderBy: [{ occurrences: 'desc' }, { lastWalkedAt: 'desc' }],
+      take: 8,
+      include: { dog: { select: { name: true } } }
+    })
   ]);
 
   const userDogIds = dogs.map((dog) => dog.id);
@@ -135,16 +150,43 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
     const ageMinutes = Math.max(0, (now.getTime() - presence.lastHeartbeatAt.getTime()) / 60_000);
     const recencyWeight = Math.max(0.05, 1 - ageMinutes / 15);
     const confidenceWeight = Math.max(0.1, Math.min(1, presence.walkingScore / 100));
-    const current = cells.get(key) ?? { key, latitude, longitude, activeDogs: 0, buddies: 0, weight: 0 };
+    const current = cells.get(key) ?? {
+      key,
+      latitude,
+      longitude,
+      activeDogs: 0,
+      buddies: 0,
+      weight: 0
+    };
     current.activeDogs += 1;
     if (buddyIds.has(presence.dogId)) current.buddies += 1;
     current.weight = Math.min(1, current.weight + recencyWeight * confidenceWeight);
     cells.set(key, current);
     return cells;
-  }, new Map<string, { key: string; latitude: number; longitude: number; activeDogs: number; buddies: number; weight: number }>()).values());
+  }, new Map<string, {
+    key: string;
+    latitude: number;
+    longitude: number;
+    activeDogs: number;
+    buddies: number;
+    weight: number;
+  }>()).values());
 
-  const reports = reportsRaw.map((report) => ({ id: report.id, title: report.title, type: report.type, latitude: report.latitude, longitude: report.longitude }));
-  const routeMemories = memoriesRaw.map((route) => ({ id: route.id, name: route.name, dogName: route.dog.name, occurrences: route.occurrences, confidence: route.confidence }));
+  const reports = reportsRaw.map((report) => ({
+    id: report.id,
+    title: report.title,
+    type: report.type,
+    latitude: report.latitude,
+    longitude: report.longitude
+  }));
+
+  const routeMemories = memoriesRaw.map((route) => ({
+    id: route.id,
+    name: route.name,
+    dogName: route.dog.name,
+    occurrences: route.occurrences,
+    confidence: route.confidence
+  }));
 
   const errorMessage = error === 'dog'
     ? 'Unable to create the walk. Select one of your dog profiles.'
@@ -169,10 +211,26 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   const walkDetails = (
     <section className="grid gap-4 text-slate-950">
       {errorMessage ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div> : null}
-      <label className="grid gap-2 text-sm font-medium text-white">Dog profile<select name="dogId" required defaultValue={dogs[0]?.id} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}</select></label>
-      <label className="grid gap-2 text-sm font-medium text-white">Start time<input name="startsAt" type="datetime-local" required defaultValue={defaultStartTimeValue()} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" /></label>
-      <label className="grid gap-2 text-sm font-medium text-white">Duration<select name="durationMin" defaultValue="30" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label>
-      <label className="grid gap-2 text-sm font-medium text-white">Notes<textarea name="notes" rows={4} maxLength={1000} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" /></label>
+      <label className="grid gap-2 text-sm font-medium text-white">Dog profile
+        <select name="dogId" required defaultValue={dogs[0]?.id} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950">
+          {dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</option>)}
+        </select>
+      </label>
+      <label className="grid gap-2 text-sm font-medium text-white">Start time
+        <input name="startsAt" type="datetime-local" required defaultValue={defaultStartTimeValue()} className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" />
+      </label>
+      <label className="grid gap-2 text-sm font-medium text-white">Duration
+        <select name="durationMin" defaultValue="30" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950">
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="90">90 minutes</option>
+        </select>
+      </label>
+      <label className="grid gap-2 text-sm font-medium text-white">Notes
+        <textarea name="notes" rows={4} maxLength={1000} placeholder="Optional pickup, schedule, or temperament notes" className="rounded-lg border bg-white/90 px-3 py-3 text-base text-slate-950" />
+      </label>
     </section>
   );
 
@@ -186,7 +244,14 @@ export default async function NewWalkPage({ searchParams }: { searchParams: Prom
   return (
     <form action={createWalkAction}>
       <UnifiedWalkWorkspace
-        planner={<WalkRoutePlanner initialToken={mapboxToken} />}
+        planner={(
+          <WalkRoutePlanner
+            initialToken={mapboxToken}
+            activeDogs={activeDogs}
+            heatCells={heatCells}
+            reports={reports}
+          />
+        )}
         walkDetails={walkDetails}
         actions={actions}
         activeDogs={activeDogs}
