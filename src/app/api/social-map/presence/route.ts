@@ -5,9 +5,50 @@ import { neighborhoodKey, presenceStatusFromScore, walkingConfidence } from '@/l
 
 export const dynamic = 'force-dynamic';
 
+type DeviceLocInput = {
+  lat?: unknown;
+  lng?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  accuracy?: unknown;
+  accuracyMeters?: unknown;
+  speed?: unknown;
+  speedMph?: unknown;
+  heading?: unknown;
+  altitude?: unknown;
+  timestamp?: unknown;
+};
+
 function numeric(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDeviceLoc(payload: Record<string, unknown>) {
+  const raw = (payload.device_loc && typeof payload.device_loc === 'object'
+    ? payload.device_loc
+    : {}) as DeviceLocInput;
+
+  const latitude = numeric(raw.lat ?? raw.latitude ?? payload.latitude);
+  const longitude = numeric(raw.lng ?? raw.longitude ?? payload.longitude);
+  const accuracyMeters = numeric(raw.accuracyMeters ?? raw.accuracy ?? payload.accuracyMeters);
+  const speedMph = numeric(raw.speedMph ?? payload.speedMph);
+  const heading = numeric(raw.heading ?? payload.heading);
+  const altitude = numeric(raw.altitude);
+  const timestampValue = raw.timestamp;
+  const timestamp = typeof timestampValue === 'string' || typeof timestampValue === 'number'
+    ? new Date(timestampValue)
+    : new Date();
+
+  return {
+    latitude,
+    longitude,
+    accuracyMeters,
+    speedMph,
+    heading,
+    altitude,
+    timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -15,16 +56,18 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
 
   const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-  const dogId = String(payload?.dogId ?? '').trim();
-  const walkId = String(payload?.walkId ?? '').trim() || null;
-  const latitude = numeric(payload?.latitude);
-  const longitude = numeric(payload?.longitude);
-  const speedMph = numeric(payload?.speedMph);
-  const accuracyMeters = numeric(payload?.accuracyMeters);
-  const heading = numeric(payload?.heading);
+  if (!payload) return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
 
-  if (!dogId || latitude === null || longitude === null) {
-    return NextResponse.json({ error: 'dogId, latitude, and longitude are required.' }, { status: 400 });
+  const dogId = String(payload.dogId ?? '').trim();
+  const walkId = String(payload.walkId ?? '').trim() || null;
+  const deviceLoc = normalizeDeviceLoc(payload);
+
+  if (!dogId || deviceLoc.latitude === null || deviceLoc.longitude === null) {
+    return NextResponse.json({ error: 'dogId and device_loc.lat/device_loc.lng are required.' }, { status: 400 });
+  }
+
+  if (deviceLoc.latitude < -90 || deviceLoc.latitude > 90 || deviceLoc.longitude < -180 || deviceLoc.longitude > 180) {
+    return NextResponse.json({ error: 'device_loc coordinates are outside valid latitude/longitude bounds.' }, { status: 400 });
   }
 
   const dog = await prisma.dog.findFirst({
@@ -33,20 +76,20 @@ export async function POST(request: NextRequest) {
   });
   if (!dog) return NextResponse.json({ error: 'Dog not found.' }, { status: 404 });
 
-  const routeMemoryId = typeof payload?.routeMemoryId === 'string' ? payload.routeMemoryId : null;
+  const routeMemoryId = typeof payload.routeMemoryId === 'string' ? payload.routeMemoryId : null;
   const score = walkingConfidence({
-    explicitStart: payload?.explicitStart === true || Boolean(walkId),
-    speedMph,
-    motionCadence: payload?.motionCadence === true,
+    explicitStart: payload.explicitStart === true || Boolean(walkId),
+    speedMph: deviceLoc.speedMph,
+    motionCadence: payload.motionCadence === true,
     knownRouteMatch: Boolean(routeMemoryId),
-    scheduledWindow: payload?.scheduledWindow === true,
-    parkGeofence: payload?.parkGeofence === true,
+    scheduledWindow: payload.scheduledWindow === true,
+    parkGeofence: payload.parkGeofence === true,
     minutesSinceHeartbeat: 0
   });
-  const status = presenceStatusFromScore(score, speedMph, 0);
-  const now = new Date();
+  const status = presenceStatusFromScore(score, deviceLoc.speedMph, 0);
+  const now = deviceLoc.timestamp;
   const expiresAt = new Date(now.getTime() + 20 * 60 * 1000);
-  const key = neighborhoodKey(latitude, longitude);
+  const key = neighborhoodKey(deviceLoc.latitude, deviceLoc.longitude);
 
   const presence = await prisma.dogPresence.create({
     data: {
@@ -54,11 +97,11 @@ export async function POST(request: NextRequest) {
       ownerId: dog.ownerId,
       walkId,
       routeMemoryId,
-      latitude,
-      longitude,
-      speedMph,
-      accuracyMeters,
-      heading,
+      latitude: deviceLoc.latitude,
+      longitude: deviceLoc.longitude,
+      speedMph: deviceLoc.speedMph,
+      accuracyMeters: deviceLoc.accuracyMeters,
+      heading: deviceLoc.heading,
       walkingScore: score,
       status,
       neighborhoodKey: key,
@@ -75,6 +118,15 @@ export async function POST(request: NextRequest) {
       status: presence.status,
       walkingScore: presence.walkingScore,
       neighborhoodKey: presence.neighborhoodKey,
+      device_loc: {
+        lat: presence.latitude,
+        lng: presence.longitude,
+        accuracyMeters: presence.accuracyMeters,
+        speedMph: presence.speedMph,
+        heading: presence.heading,
+        altitude: deviceLoc.altitude,
+        timestamp: presence.lastHeartbeatAt.toISOString()
+      },
       expiresAt: presence.expiresAt.toISOString()
     }
   }, { status: 201 });
