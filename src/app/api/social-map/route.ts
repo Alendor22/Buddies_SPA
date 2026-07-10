@@ -5,6 +5,8 @@ import { heatLevel, neighborhoodKey } from '@/lib/socialMap';
 
 export const dynamic = 'force-dynamic';
 
+const LIVE_HEAT_WINDOW_MS = 15 * 60 * 1000;
+
 function numberParam(value: string | null) {
   if (!value) return null;
   const parsed = Number(value);
@@ -13,6 +15,31 @@ function numberParam(value: string | null) {
 
 function avatarFor(name: string) {
   return name.trim().slice(0, 2).toUpperCase();
+}
+
+function deviceLocFor(presence: {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number | null;
+  speedMph: number | null;
+  heading: number | null;
+  lastHeartbeatAt: Date;
+}) {
+  return {
+    lat: presence.latitude,
+    lng: presence.longitude,
+    accuracyMeters: presence.accuracyMeters,
+    speedMph: presence.speedMph,
+    heading: presence.heading,
+    timestamp: presence.lastHeartbeatAt.toISOString()
+  };
+}
+
+function heatWeight(lastHeartbeatAt: Date, walkingScore: number, now: Date) {
+  const ageMs = Math.max(0, now.getTime() - lastHeartbeatAt.getTime());
+  const recency = Math.max(0, 1 - ageMs / LIVE_HEAT_WINDOW_MS);
+  const confidence = Math.max(0.2, Math.min(1, walkingScore / 100));
+  return Number((recency * confidence).toFixed(3));
 }
 
 export async function GET(request: NextRequest) {
@@ -31,6 +58,7 @@ export async function GET(request: NextRequest) {
         ? neighborhoodKey(latitude, longitude)
         : userWithLocation?.neighborhoodKey ?? undefined;
     const now = new Date();
+    const heatCutoff = new Date(now.getTime() - LIVE_HEAT_WINDOW_MS);
 
     const userDogs = user
       ? await prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } })
@@ -39,7 +67,11 @@ export async function GET(request: NextRequest) {
 
     const [presences, reports, routeMemories] = await Promise.all([
       prisma.dogPresence.findMany({
-        where: { expiresAt: { gt: now }, ...(key ? { neighborhoodKey: key } : {}) },
+        where: {
+          expiresAt: { gt: now },
+          lastHeartbeatAt: { gte: heatCutoff },
+          ...(key ? { neighborhoodKey: key } : {})
+        },
         orderBy: { lastHeartbeatAt: 'desc' },
         take: 100,
         include: {
@@ -79,18 +111,34 @@ export async function GET(request: NextRequest) {
 
     const heatCells = Array.from(
       presences.reduce((cells, presence) => {
-        const cellKey = neighborhoodKey(presence.latitude, presence.longitude);
+        const deviceLoc = deviceLocFor(presence);
+        const cellKey = neighborhoodKey(deviceLoc.lat, deviceLoc.lng);
         const [cellLatitude, cellLongitude] = cellKey.split(',').map(Number);
-        const current = cells.get(cellKey) ?? { key: cellKey, latitude: cellLatitude, longitude: cellLongitude, activeDogs: 0, buddies: 0 };
+        const weight = heatWeight(presence.lastHeartbeatAt, presence.walkingScore, now);
+        const current = cells.get(cellKey) ?? {
+          key: cellKey,
+          latitude: cellLatitude,
+          longitude: cellLongitude,
+          activeDogs: 0,
+          buddies: 0,
+          weight: 0
+        };
         current.activeDogs += 1;
+        current.weight += weight;
         if (buddyDogIds.has(presence.dogId)) current.buddies += 1;
         cells.set(cellKey, current);
         return cells;
-      }, new Map<string, { key: string; latitude: number; longitude: number; activeDogs: number; buddies: number }>()).values()
-    ).map((cell) => ({ ...cell, level: heatLevel(cell.activeDogs) }));
+      }, new Map<string, { key: string; latitude: number; longitude: number; activeDogs: number; buddies: number; weight: number }>()).values()
+    ).map((cell) => ({
+      ...cell,
+      weight: Number(cell.weight.toFixed(3)),
+      level: heatLevel(Math.max(cell.activeDogs, Math.ceil(cell.weight)))
+    }));
 
     return NextResponse.json({
       authenticated: Boolean(user),
+      source: 'device_loc',
+      heatWindowMinutes: LIVE_HEAT_WINDOW_MS / 60000,
       center: latitude != null && longitude != null ? { latitude, longitude, neighborhoodKey: key } : null,
       activeDogs: presences.map((presence) => ({
         id: presence.id,
@@ -100,10 +148,12 @@ export async function GET(request: NextRequest) {
         breed: presence.dog.breed,
         avatar: avatarFor(presence.dog.name),
         photoUrl: presence.dog.photoUrl,
+        device_loc: deviceLocFor(presence),
         latitude: presence.latitude,
         longitude: presence.longitude,
         status: presence.status,
         walkingScore: presence.walkingScore,
+        heatWeight: heatWeight(presence.lastHeartbeatAt, presence.walkingScore, now),
         isBuddy: buddyDogIds.has(presence.dogId),
         halo: buddyDogIds.has(presence.dogId) ? 'ice-blue' : 'neutral',
         routeMemory: presence.routeMemory,
