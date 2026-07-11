@@ -8,18 +8,15 @@ export async function loginAction(formData: FormData) {
   const email = normalizeEmail(String(formData.get('email') ?? ''));
   const password = String(formData.get('password') ?? '');
 
-  if (!email || !password) {
-    redirect('/auth/login?error=missing');
-  }
+  if (!email || !password) redirect('/auth/login?error=missing');
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, passwordHash: true }
+    select: { id: true, passwordHash: true, emailVerifiedAt: true }
   });
 
-  if (!user || !verifyPassword(password, user.passwordHash)) {
-    redirect('/auth/login?error=invalid');
-  }
+  if (!user || !verifyPassword(password, user.passwordHash)) redirect('/auth/login?error=invalid');
+  if (!user.emailVerifiedAt) redirect(`/auth/check-email?email=${encodeURIComponent(email)}&unverified=1`);
 
   await createSession(user.id);
   redirect('/dashboard');
