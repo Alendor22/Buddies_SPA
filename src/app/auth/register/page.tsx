@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createSession, hashPassword, normalizeEmail } from '@/lib/auth';
+import { createAuthToken, hashPassword, normalizeEmail } from '@/lib/auth';
+import { absoluteAppUrl, sendTransactionalEmail } from '@/lib/email';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -14,28 +15,46 @@ async function registerAction(formData: FormData) {
 
   if (!displayName || !email || password.length < 8) redirect('/auth/register?error=invalid');
 
-  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) redirect('/auth/login?error=exists');
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, emailVerifiedAt: true } });
+  if (existing?.emailVerifiedAt) redirect('/auth/login?error=exists');
 
-  const user = await prisma.user.create({
-    data: { email, displayName, passwordHash: hashPassword(password), emailVerifiedAt: new Date() },
-    select: { id: true }
-  });
+  const user = existing
+    ? await prisma.user.update({ where: { id: existing.id }, data: { displayName, passwordHash: hashPassword(password), emailVerifiedAt: null }, select: { id: true, email: true } })
+    : await prisma.user.create({ data: { email, displayName, passwordHash: hashPassword(password), emailVerifiedAt: null }, select: { id: true, email: true } });
 
-  await createSession(user.id);
-  redirect('/dashboard?registered=1');
+  const token = createAuthToken(user.id, user.email, 'verify-email');
+  const verificationUrl = absoluteAppUrl(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+
+  try {
+    await sendTransactionalEmail({
+      to: user.email,
+      subject: 'Verify your Buddies account',
+      html: `<p>Confirm your email address to activate your Buddies account.</p><p><a href="${verificationUrl}">Verify email</a></p><p>This link expires in 24 hours.</p>`,
+      text: `Confirm your Buddies account: ${verificationUrl}\n\nThis link expires in 24 hours.`
+    });
+  } catch {
+    redirect('/auth/register?error=email');
+  }
+
+  redirect(`/auth/check-email?email=${encodeURIComponent(user.email)}`);
 }
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
+  const errorMessage = error === 'email'
+    ? 'The account was created, but the verification email could not be sent. Try again after email delivery is configured.'
+    : error
+      ? 'Enter a valid name, email, and password of at least 8 characters.'
+      : null;
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div>
-        <p className="text-sm font-medium text-slate-500">Buddies V2.3 Mobile Registration</p>
+        <p className="text-sm font-medium text-slate-500">Buddies secure registration</p>
         <h1 className="mt-2 text-3xl font-bold">Create account</h1>
-        <p className="mt-2 text-slate-600">Create an owner account and sign in without using a route handler.</p>
+        <p className="mt-2 text-slate-600">A verification link will be sent to your email before the account can sign in.</p>
       </div>
-      {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Enter a valid name, email, and password of at least 8 characters.</div> : null}
+      {errorMessage ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div> : null}
       <form action={registerAction} className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
         <label className="grid gap-2 text-sm font-medium">Display name<input name="displayName" autoComplete="name" maxLength={120} required className="rounded-lg border px-3 py-3 text-base" /></label>
         <label className="grid gap-2 text-sm font-medium">Email<input name="email" type="email" autoComplete="email" required className="rounded-lg border px-3 py-3 text-base" /></label>
