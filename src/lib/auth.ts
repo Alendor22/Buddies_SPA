@@ -1,12 +1,16 @@
 import { cookies, headers } from 'next/headers';
-import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
 
 export const SESSION_COOKIE = 'buddies_session';
 export const LOGOUT_COOKIE = 'buddies_signed_out';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const VERIFY_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24;
+const RESET_TOKEN_MAX_AGE_SECONDS = 60 * 30;
 
 export type CurrentUser = { id: string; email: string; displayName: string; role: string };
+type AuthTokenPurpose = 'verify-email' | 'reset-password';
+type AuthTokenPayload = { userId: string; email: string; purpose: AuthTokenPurpose; expiresAt: number };
 
 export function normalizeEmail(email: string) { return email.trim().toLowerCase(); }
 
@@ -31,9 +35,38 @@ export function verifyPassword(password: string, storedHash: string | null | und
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }
 
+function authSecret() {
+  return process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'dev-only-buddies-secret';
+}
+
 function signSession(userId: string) {
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'dev-only-buddies-secret';
-  return createHash('sha256').update(`${userId}.${secret}`).digest('hex');
+  return createHash('sha256').update(`${userId}.${authSecret()}`).digest('hex');
+}
+
+function signAuthPayload(encodedPayload: string) {
+  return createHmac('sha256', authSecret()).update(encodedPayload).digest('base64url');
+}
+
+export function createAuthToken(userId: string, email: string, purpose: AuthTokenPurpose) {
+  const maxAge = purpose === 'verify-email' ? VERIFY_TOKEN_MAX_AGE_SECONDS : RESET_TOKEN_MAX_AGE_SECONDS;
+  const payload: AuthTokenPayload = { userId, email: normalizeEmail(email), purpose, expiresAt: Math.floor(Date.now() / 1000) + maxAge };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `${encoded}.${signAuthPayload(encoded)}`;
+}
+
+export function verifyAuthToken(token: string, purpose: AuthTokenPurpose): AuthTokenPayload | null {
+  const [encoded, signature] = token.split('.');
+  if (!encoded || !signature) return null;
+  const expected = Buffer.from(signAuthPayload(encoded));
+  const received = Buffer.from(signature);
+  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as AuthTokenPayload;
+    if (!payload.userId || !payload.email || payload.purpose !== purpose || payload.expiresAt < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 export function encodeSession(userId: string) {
@@ -92,8 +125,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const userId = decodeSession(store.get(SESSION_COOKIE)?.value);
   if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, displayName: true, role: true } });
-  return user ? { ...user, role: user.role.toString() } : null;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, displayName: true, role: true, emailVerifiedAt: true } });
+  return user?.emailVerifiedAt ? { id: user.id, email: user.email, displayName: user.displayName, role: user.role.toString() } : null;
 }
 
 export async function requireCurrentUser() { const user = await getCurrentUser(); if (!user) throw new Error('Authentication required'); return user; }
