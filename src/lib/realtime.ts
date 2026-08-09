@@ -1,4 +1,4 @@
-import Ably from 'ably';
+import * as Ably from 'ably';
 import { realtimeChannels } from '@/lib/realtimeChannels';
 
 let client: Ably.Realtime | null = null;
