@@ -14,6 +14,7 @@ import LiveMapLayers, {
   type HeatCellMapItem,
   type ReportMapItem
 } from '@/components/map/LiveMapLayers';
+import { useMapboxConfig } from '@/components/providers/MapboxProvider';
 import {
   DEFAULT_CENTER,
   DEFAULT_VIEW_FEET,
@@ -41,7 +42,6 @@ type MapPressEvent = {
 };
 
 type Props = {
-  initialToken: string;
   activeDogs?: ActiveDogMapItem[];
   heatCells?: HeatCellMapItem[];
   reports?: ReportMapItem[];
@@ -155,7 +155,6 @@ function formatStep(step: { instruction: string; distanceFeet: number }) {
 }
 
 export default function WalkRoutePlanner({
-  initialToken,
   activeDogs = [],
   heatCells = [],
   reports = [],
@@ -171,10 +170,9 @@ export default function WalkRoutePlanner({
   const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<string | null>(null);
   const [snapPreviewRoute, setSnapPreviewRoute] = useState<Coordinate[]>([]);
-  const { walkPlanner, hydrateMapToken, patchWalkPlanner, resetRoute } = useBuddiesStore();
+  const { token, loading: mapConfigLoading, error: mapConfigError, refresh: refreshMapConfig } = useMapboxConfig();
+  const { walkPlanner, patchWalkPlanner, resetRoute } = useBuddiesStore();
   const {
-    token: cachedToken,
-    tokenCachedAt,
     center,
     start,
     apex,
@@ -194,7 +192,6 @@ export default function WalkRoutePlanner({
     mapLoaded,
     mapUpdatedAt
   } = walkPlanner;
-  const token = initialToken || cachedToken;
   const routing = routingState === 'routing';
   const editPoints = useMemo(() => [start || center, ...waypoints], [center, start, waypoints]);
   const tempLoopPoints = useMemo(
@@ -214,17 +211,6 @@ export default function WalkRoutePlanner({
           apexMiles: latest.apexMiles > MAX_RANDOM_LOOP_MILES ? 0.5 : latest.apexMiles
         });
       }
-      if (initialToken) hydrateMapToken(initialToken);
-      else if (!latest.token) {
-        try {
-          const response = await fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' });
-          const payload = await response.json() as { token?: string; error?: string };
-          if (active && response.ok && payload.token) hydrateMapToken(payload.token);
-          else if (active) patchWalkPlanner({ status: payload.error || 'Mapbox token unavailable.' });
-        } catch {
-          if (active) patchWalkPlanner({ status: 'Map configuration could not be loaded.' });
-        }
-      }
       try {
         const response = await fetch('/api/walk-routes/favorites', { cache: 'no-store' });
         const payload = await response.json() as { favorites?: SavedRoute[] };
@@ -238,7 +224,7 @@ export default function WalkRoutePlanner({
       if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
       if (revealTimerRef.current) clearInterval(revealTimerRef.current);
     };
-  }, [hydrateMapToken, initialToken, patchWalkPlanner]);
+  }, [patchWalkPlanner]);
 
   const routeFeature = useMemo(() => ({
     type: 'Feature' as const,
@@ -480,7 +466,7 @@ export default function WalkRoutePlanner({
   }
 
   async function fetchDirectMapboxRoute(coordinates: Coordinate[]): Promise<DirectionsPayload> {
-    if (!token) throw new Error('Mapbox token is unavailable for direct routing.');
+    if (!token) throw new Error(mapConfigError || 'Mapbox configuration is unavailable for direct routing.');
     const coordinatePath = coordinates
       .map((point) => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`)
       .join(';');
@@ -912,8 +898,8 @@ export default function WalkRoutePlanner({
           </Map>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600">
-            <p>Mapbox public token is missing from this Production deployment.</p>
-            <p className="text-xs">Expected a browser-safe token beginning with pk.</p>
+            <p>{mapConfigLoading ? 'Loading Mapbox configuration…' : (mapConfigError || 'Mapbox public configuration is unavailable.')}</p>
+            {!mapConfigLoading ? <button type="button" onClick={() => void refreshMapConfig()} className="rounded-lg border px-3 py-2 font-medium">Retry map configuration</button> : null}
           </div>
         )}
 
@@ -952,7 +938,7 @@ export default function WalkRoutePlanner({
       <div className="rounded-xl bg-white/50 p-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold">Favorite routes</h3>
-          <p className="text-xs text-slate-500">Token cached: {tokenCachedAt ? new Date(tokenCachedAt).toLocaleTimeString() : 'not yet'}</p>
+          <p className="text-xs text-slate-500">Map configuration: {token ? 'provider ready' : mapConfigLoading ? 'loading' : 'unavailable'}</p>
         </div>
         <div className="mt-3 grid gap-2">
           {favorites.length === 0 ? <p className="text-sm text-slate-600">No account favorites saved yet.</p> : favorites.map((favorite) => (
