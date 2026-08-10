@@ -29,8 +29,6 @@ export type BuddyRequestViewState = {
 };
 
 export type WalkPlannerState = {
-  token: string;
-  tokenCachedAt: number | null;
   center: Coordinate;
   start: Coordinate | null;
   apex: Coordinate | null;
@@ -55,8 +53,11 @@ export type WalkPlannerState = {
 type BuddiesStore = {
   walkPlanner: WalkPlannerState;
   buddyRequests: Record<string, BuddyRequestViewState>;
-  hydrateMapToken: (token: string) => void;
   patchWalkPlanner: (patch: Partial<WalkPlannerState>) => void;
+  setMapCenter: (center: Coordinate) => void;
+  setStart: (start: Coordinate) => void;
+  setWaypoints: (waypoints: Coordinate[]) => void;
+  setRoutingState: (routingState: RoutingState, routingError?: string | null) => void;
   resetRoute: () => void;
   resetWalkPlanner: () => void;
   initializeBuddyRequest: (key: string, pair?: BuddyRequestPairState) => void;
@@ -68,8 +69,6 @@ export const DEFAULT_CENTER: Coordinate = { lat: 40.685743, lng: -73.941329 };
 export const DEFAULT_VIEW_FEET = 20000;
 
 const defaultWalkPlanner = (): WalkPlannerState => ({
-  token: '',
-  tokenCachedAt: null,
   center: DEFAULT_CENTER,
   start: DEFAULT_CENTER,
   apex: null,
@@ -97,28 +96,82 @@ export const useBuddiesStore = create<BuddiesStore>()(
       walkPlanner: defaultWalkPlanner(),
       buddyRequests: {},
 
-      hydrateMapToken: (token) => {
-        if (!token) return;
-        set((state) => ({ walkPlanner: { ...state.walkPlanner, token, tokenCachedAt: Date.now() } }));
-      },
+      patchWalkPlanner: (patch) => set((state) => ({
+        walkPlanner: {
+          ...state.walkPlanner,
+          ...patch,
+          mapUpdatedAt: patch.mapUpdatedAt === undefined ? Date.now() : patch.mapUpdatedAt
+        }
+      })),
 
-      patchWalkPlanner: (patch) => set((state) => ({ walkPlanner: { ...state.walkPlanner, ...patch, mapUpdatedAt: patch.mapUpdatedAt === undefined ? Date.now() : patch.mapUpdatedAt } })),
+      setMapCenter: (center) => set((state) => ({
+        walkPlanner: { ...state.walkPlanner, center, mapUpdatedAt: Date.now() }
+      })),
 
-      resetRoute: () => set((state) => ({ walkPlanner: { ...state.walkPlanner, route: [], routeSteps: [], distanceMiles: null, durationMinutes: null, routingState: state.walkPlanner.waypoints.length ? 'plotting' : 'idle', routingError: null, mapUpdatedAt: Date.now() } })),
+      setStart: (start) => set((state) => ({
+        walkPlanner: { ...state.walkPlanner, start, center: start, mapUpdatedAt: Date.now() }
+      })),
 
-      resetWalkPlanner: () => set((state) => ({ walkPlanner: { ...defaultWalkPlanner(), token: state.walkPlanner.token, tokenCachedAt: state.walkPlanner.tokenCachedAt } })),
+      setWaypoints: (waypoints) => set((state) => ({
+        walkPlanner: { ...state.walkPlanner, waypoints, mapUpdatedAt: Date.now() }
+      })),
 
-      initializeBuddyRequest: (key, pair) => set((state) => ({ buddyRequests: { ...state.buddyRequests, [key]: { pair, pending: false, feedback: '' } } })),
+      setRoutingState: (routingState, routingError = null) => set((state) => ({
+        walkPlanner: { ...state.walkPlanner, routingState, routingError, mapUpdatedAt: Date.now() }
+      })),
 
-      patchBuddyRequest: (key, patch) => set((state) => ({ buddyRequests: { ...state.buddyRequests, [key]: { pair: state.buddyRequests[key]?.pair, pending: state.buddyRequests[key]?.pending ?? false, feedback: state.buddyRequests[key]?.feedback ?? '', ...patch } } })),
+      resetRoute: () => set((state) => ({
+        walkPlanner: {
+          ...state.walkPlanner,
+          route: [],
+          routeSteps: [],
+          distanceMiles: null,
+          durationMinutes: null,
+          routingState: state.walkPlanner.waypoints.length ? 'plotting' : 'idle',
+          routingError: null,
+          mapUpdatedAt: Date.now()
+        }
+      })),
 
-      clearBuddyRequest: (key) => set((state) => { const next = { ...state.buddyRequests }; delete next[key]; return { buddyRequests: next }; })
+      resetWalkPlanner: () => set(() => ({ walkPlanner: defaultWalkPlanner() })),
+
+      initializeBuddyRequest: (key, pair) => set((state) => ({
+        buddyRequests: { ...state.buddyRequests, [key]: { pair, pending: false, feedback: '' } }
+      })),
+
+      patchBuddyRequest: (key, patch) => set((state) => ({
+        buddyRequests: {
+          ...state.buddyRequests,
+          [key]: {
+            pair: state.buddyRequests[key]?.pair,
+            pending: state.buddyRequests[key]?.pending ?? false,
+            feedback: state.buddyRequests[key]?.feedback ?? '',
+            ...patch
+          }
+        }
+      })),
+
+      clearBuddyRequest: (key) => set((state) => {
+        const next = { ...state.buddyRequests };
+        delete next[key];
+        return { buddyRequests: next };
+      })
     }),
     {
-      name: 'buddies-session-state-v4',
+      name: 'buddies-session-state-v6',
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
-      partialize: (state) => ({ walkPlanner: { ...state.walkPlanner, favorites: [], routingState: 'idle' as const, routingError: null, savingFavorite: false, mapLoaded: false }, buddyRequests: {} }),
+      partialize: (state) => ({
+        walkPlanner: {
+          ...state.walkPlanner,
+          favorites: [],
+          routingState: 'idle' as const,
+          routingError: null,
+          savingFavorite: false,
+          mapLoaded: false
+        },
+        buddyRequests: {}
+      }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<BuddiesStore>;
         const persistedPlanner = persisted.walkPlanner;

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import AppNavigation from '@/components/AppNavigation';
+import { MapboxProvider } from '@/components/providers/MapboxProvider';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import './globals.css';
@@ -22,8 +23,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en">
       <body className="pb-24 sm:pb-0">
-        <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
-        {children}
+        <MapboxProvider>
+          <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
+          {children}
+        </MapboxProvider>
       </body>
     </html>
   );

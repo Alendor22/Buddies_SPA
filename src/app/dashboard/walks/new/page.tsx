@@ -4,7 +4,6 @@ import WalkRoutePlanner from '@/components/WalkRoutePlanner';
 import UnifiedWalkWorkspace from '@/components/map/UnifiedWalkWorkspace';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import { neighborhoodKey } from '@/lib/socialMap';
 import { UI_ROUTES } from '@/lib/uiRoutes';
 import { parseRoutePlan } from '@/lib/walkRoutes';
@@ -82,13 +81,12 @@ export default async function NewWalkPage({
   const now = new Date();
   const heatCutoff = new Date(now.getTime() - 15 * 60_000);
 
-  const [dogs, mapboxToken, activeDogsRaw, reportsRaw, memoriesRaw] = await Promise.all([
+  const [dogs, activeDogsRaw, reportsRaw, memoriesRaw] = await Promise.all([
     prisma.dog.findMany({
       where: { ownerId: user.id },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, breed: true }
     }),
-    Promise.resolve(getPublicMapboxToken()),
     prisma.dogPresence.findMany({
       where: { expiresAt: { gt: now }, lastHeartbeatAt: { gte: heatCutoff } },
       orderBy: { lastHeartbeatAt: 'desc' },
@@ -246,7 +244,6 @@ export default async function NewWalkPage({
       <UnifiedWalkWorkspace
         planner={(
           <WalkRoutePlanner
-            initialToken={mapboxToken}
             activeDogs={activeDogs}
             heatCells={heatCells}
             reports={reports}
