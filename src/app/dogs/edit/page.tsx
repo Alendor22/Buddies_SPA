@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const FIELD_ERRORS: Record<string, string> = {
   name: 'Enter a dog name.',
+  duplicateName: 'You already have a dog profile with this name. Use a different name or edit the existing profile.',
   birthDate: 'Enter a valid birth date.',
   weightLbs: 'Weight must be a whole number between 1 and 300 lb.',
   photoUrl: 'Enter a valid http or https photo URL.',
@@ -35,6 +36,7 @@ export default async function MobileDogEditPage({ searchParams }: { searchParams
       ? 'That value conflicts with an existing record. Review the form and try again.'
       : 'We could not save your changes. Please try again.'
     : null;
+  const nameError = error === 'name' || error === 'duplicateName';
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -53,7 +55,7 @@ export default async function MobileDogEditPage({ searchParams }: { searchParams
       <form action="/api/dogs/manage" method="post" className="mt-6 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
         <input type="hidden" name="id" value={dog.id} />
         <input type="hidden" name="_intent" value="update" />
-        <label className="grid gap-2 text-sm font-medium">Name<input name="name" defaultValue={dog.name} required maxLength={80} aria-invalid={error === 'name'} className="rounded-lg border px-3 py-3 text-base" /><FieldError field="name" error={error} /></label>
+        <label className="grid gap-2 text-sm font-medium">Name<input name="name" defaultValue={dog.name} required maxLength={80} aria-invalid={nameError} className="rounded-lg border px-3 py-3 text-base" />{error === 'duplicateName' ? <FieldError field="duplicateName" error={error} /> : <FieldError field="name" error={error} />}</label>
         <label className="grid gap-2 text-sm font-medium">Breed<input name="breed" defaultValue={dog.breed ?? ''} maxLength={120} className="rounded-lg border px-3 py-3 text-base" /></label>
         <label className="grid gap-2 text-sm font-medium">Birth date<input name="birthDate" type="date" defaultValue={birthDate} aria-invalid={error === 'birthDate'} className="rounded-lg border px-3 py-3 text-base" /><FieldError field="birthDate" error={error} /></label>
         <label className="grid gap-2 text-sm font-medium">Weight lb<input name="weightLbs" type="number" min="1" max="300" step="1" defaultValue={dog.weightLbs ?? ''} aria-invalid={error === 'weightLbs'} className="rounded-lg border px-3 py-3 text-base" /><FieldError field="weightLbs" error={error} /></label>
