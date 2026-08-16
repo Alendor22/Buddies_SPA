@@ -240,6 +240,7 @@ model DogPresence {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
+  @@unique([dogId])
   @@index([dogId, lastHeartbeatAt])
   @@index([ownerId, lastHeartbeatAt])
   @@index([neighborhoodKey, status, expiresAt])

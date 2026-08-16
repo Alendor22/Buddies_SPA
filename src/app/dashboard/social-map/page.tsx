@@ -43,13 +43,14 @@ export default async function SocialMapPage() {
     })
   ]);
 
-  const buddyLinks = userDogIds.length && activeDogs.length
+  const activeDogIds = activeDogs.map((presence) => presence.dogId);
+  const buddyLinks = userDogIds.length && activeDogIds.length
     ? await prisma.dogBuddy.findMany({
         where: {
-          OR: activeDogs.flatMap((presence) => userDogIds.flatMap((dogId) => ([
-            { dogAId: dogId, dogBId: presence.dogId },
-            { dogAId: presence.dogId, dogBId: dogId }
-          ])))
+          OR: [
+            { dogAId: { in: userDogIds }, dogBId: { in: activeDogIds } },
+            { dogAId: { in: activeDogIds }, dogBId: { in: userDogIds } }
+          ]
         },
         select: { dogAId: true, dogBId: true }
       })

@@ -26,13 +26,13 @@ export async function GET() {
     );
   }
 
+  // The token is a public (pk.*) key that only changes on redeploy — safe to let the
+  // browser reuse it for a few minutes instead of re-fetching on every page load.
   return NextResponse.json(
     { ready: true, token },
     {
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
-        'CDN-Cache-Control': 'no-store',
-        'Vercel-CDN-Cache-Control': 'no-store'
+        'Cache-Control': 'private, max-age=300'
       }
     }
   );

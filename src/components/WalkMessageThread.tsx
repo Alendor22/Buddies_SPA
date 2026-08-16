@@ -140,9 +140,14 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
     }
 
     let stopRealtime: (() => void) | undefined;
-    void startRealtime().then((cleanup) => { stopRealtime = cleanup; });
+    void startRealtime().then((cleanup) => {
+      stopRealtime = cleanup;
+      // Realtime already delivers messages live; only poll as a fallback when it failed to connect.
+      if (!cleanup && active) {
+        pollTimer = setInterval(() => { void pollMessages(); }, 15000);
+      }
+    });
     void markRead();
-    pollTimer = setInterval(() => { void pollMessages(); }, 15000);
 
     return () => {
       active = false;

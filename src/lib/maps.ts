@@ -1,13 +1,25 @@
+import { redis } from '@/lib/redis';
+
 type GeocodedLocation = {
   latitude: number;
   longitude: number;
   label: string | null;
 };
 
+const GEOCODE_CACHE_TTL_SECONDS = 6 * 60 * 60;
+
 export async function geocodePlace(query: string): Promise<GeocodedLocation | null> {
   const token = process.env.MAPBOX_ACCESS_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const normalized = query.trim();
   if (!token || !normalized) return null;
+
+  // Forward-geocoding a place name is effectively static in the short term; cache the
+  // result instead of paying for a Mapbox call on every identical search.
+  const cacheKey = `geocode:${normalized.toLowerCase()}`;
+  if (redis) {
+    const cached = await redis.get<GeocodedLocation | null>(cacheKey).catch(() => undefined);
+    if (cached !== undefined && cached !== null) return cached;
+  }
 
   const search = new URLSearchParams({
     q: normalized,
@@ -33,9 +45,15 @@ export async function geocodePlace(query: string): Promise<GeocodedLocation | nu
   const coordinates = feature?.geometry?.coordinates;
   if (!coordinates || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) return null;
 
-  return {
+  const result: GeocodedLocation = {
     longitude: coordinates[0],
     latitude: coordinates[1],
     label: feature?.properties?.full_address || feature?.properties?.name || null
   };
+
+  if (redis) {
+    await redis.set(cacheKey, result, { ex: GEOCODE_CACHE_TTL_SECONDS }).catch(() => undefined);
+  }
+
+  return result;
 }

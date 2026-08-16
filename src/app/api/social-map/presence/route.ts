@@ -91,23 +91,37 @@ export async function POST(request: NextRequest) {
   const expiresAt = new Date(now.getTime() + 20 * 60 * 1000);
   const key = neighborhoodKey(deviceLoc.latitude, deviceLoc.longitude);
 
-  const presence = await prisma.dogPresence.create({
-    data: {
-      dogId: dog.id,
-      ownerId: dog.ownerId,
-      walkId,
-      routeMemoryId,
-      latitude: deviceLoc.latitude,
-      longitude: deviceLoc.longitude,
-      speedMph: deviceLoc.speedMph,
-      accuracyMeters: deviceLoc.accuracyMeters,
-      heading: deviceLoc.heading,
-      walkingScore: score,
-      status,
-      neighborhoodKey: key,
-      lastHeartbeatAt: now,
-      expiresAt
-    }
+  const previous = await prisma.dogPresence.findUnique({
+    where: { dogId: dog.id },
+    select: { expiresAt: true }
+  });
+  const isNewSession = !previous || previous.expiresAt <= now;
+
+  const presenceFields = {
+    ownerId: dog.ownerId,
+    walkId,
+    routeMemoryId,
+    latitude: deviceLoc.latitude,
+    longitude: deviceLoc.longitude,
+    speedMph: deviceLoc.speedMph,
+    accuracyMeters: deviceLoc.accuracyMeters,
+    heading: deviceLoc.heading,
+    walkingScore: score,
+    status,
+    neighborhoodKey: key,
+    lastHeartbeatAt: now,
+    expiresAt,
+    ...(isNewSession ? { startedAt: now } : {})
+  };
+
+  // Upsert on dogId: a heartbeat updates the dog's one live presence row rather than
+  // inserting a new row every call, which would grow the table unboundedly. startedAt
+  // resets when the prior session already expired, so it still reflects "this walk", not
+  // whenever the dog's row was first ever created.
+  const presence = await prisma.dogPresence.upsert({
+    where: { dogId: dog.id },
+    create: { dogId: dog.id, ...presenceFields },
+    update: presenceFields
   });
 
   return NextResponse.json({
