@@ -2,6 +2,13 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  webpack(config) {
+    // Ably's browser bundle uses a nested super() call that is valid in modern
+    // JavaScript but rejected by webpack's parser. The UMD bundle is
+    // self-contained, so webpack can safely include it without parsing it.
+    config.module.noParse = /[\\/]ably[\\/]build[\\/]ably\.js$/;
+    return config;
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.r2.dev' },
