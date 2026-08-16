@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:ci"
+  "buildCommand": "npm run build:ci",
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-expired",
+      "schedule": "*/30 * * * *"
+    }
+  ]
 }
