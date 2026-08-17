@@ -1,0 +1,43 @@
+{
+  "autoMode": {
+    "environment": [
+      "### Org-wide",
+      "**Organization**: None configured",
+      "**Cloud provider(s)**: Cloudflare (R2 object storage), Vercel (production hosting/deploy), Upstash (managed Redis) — as used by `Alendor22/Buddies_SPA`",
+      "**Repository visibility**: Private — `Alendor22/Buddies_SPA` (confirmed via gh)",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: Environment variables via Vercel project config / `.env` (local, gitignored) — DATABASE_URL, DATABASE_URL_UNPOOLED, AUTH_SECRET, CRON_SECRET, NEXT_PUBLIC_APP_URL, MAPBOX_ACCESS_TOKEN, NEXT_PUBLIC_MAPBOX_TOKEN, ABLY_API_KEY, NEXT_PUBLIC_ABLY_KEY, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL",
+      "**Default / protected branches**: Default branch `main`; no classic branch protection listed and rulesets not queryable here — treat `main` as sensitive pending confirmation",
+      "**CI/CD deploy targets**: GitHub Actions CI (`.github/workflows`) building/testing on push; Vercel production deploy of `main` to `https://buddies.vercel.app`",
+      "**Network posture**: None configured",
+      "**Source control**: `Alendor22/Buddies_SPA` (origin, github.com) only — no additional orgs configured",
+      "**Trusted internal domains**: None configured",
+      "**Trusted cloud buckets**: `buddies-media` (R2_BUCKET_NAME default in `.env.example`) (config-derived — not a confirmed upload destination; uploads of local data still require confirmation)",
+      "**Key internal services**: Production health endpoints at `https://buddies.vercel.app/api/health` and `https://buddies.vercel.app/api/health?deep=1`",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: `.env` / `.env.local` (gitignored, local secrets); dog owner personal/location data and private profile records in PostgreSQL; do not expose private user/location data through public dog/QR routes",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: Production Vercel deployment `buddies.vercel.app` and any namespace/host/container whose name carries `prod` or `production` as a whole word or name segment",
+      "**Protected deployment namespaces / environments**: Vercel production environment for `Alendor22/Buddies_SPA` (deploys of `main`); Prisma production migrations (`prisma:deploy`) — never use `prisma db push` against production per CLAUDE.md",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development (Buddies SPA V2 — dog identity/safety/social app)",
+      "**Trusted repo**: `Alendor22/Buddies_SPA` (private) — the working directory at `/home/motoscucci/coding/Buddies_SPA` and its `origin` remote (github.com:Alendor22/Buddies_SPA.git); private visibility means confidential material is fine to commit here, but secrets are never cleared into it by visibility alone",
+      "**Org-specific CLIs**: None configured",
+      "routine under /home/motoscucci/coding/Buddies_SPA/ prefix qualifier: repository-local npm/prisma scripts (`npm run check`, `npm run typecheck`, `npm run lint`, `npm run build:ci`, `prisma:validate`, `prisma:generate`) are routine dev actions within this repo"
+    ],
+    "allow": [
+      "$defaults",
+      "Bash(npm run check:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run build\\:ci:*)"
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Bash(npx prisma db push:*)",
+      "Bash(npm run prisma\\:push:*)",
+      "Bash(npm run prisma\\:deploy:*)"
+    ]
+  }
+}
