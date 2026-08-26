@@ -14,9 +14,11 @@ import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
 import { useMapboxConfig } from '@/components/providers/MapboxProvider';
 import { DEFAULT_CENTER } from '@/stores/useBuddiesStore';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
+import ArCameraPermissionHelp from './ArCameraPermissionHelp';
 import MapArCamera from './MapArCamera';
 import MapArEnvironment from './MapArEnvironment';
 import MapCameraController from './MapCameraController';
+import type { ArCameraStatus, ArCameraStatusDetail } from './arTypes';
 
 type SocialMapPayload = {
   activeDogs?: ActiveDogMapItem[];
@@ -24,8 +26,6 @@ type SocialMapPayload = {
   reports?: ReportMapItem[];
   error?: string;
 };
-
-type ArCameraStatus = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
 export default function BuddiesSpatialMap() {
   const { token, loading, error, refresh } = useMapboxConfig();
@@ -95,7 +95,7 @@ export default function BuddiesSpatialMap() {
 
   useEffect(() => {
     function handleCameraStatus(event: Event) {
-      const detail = (event as CustomEvent<{ status: ArCameraStatus; message: string }>).detail;
+      const detail = (event as CustomEvent<ArCameraStatusDetail>).detail;
       if (!detail) return;
       setArCameraStatus(detail.status);
       setStatus(detail.message);
@@ -198,6 +198,7 @@ export default function BuddiesSpatialMap() {
               {arCameraStatus === 'ready' ? 'AR CAMERA LIVE' : arCameraStatus === 'requesting' ? 'STARTING AR CAMERA' : arCameraStatus === 'denied' ? 'CAMERA PERMISSION BLOCKED' : arCameraStatus === 'unavailable' ? 'CAMERA UNAVAILABLE' : arCameraStatus === 'error' ? 'CAMERA ERROR' : 'AR STARTING'} · {arOrientationStatus === 'granted' ? 'DEVICE HEADING' : 'MAP HEADING'}
             </div>
           </div>
+          <ArCameraPermissionHelp status={arCameraStatus} />
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-200/80 shadow-[0_0_30px_rgba(125,211,252,0.45)]">
             <div className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-sky-100/90" />
             <div className="absolute bottom-0 left-1/2 h-4 w-px -translate-x-1/2 bg-sky-100/90" />
