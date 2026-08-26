@@ -14,6 +14,7 @@ import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
 import { useMapboxConfig } from '@/components/providers/MapboxProvider';
 import { DEFAULT_CENTER } from '@/stores/useBuddiesStore';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
+import MapArEnvironment from './MapArEnvironment';
 import MapCameraController from './MapCameraController';
 
 type SocialMapPayload = {
@@ -34,6 +35,7 @@ export default function BuddiesSpatialMap() {
   const [reports, setReports] = useState<ReportMapItem[]>([]);
   const [pendingReportType, setPendingReportType] = useState<string | null>(null);
   const [status, setStatus] = useState('Map ready. Walk detection starts when location permission is available.');
+  const [arOrientationStatus, setArOrientationStatus] = useState<'granted' | 'denied' | 'unavailable' | null>(null);
 
   const loadSocialMap = useCallback(async () => {
     const query = new URLSearchParams();
@@ -68,6 +70,23 @@ export default function BuddiesSpatialMap() {
     }
     window.addEventListener('buddies:create-map-report', beginReport);
     return () => window.removeEventListener('buddies:create-map-report', beginReport);
+  }, []);
+
+  useEffect(() => {
+    function handlePermission(event: Event) {
+      const permission = (event as CustomEvent<'granted' | 'denied' | 'unavailable'>).detail;
+      setArOrientationStatus(permission);
+      if (permission === 'denied') {
+        setStatus('AR view is active, but device-heading permission was denied. Camera bearing will use map/GPS heading.');
+      } else if (permission === 'granted') {
+        setStatus('AR view active. Move the phone to steer the first-person camera.');
+      } else {
+        setStatus('AR view active. Device orientation is unavailable; using GPS/map heading.');
+      }
+    }
+
+    window.addEventListener('buddies:ar-orientation-permission', handlePermission);
+    return () => window.removeEventListener('buddies:ar-orientation-permission', handlePermission);
   }, []);
 
   async function placeReport(latitude: number, longitude: number) {
@@ -109,12 +128,15 @@ export default function BuddiesSpatialMap() {
           minZoom={2}
           maxZoom={22}
           maxPitch={85}
-          dragRotate
-          touchPitch
-          doubleClickZoom
+          dragPan={cameraMode !== 'ar'}
+          dragRotate={cameraMode !== 'ar'}
+          touchPitch={cameraMode !== 'ar'}
+          doubleClickZoom={cameraMode !== 'ar'}
           attributionControl
           cursor={pendingReportType ? 'crosshair' : cameraMode === 'explore' ? 'grab' : 'default'}
-          onDragStart={() => setCameraMode('explore')}
+          onDragStart={() => {
+            if (cameraMode !== 'ar') setCameraMode('explore');
+          }}
           onClick={(event) => {
             if (!pendingReportType) return;
             void placeReport(event.lngLat.lat, event.lngLat.lng);
@@ -123,6 +145,7 @@ export default function BuddiesSpatialMap() {
           onError={(event) => setStatus(`Mapbox render error: ${event.error?.message || 'unknown error'}`)}
         >
           <MapCameraController />
+          <MapArEnvironment />
           <LiveMapLayers
             activeDogs={activeDogs}
             heatCells={heatCells}
@@ -147,6 +170,23 @@ export default function BuddiesSpatialMap() {
           </div>
         </div>
       )}
+
+      {cameraMode === 'ar' ? (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 flex justify-center px-4">
+            <div className="rounded-full border border-sky-300/50 bg-slate-950/70 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-100 shadow-2xl backdrop-blur-xl">
+              AR LIVE · 3D WORLD · {arOrientationStatus === 'granted' ? 'DEVICE HEADING' : 'MAP HEADING'}
+            </div>
+          </div>
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-200/70 shadow-[0_0_30px_rgba(125,211,252,0.35)]">
+            <div className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-sky-100/80" />
+            <div className="absolute bottom-0 left-1/2 h-4 w-px -translate-x-1/2 bg-sky-100/80" />
+            <div className="absolute left-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/80" />
+            <div className="absolute right-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/80" />
+          </div>
+          <div className="pointer-events-none absolute inset-x-[12%] top-[61%] z-20 h-px bg-gradient-to-r from-transparent via-sky-200/50 to-transparent" />
+        </>
+      ) : null}
 
       <WalkTelemetryHUD />
       <MapActionBar />
