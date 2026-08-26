@@ -124,6 +124,7 @@ export default async function NewWalkPage({
 
   const activeDogs = activeDogsRaw.map((presence) => ({
     id: presence.id,
+    dogId: presence.dogId,
     dogName: presence.dog.name,
     dogSlug: presence.dog.slug,
     avatar: presence.dog.name.slice(0, 2).toUpperCase(),
