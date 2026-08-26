@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { Analytics } from '@vercel/analytics/next';
 import AppNavigation from '@/components/AppNavigation';
 import { MapboxProvider } from '@/components/providers/MapboxProvider';
 import { getCurrentUser } from '@/lib/auth';
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
           {children}
         </MapboxProvider>
+        <Analytics />
       </body>
     </html>
   );
