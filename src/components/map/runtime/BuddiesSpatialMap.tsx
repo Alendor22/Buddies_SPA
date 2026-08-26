@@ -147,6 +147,7 @@ export default function BuddiesSpatialMap() {
 
   useEffect(() => {
     if (!currentNeighborhood) return;
+    const neighborhood = currentNeighborhood;
 
     let active = true;
     let realtimeChannel: ReturnType<ReturnType<typeof getRealtimeClient>['channels']['get']> | null = null;
@@ -154,7 +155,7 @@ export default function BuddiesSpatialMap() {
     const handlePresenceUpdated = (message: { data?: unknown }) => {
       if (!active || !isPresenceUpdatedEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const incoming = event.presence;
       const existing = activeDogsRef.current.find((dog) => dog.dogId === incoming.dogId);
 
@@ -180,7 +181,7 @@ export default function BuddiesSpatialMap() {
     const handlePresenceLeft = (message: { data?: unknown }) => {
       if (!active || !isPresenceLeftEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const dogId = event.dogId;
       setActiveDogs((current) => current.filter((dog) => dog.dogId !== dogId));
     };
@@ -188,7 +189,7 @@ export default function BuddiesSpatialMap() {
     const handleReportCreated = (message: { data?: unknown }) => {
       if (!active || !isReportCreatedEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const incoming = event.report;
       setReports((current) => current.some((report) => report.id === incoming.id) ? current : [incoming, ...current]);
     };
@@ -196,7 +197,7 @@ export default function BuddiesSpatialMap() {
     async function startRealtime() {
       try {
         const client = getRealtimeClient();
-        const channel = client.channels.get(channels.nearby(currentNeighborhood));
+        const channel = client.channels.get(channels.nearby(neighborhood));
         realtimeChannel = channel;
         await channel.subscribe(socialMapRealtimeEvents.presenceUpdated, handlePresenceUpdated);
         await channel.subscribe(socialMapRealtimeEvents.presenceLeft, handlePresenceLeft);
