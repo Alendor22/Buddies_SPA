@@ -18,6 +18,8 @@ import ArCameraPermissionHelp from './ArCameraPermissionHelp';
 import MapArCamera from './MapArCamera';
 import MapArEnvironment from './MapArEnvironment';
 import MapCameraController from './MapCameraController';
+import ArOverlayControls from './ArOverlayControls';
+import ArSpatialLabels from './ArSpatialLabels';
 import type { ArCameraStatus, ArCameraStatusDetail } from './arTypes';
 
 type SocialMapPayload = {
@@ -32,6 +34,7 @@ export default function BuddiesSpatialMap() {
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
   const cameraMode = useMapRuntimeStore((state) => state.cameraMode);
   const layers = useMapRuntimeStore((state) => state.layers);
+  const arOverlayOpacity = useMapRuntimeStore((state) => state.arOverlayOpacity);
   const setCameraMode = useMapRuntimeStore((state) => state.setCameraMode);
   const [activeDogs, setActiveDogs] = useState<ActiveDogMapItem[]>([]);
   const [heatCells, setHeatCells] = useState<HeatCellMapItem[]>([]);
@@ -130,7 +133,10 @@ export default function BuddiesSpatialMap() {
       <MapArCamera />
 
       {token ? (
-        <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${cameraMode === 'ar' ? 'opacity-[0.58]' : 'opacity-100'}`}>
+        <div
+          className="absolute inset-0 z-10 transition-opacity duration-200"
+          style={{ opacity: cameraMode === 'ar' ? arOverlayOpacity : 1 }}
+        >
           <Map
             id="buddies-spatial-map"
             mapboxAccessToken={token}
@@ -169,9 +175,9 @@ export default function BuddiesSpatialMap() {
               activeDogs={activeDogs}
               heatCells={heatCells}
               reports={reports}
-              showRadar={layers.dogs || layers.buddies}
+              showRadar={(layers.dogs || layers.buddies) && cameraMode !== 'ar'}
               showHeat={layers.heat}
-              showReports={layers.reports || layers.hazards}
+              showReports={(layers.reports || layers.hazards) && cameraMode !== 'ar'}
             />
 
             {telemetry.latitude != null && telemetry.longitude != null ? (
@@ -209,6 +215,8 @@ export default function BuddiesSpatialMap() {
         </>
       ) : null}
 
+      <ArSpatialLabels activeDogs={activeDogs} reports={reports} />
+      <ArOverlayControls />
       <WalkTelemetryHUD />
       <MapActionBar />
       <SpatialOverlaySheet activeDogs={activeDogs} />
