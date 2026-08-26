@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
+import type { ArCameraStatus } from './arTypes';
 
-type CameraStatus = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
-
-function emitStatus(status: CameraStatus, message: string) {
+function emitStatus(status: ArCameraStatus, message: string) {
   window.dispatchEvent(new CustomEvent('buddies:ar-camera-status', {
     detail: { status, message }
   }));
@@ -15,7 +14,7 @@ export default function MapArCamera() {
   const cameraMode = useMapRuntimeStore((state) => state.cameraMode);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [status, setStatus] = useState<CameraStatus>('idle');
+  const [status, setStatus] = useState<ArCameraStatus>('idle');
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -62,7 +61,7 @@ export default function MapArCamera() {
     } catch (error) {
       const denied = error instanceof DOMException
         && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
-      const nextStatus: CameraStatus = denied ? 'denied' : 'error';
+      const nextStatus: ArCameraStatus = denied ? 'denied' : 'error';
       const message = denied
         ? 'Camera permission was denied. Allow camera access for Buddies and tap AR again.'
         : 'Rear camera could not be started.';
