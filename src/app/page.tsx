@@ -4,10 +4,10 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const features = [
-  ['Digital dog ID', 'QR-ready safety profiles with medical and emergency details.'],
-  ['Lost-dog network', 'Realtime sightings, scans, and location updates.'],
-  ['Walk marketplace', 'Request, accept, track, and complete local dog walks.'],
-  ['Community map', 'Discover nearby dogs, walkers, alerts, and activity.']
+  ['Spatial dog network', 'A first-person map for nearby dogs, Buddies, routes, reports, resources, and live activity.'],
+  ['Digital dog ID', 'QR-ready safety profiles designed to extend into NFC and BLE identity exchange.'],
+  ['Automatic walks', 'Device telemetry detects walking, jogging, pauses, and likely driving to build route memory.'],
+  ['Dog-centric reports', 'Share water, bag stations, loose dogs, hazards, crowded parks, and other neighborhood signals.']
 ];
 
 export default async function HomePage() {
@@ -20,11 +20,12 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen">
       <section className="mx-auto max-w-6xl px-6 py-20">
-        <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Buddies V2</span>
-        <h1 className="mt-6 max-w-3xl text-5xl font-bold tracking-tight">One network for every dog, owner, and trusted walker.</h1>
-        <p className="mt-5 max-w-2xl text-lg text-slate-600">Buddies combines dog identity, emergency safety, local discovery, walking coordination, and realtime communication.</p>
-        <div className="mt-8 flex gap-3">
-          <Link href="/dashboard" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Open dashboard</Link>
+        <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Buddies Spatial</span>
+        <h1 className="mt-6 max-w-3xl text-5xl font-bold tracking-tight">Your dog community, visualized in the real world.</h1>
+        <p className="mt-5 max-w-2xl text-lg text-slate-600">Buddies is becoming a map-first spatial network for walking, identity, nearby dogs, safety, community reports, resources, and route intelligence.</p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link href="/map" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Open spatial map</Link>
+          <Link href="/dashboard" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Open dashboard</Link>
           <Link href={publicProfileHref} className="rounded-lg border border-slate-300 px-5 py-3 font-medium">View public profile</Link>
         </div>
       </section>
