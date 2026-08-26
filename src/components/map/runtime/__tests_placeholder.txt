@@ -1,0 +1,1 @@
+Browser camera AR requires device-level manual acceptance testing in addition to CI typecheck/lint/build validation.
