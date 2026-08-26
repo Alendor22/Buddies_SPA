@@ -59,6 +59,10 @@ type MapRuntimeState = {
   followZoom: number;
   followPitch: number;
   bearing: number;
+  arOverlayOpacity: number;
+  arFieldOfViewDegrees: number;
+  arDevicePitch: number | null;
+  arDeviceRoll: number | null;
   selectedEntity: SpatialEntitySelection;
   layers: Record<MapLayerKey, boolean>;
   telemetry: WalkTelemetry;
@@ -67,6 +71,9 @@ type MapRuntimeState = {
   setUiMode: (mode: MapUiMode) => void;
   setBearing: (bearing: number) => void;
   setFollowCamera: (input: Partial<Pick<MapRuntimeState, 'followZoom' | 'followPitch'>>) => void;
+  setArOverlayOpacity: (opacity: number) => void;
+  setArFieldOfViewDegrees: (degrees: number) => void;
+  setArOrientation: (input: { heading?: number | null; pitch?: number | null; roll?: number | null }) => void;
   toggleLayer: (layer: MapLayerKey) => void;
   setLayerVisible: (layer: MapLayerKey, visible: boolean) => void;
   selectEntity: (selection: SpatialEntitySelection) => void;
@@ -101,12 +108,20 @@ const initialWalk: ActiveSpatialWalk = {
   startLongitude: null
 };
 
+function normalizeBearing(value: number) {
+  return ((value % 360) + 360) % 360;
+}
+
 export const useMapRuntimeStore = create<MapRuntimeState>((set) => ({
   cameraMode: 'follow',
   uiMode: 'normal',
   followZoom: 18.7,
   followPitch: 68,
   bearing: 0,
+  arOverlayOpacity: 0.42,
+  arFieldOfViewDegrees: 68,
+  arDevicePitch: null,
+  arDeviceRoll: null,
   selectedEntity: null,
   layers: {
     buddies: true,
@@ -127,10 +142,21 @@ export const useMapRuntimeStore = create<MapRuntimeState>((set) => ({
   activeWalk: initialWalk,
   setCameraMode: (cameraMode) => set({ cameraMode }),
   setUiMode: (uiMode) => set({ uiMode }),
-  setBearing: (bearing) => set({ bearing: ((bearing % 360) + 360) % 360 }),
+  setBearing: (bearing) => set({ bearing: normalizeBearing(bearing) }),
   setFollowCamera: (input) => set((state) => ({
     followZoom: input.followZoom ?? state.followZoom,
     followPitch: input.followPitch ?? state.followPitch
+  })),
+  setArOverlayOpacity: (arOverlayOpacity) => set({
+    arOverlayOpacity: Math.max(0.15, Math.min(0.85, arOverlayOpacity))
+  }),
+  setArFieldOfViewDegrees: (arFieldOfViewDegrees) => set({
+    arFieldOfViewDegrees: Math.max(45, Math.min(100, arFieldOfViewDegrees))
+  }),
+  setArOrientation: ({ heading, pitch, roll }) => set((state) => ({
+    bearing: heading == null ? state.bearing : normalizeBearing(heading),
+    arDevicePitch: pitch === undefined ? state.arDevicePitch : pitch,
+    arDeviceRoll: roll === undefined ? state.arDeviceRoll : roll
   })),
   toggleLayer: (layer) => set((state) => ({
     layers: { ...state.layers, [layer]: !state.layers[layer] }
