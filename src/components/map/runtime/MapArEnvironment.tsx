@@ -13,8 +13,9 @@ export default function MapArEnvironment() {
 
   useEffect(() => {
     const mapRef = maps.current;
-    const map = mapRef?.getMap();
-    if (!map) return;
+    const mapInstance = mapRef?.getMap();
+    if (!mapInstance) return;
+    const map = mapInstance;
 
     function applyEnvironment() {
       if (!map.isStyleLoaded()) return;
@@ -79,7 +80,9 @@ export default function MapArEnvironment() {
 
     map.on('style.load', applyEnvironment);
     applyEnvironment();
-    return () => map.off('style.load', applyEnvironment);
+    return () => {
+      map.off('style.load', applyEnvironment);
+    };
   }, [cameraMode, maps]);
 
   return null;
