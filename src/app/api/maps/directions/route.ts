@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_COORDINATES = 25;
-const ROUTING_PROFILE = 'mapbox/driving';
+const ROUTING_PROFILE = 'mapbox/walking';
 
 type Coordinate = { lng: number; lat: number };
 
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok || data?.code !== 'Ok' || !data.routes?.length) {
       return json({
-        error: data?.message || 'Mapbox could not construct a driving route through the plotted points.',
+        error: data?.message || 'Mapbox could not construct a walking route through the plotted points.',
         code: data?.code || 'MAPBOX_ROUTE_FAILED'
       }, response.ok ? 422 : response.status);
     }
@@ -139,10 +139,10 @@ export async function POST(request: NextRequest) {
     const timedOut = error instanceof Error && error.name === 'AbortError';
     return json({
       error: timedOut
-        ? 'Driving-route request timed out. Reduce the number of shaping points or retry.'
+        ? 'Walking-route request timed out. Reduce the number of shaping points or retry.'
         : error instanceof Error
           ? error.message
-          : 'Driving-route service could not be reached.',
+          : 'Walking-route service could not be reached.',
       code: timedOut ? 'MAPBOX_TIMEOUT' : 'MAPBOX_UNAVAILABLE'
     }, timedOut ? 504 : 502);
   } finally {
