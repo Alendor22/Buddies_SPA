@@ -128,6 +128,7 @@ export default function ArOverlayControls() {
           max="85"
           step="1"
           value={Math.round(opacity * 100)}
+          onFocus={scheduleAutoHide}
           onChange={(event) => {
             setOpacity(Number(event.target.value) / 100);
             scheduleAutoHide();
@@ -145,6 +146,7 @@ export default function ArOverlayControls() {
           max="100"
           step="1"
           value={Math.round(fieldOfView)}
+          onFocus={scheduleAutoHide}
           onChange={(event) => {
             setFieldOfView(Number(event.target.value));
             scheduleAutoHide();
