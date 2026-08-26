@@ -14,6 +14,7 @@ export type DeviceLoc = {
 
 export type ActiveDogMapItem = {
   id: string;
+  dogId: string;
   dogName: string;
   dogSlug?: string;
   breed: string | null;
