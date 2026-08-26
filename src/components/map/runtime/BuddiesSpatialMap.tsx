@@ -148,6 +148,10 @@ export default function BuddiesSpatialMap() {
   useEffect(() => {
     if (!currentNeighborhood) return;
 
+    // Captured after the guard: TypeScript does not carry the narrowing above into the
+    // nested startRealtime() declaration, so the channel name needs a definitely-string ref.
+    const neighborhood = currentNeighborhood;
+
     let active = true;
     let realtimeChannel: ReturnType<ReturnType<typeof getRealtimeClient>['channels']['get']> | null = null;
 
@@ -196,7 +200,7 @@ export default function BuddiesSpatialMap() {
     async function startRealtime() {
       try {
         const client = getRealtimeClient();
-        const channel = client.channels.get(channels.nearby(currentNeighborhood));
+        const channel = client.channels.get(channels.nearby(neighborhood));
         realtimeChannel = channel;
         await channel.subscribe(socialMapRealtimeEvents.presenceUpdated, handlePresenceUpdated);
         await channel.subscribe(socialMapRealtimeEvents.presenceLeft, handlePresenceLeft);
