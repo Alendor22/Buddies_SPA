@@ -1,12 +1,35 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-map-gl/mapbox';
 import { useMapRuntimeStore, type MapCameraMode } from '@/stores/useMapRuntimeStore';
 
 type OrientationEventWithWebkitHeading = DeviceOrientationEvent & {
   webkitCompassHeading?: number;
 };
+
+type WindowWithLegacyOrientation = Window & {
+  orientation?: number;
+};
+
+function normalizeDegrees(value: number) {
+  return ((value % 360) + 360) % 360;
+}
+
+function shortestAngularDelta(from: number, to: number) {
+  return ((to - from + 540) % 360) - 180;
+}
+
+function smoothHeading(previous: number, next: number, factor = 0.22) {
+  return normalizeDegrees(previous + shortestAngularDelta(previous, next) * factor);
+}
+
+function getScreenRotation() {
+  const modern = window.screen.orientation?.angle;
+  if (typeof modern === 'number') return modern;
+  const legacy = (window as WindowWithLegacyOrientation).orientation;
+  return typeof legacy === 'number' ? legacy : 0;
+}
 
 export default function MapCameraController() {
   const maps = useMap();
@@ -15,8 +38,10 @@ export default function MapCameraController() {
   const followPitch = useMapRuntimeStore((state) => state.followPitch);
   const bearing = useMapRuntimeStore((state) => state.bearing);
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
-  const setBearing = useMapRuntimeStore((state) => state.setBearing);
+  const setArOrientation = useMapRuntimeStore((state) => state.setArOrientation);
   const setCameraMode = useMapRuntimeStore((state) => state.setCameraMode);
+  const [hasDeviceHeading, setHasDeviceHeading] = useState(false);
+  const smoothedHeadingRef = useRef<number | null>(null);
 
   useEffect(() => {
     function handleMode(event: Event) {
@@ -29,22 +54,36 @@ export default function MapCameraController() {
   }, [setCameraMode]);
 
   useEffect(() => {
-    if (cameraMode !== 'ar') return;
+    if (cameraMode !== 'ar') {
+      smoothedHeadingRef.current = null;
+      setHasDeviceHeading(false);
+      return;
+    }
 
     function handleOrientation(event: DeviceOrientationEvent) {
       const oriented = event as OrientationEventWithWebkitHeading;
-      const heading = typeof oriented.webkitCompassHeading === 'number'
+      const rawHeading = typeof oriented.webkitCompassHeading === 'number'
         ? oriented.webkitCompassHeading
         : typeof event.alpha === 'number'
-          ? 360 - event.alpha
+          ? normalizeDegrees(360 - event.alpha + getScreenRotation())
           : null;
 
-      if (heading != null && Number.isFinite(heading)) setBearing(heading);
+      if (rawHeading == null || !Number.isFinite(rawHeading)) return;
+
+      const previous = smoothedHeadingRef.current;
+      const heading = previous == null ? normalizeDegrees(rawHeading) : smoothHeading(previous, rawHeading);
+      smoothedHeadingRef.current = heading;
+      setHasDeviceHeading(true);
+      setArOrientation({
+        heading,
+        pitch: typeof event.beta === 'number' ? event.beta : null,
+        roll: typeof event.gamma === 'number' ? event.gamma : null
+      });
     }
 
     window.addEventListener('deviceorientation', handleOrientation, true);
     return () => window.removeEventListener('deviceorientation', handleOrientation, true);
-  }, [cameraMode, setBearing]);
+  }, [cameraMode, setArOrientation]);
 
   useEffect(() => {
     const map = maps.current;
@@ -57,13 +96,17 @@ export default function MapCameraController() {
       : [currentCenter.lng, currentCenter.lat];
 
     if (cameraMode === 'ar') {
+      const arBearing = hasDeviceHeading
+        ? bearing
+        : telemetry.heading ?? bearing ?? map.getBearing();
+
       map.easeTo({
         center,
         zoom: Math.max(19.2, followZoom),
         pitch: 80,
-        bearing: telemetry.heading ?? bearing ?? map.getBearing(),
+        bearing: arBearing,
         offset: [0, 185],
-        duration: 700,
+        duration: hasDeviceHeading ? 140 : 500,
         essential: true
       });
       return;
@@ -93,7 +136,7 @@ export default function MapCameraController() {
         essential: true
       });
     }
-  }, [bearing, cameraMode, followPitch, followZoom, maps, telemetry.heading, telemetry.latitude, telemetry.longitude]);
+  }, [bearing, cameraMode, followPitch, followZoom, hasDeviceHeading, maps, telemetry.heading, telemetry.latitude, telemetry.longitude]);
 
   return null;
 }
