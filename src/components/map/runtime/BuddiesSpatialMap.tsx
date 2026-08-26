@@ -152,8 +152,10 @@ export default function BuddiesSpatialMap() {
     let realtimeChannel: ReturnType<ReturnType<typeof getRealtimeClient>['channels']['get']> | null = null;
 
     const handlePresenceUpdated = (message: { data?: unknown }) => {
-      if (!active || !isPresenceUpdatedEvent(message.data) || message.data.neighborhoodKey !== currentNeighborhood) return;
-      const incoming = message.data.presence;
+      if (!active || !isPresenceUpdatedEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const incoming = event.presence;
       const existing = activeDogsRef.current.find((dog) => dog.dogId === incoming.dogId);
 
       if (!existing) {
@@ -176,13 +178,18 @@ export default function BuddiesSpatialMap() {
     };
 
     const handlePresenceLeft = (message: { data?: unknown }) => {
-      if (!active || !isPresenceLeftEvent(message.data) || message.data.neighborhoodKey !== currentNeighborhood) return;
-      setActiveDogs((current) => current.filter((dog) => dog.dogId !== message.data.dogId));
+      if (!active || !isPresenceLeftEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const dogId = event.dogId;
+      setActiveDogs((current) => current.filter((dog) => dog.dogId !== dogId));
     };
 
     const handleReportCreated = (message: { data?: unknown }) => {
-      if (!active || !isReportCreatedEvent(message.data) || message.data.neighborhoodKey !== currentNeighborhood) return;
-      const incoming = message.data.report;
+      if (!active || !isReportCreatedEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const incoming = event.report;
       setReports((current) => current.some((report) => report.id === incoming.id) ? current : [incoming, ...current]);
     };
 
@@ -262,7 +269,8 @@ export default function BuddiesSpatialMap() {
       });
       const payload = await response.json() as { error?: string; report?: ReportMapItem };
       if (!response.ok || !payload.report) throw new Error(payload.error || 'Report could not be published.');
-      setReports((current) => current.some((report) => report.id === payload.report?.id) ? current : [payload.report as ReportMapItem, ...current]);
+      const report = payload.report;
+      setReports((current) => current.some((entry) => entry.id === report.id) ? current : [report, ...current]);
       setPendingReportType(null);
       setStatus('Report published to the local pack.');
     } catch (reportError) {
