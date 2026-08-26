@@ -14,8 +14,11 @@ import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
 import { useMapboxConfig } from '@/components/providers/MapboxProvider';
 import { DEFAULT_CENTER } from '@/stores/useBuddiesStore';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
+import ArCameraPermissionHelp from './ArCameraPermissionHelp';
+import MapArCamera from './MapArCamera';
 import MapArEnvironment from './MapArEnvironment';
 import MapCameraController from './MapCameraController';
+import type { ArCameraStatus, ArCameraStatusDetail } from './arTypes';
 
 type SocialMapPayload = {
   activeDogs?: ActiveDogMapItem[];
@@ -36,6 +39,7 @@ export default function BuddiesSpatialMap() {
   const [pendingReportType, setPendingReportType] = useState<string | null>(null);
   const [status, setStatus] = useState('Map ready. Walk detection starts when location permission is available.');
   const [arOrientationStatus, setArOrientationStatus] = useState<'granted' | 'denied' | 'unavailable' | null>(null);
+  const [arCameraStatus, setArCameraStatus] = useState<ArCameraStatus>('idle');
 
   const loadSocialMap = useCallback(async () => {
     const query = new URLSearchParams();
@@ -77,16 +81,28 @@ export default function BuddiesSpatialMap() {
       const permission = (event as CustomEvent<'granted' | 'denied' | 'unavailable'>).detail;
       setArOrientationStatus(permission);
       if (permission === 'denied') {
-        setStatus('AR view is active, but device-heading permission was denied. Camera bearing will use map/GPS heading.');
+        setStatus('AR camera is active, but device-heading permission was denied. Bearing will use map/GPS heading.');
       } else if (permission === 'granted') {
-        setStatus('AR view active. Move the phone to steer the first-person camera.');
+        setStatus('AR camera active. Move the phone to steer the spatial overlay.');
       } else {
-        setStatus('AR view active. Device orientation is unavailable; using GPS/map heading.');
+        setStatus('AR camera active. Device orientation is unavailable; using GPS/map heading.');
       }
     }
 
     window.addEventListener('buddies:ar-orientation-permission', handlePermission);
     return () => window.removeEventListener('buddies:ar-orientation-permission', handlePermission);
+  }, []);
+
+  useEffect(() => {
+    function handleCameraStatus(event: Event) {
+      const detail = (event as CustomEvent<ArCameraStatusDetail>).detail;
+      if (!detail) return;
+      setArCameraStatus(detail.status);
+      setStatus(detail.message);
+    }
+
+    window.addEventListener('buddies:ar-camera-status', handleCameraStatus);
+    return () => window.removeEventListener('buddies:ar-camera-status', handleCameraStatus);
   }, []);
 
   async function placeReport(latitude: number, longitude: number) {
@@ -111,58 +127,62 @@ export default function BuddiesSpatialMap() {
   return (
     <main className="relative h-[100dvh] min-h-[540px] w-full overflow-hidden bg-slate-950 text-white">
       <AutoWalkDetector />
+      <MapArCamera />
 
       {token ? (
-        <Map
-          id="buddies-spatial-map"
-          mapboxAccessToken={token}
-          reuseMaps
-          initialViewState={{
-            latitude: DEFAULT_CENTER.lat,
-            longitude: DEFAULT_CENTER.lng,
-            zoom: 16.5,
-            pitch: 50,
-            bearing: 0
-          }}
-          mapStyle="mapbox://styles/mapbox/streets-v12"
-          minZoom={2}
-          maxZoom={22}
-          maxPitch={85}
-          dragPan={cameraMode !== 'ar'}
-          dragRotate={cameraMode !== 'ar'}
-          touchPitch={cameraMode !== 'ar'}
-          doubleClickZoom={cameraMode !== 'ar'}
-          attributionControl
-          cursor={pendingReportType ? 'crosshair' : cameraMode === 'explore' ? 'grab' : 'default'}
-          onDragStart={() => {
-            if (cameraMode !== 'ar') setCameraMode('explore');
-          }}
-          onClick={(event) => {
-            if (!pendingReportType) return;
-            void placeReport(event.lngLat.lat, event.lngLat.lng);
-          }}
-          onLoad={() => setStatus('Buddies spatial map online.')}
-          onError={(event) => setStatus(`Mapbox render error: ${event.error?.message || 'unknown error'}`)}
-        >
-          <MapCameraController />
-          <MapArEnvironment />
-          <LiveMapLayers
-            activeDogs={activeDogs}
-            heatCells={heatCells}
-            reports={reports}
-            showRadar={layers.dogs || layers.buddies}
-            showHeat={layers.heat}
-            showReports={layers.reports || layers.hazards}
-          />
+        <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${cameraMode === 'ar' ? 'opacity-[0.58]' : 'opacity-100'}`}>
+          <Map
+            id="buddies-spatial-map"
+            mapboxAccessToken={token}
+            reuseMaps
+            initialViewState={{
+              latitude: DEFAULT_CENTER.lat,
+              longitude: DEFAULT_CENTER.lng,
+              zoom: 16.5,
+              pitch: 50,
+              bearing: 0
+            }}
+            style={{ width: '100%', height: '100%' }}
+            mapStyle="mapbox://styles/mapbox/streets-v12"
+            minZoom={2}
+            maxZoom={22}
+            maxPitch={85}
+            dragPan={cameraMode !== 'ar'}
+            dragRotate={cameraMode !== 'ar'}
+            touchPitch={cameraMode !== 'ar'}
+            doubleClickZoom={cameraMode !== 'ar'}
+            attributionControl
+            cursor={pendingReportType ? 'crosshair' : cameraMode === 'explore' ? 'grab' : 'default'}
+            onDragStart={() => {
+              if (cameraMode !== 'ar') setCameraMode('explore');
+            }}
+            onClick={(event) => {
+              if (!pendingReportType) return;
+              void placeReport(event.lngLat.lat, event.lngLat.lng);
+            }}
+            onLoad={() => setStatus('Buddies spatial map online.')}
+            onError={(event) => setStatus(`Mapbox render error: ${event.error?.message || 'unknown error'}`)}
+          >
+            <MapCameraController />
+            <MapArEnvironment />
+            <LiveMapLayers
+              activeDogs={activeDogs}
+              heatCells={heatCells}
+              reports={reports}
+              showRadar={layers.dogs || layers.buddies}
+              showHeat={layers.heat}
+              showReports={layers.reports || layers.hazards}
+            />
 
-          {telemetry.latitude != null && telemetry.longitude != null ? (
-            <Marker latitude={telemetry.latitude} longitude={telemetry.longitude} anchor="center" rotation={telemetry.heading ?? 0} rotationAlignment="map">
-              <div className="grid h-12 w-12 place-items-center rounded-full border-4 border-white bg-slate-950 text-xl shadow-2xl ring-4 ring-sky-300/40" aria-label="Your current location">🐾</div>
-            </Marker>
-          ) : null}
-        </Map>
+            {telemetry.latitude != null && telemetry.longitude != null ? (
+              <Marker latitude={telemetry.latitude} longitude={telemetry.longitude} anchor="center" rotation={telemetry.heading ?? 0} rotationAlignment="map">
+                <div className="grid h-12 w-12 place-items-center rounded-full border-4 border-white bg-slate-950 text-xl shadow-2xl ring-4 ring-sky-300/40" aria-label="Your current location">🐾</div>
+              </Marker>
+            ) : null}
+          </Map>
+        </div>
       ) : (
-        <div className="grid h-full place-items-center p-8 text-center">
+        <div className="relative z-10 grid h-full place-items-center p-8 text-center">
           <div className="max-w-md rounded-3xl border border-white/15 bg-white/10 p-6 backdrop-blur-xl">
             <h1 className="text-xl font-black">Buddies spatial map</h1>
             <p className="mt-2 text-sm text-white/65">{loading ? 'Loading Mapbox configuration…' : (error || 'Mapbox configuration is unavailable.')}</p>
@@ -174,17 +194,18 @@ export default function BuddiesSpatialMap() {
       {cameraMode === 'ar' ? (
         <>
           <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 flex justify-center px-4">
-            <div className="rounded-full border border-sky-300/50 bg-slate-950/70 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-100 shadow-2xl backdrop-blur-xl">
-              AR LIVE · 3D WORLD · {arOrientationStatus === 'granted' ? 'DEVICE HEADING' : 'MAP HEADING'}
+            <div className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-2xl backdrop-blur-xl ${arCameraStatus === 'ready' ? 'border-emerald-300/60 bg-emerald-950/70' : arCameraStatus === 'denied' || arCameraStatus === 'error' ? 'border-red-300/60 bg-red-950/75' : 'border-sky-300/50 bg-slate-950/70'}`}>
+              {arCameraStatus === 'ready' ? 'AR CAMERA LIVE' : arCameraStatus === 'requesting' ? 'STARTING AR CAMERA' : arCameraStatus === 'denied' ? 'CAMERA PERMISSION BLOCKED' : arCameraStatus === 'unavailable' ? 'CAMERA UNAVAILABLE' : arCameraStatus === 'error' ? 'CAMERA ERROR' : 'AR STARTING'} · {arOrientationStatus === 'granted' ? 'DEVICE HEADING' : 'MAP HEADING'}
             </div>
           </div>
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-200/70 shadow-[0_0_30px_rgba(125,211,252,0.35)]">
-            <div className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-sky-100/80" />
-            <div className="absolute bottom-0 left-1/2 h-4 w-px -translate-x-1/2 bg-sky-100/80" />
-            <div className="absolute left-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/80" />
-            <div className="absolute right-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/80" />
+          <ArCameraPermissionHelp status={arCameraStatus} />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-200/80 shadow-[0_0_30px_rgba(125,211,252,0.45)]">
+            <div className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-sky-100/90" />
+            <div className="absolute bottom-0 left-1/2 h-4 w-px -translate-x-1/2 bg-sky-100/90" />
+            <div className="absolute left-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/90" />
+            <div className="absolute right-0 top-1/2 h-px w-4 -translate-y-1/2 bg-sky-100/90" />
           </div>
-          <div className="pointer-events-none absolute inset-x-[12%] top-[61%] z-20 h-px bg-gradient-to-r from-transparent via-sky-200/50 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-[12%] top-[61%] z-20 h-px bg-gradient-to-r from-transparent via-sky-200/60 to-transparent" />
         </>
       ) : null}
 

@@ -33,12 +33,16 @@ export default function MapActionBar() {
 
   async function toggleAr() {
     if (cameraMode === 'ar') {
+      window.dispatchEvent(new CustomEvent('buddies:ar-camera-stop'));
       camera('follow');
       return;
     }
 
-    const permission = await requestOrientationPermission();
     camera('ar');
+    // Dispatch synchronously from the tap so iOS/Safari can associate the
+    // getUserMedia request with a direct user gesture.
+    window.dispatchEvent(new CustomEvent('buddies:ar-camera-request'));
+    const permission = await requestOrientationPermission();
     window.dispatchEvent(new CustomEvent('buddies:ar-orientation-permission', { detail: permission }));
   }
 
@@ -48,7 +52,7 @@ export default function MapActionBar() {
         <button type="button" onClick={() => dispatch('buddies:open-buddies')} className="grid min-h-12 min-w-12 place-items-center rounded-2xl px-2 text-xs font-bold active:bg-white/15" aria-label="Nearby Buddies"><span className="text-xl" aria-hidden="true">🐾</span><span>Buddy</span></button>
         <button type="button" onClick={() => dispatch('buddies:open-report')} className="grid min-h-12 min-w-12 place-items-center rounded-2xl px-2 text-xs font-bold active:bg-white/15" aria-label="Report dog-centric place or hazard"><span className="text-xl" aria-hidden="true">＋</span><span>Report</span></button>
         <button type="button" onClick={() => camera(cameraMode === 'follow' ? 'explore' : 'follow')} className="grid min-h-14 min-w-14 place-items-center rounded-full border border-white/30 bg-white/15 px-2 text-xs font-black active:scale-95" aria-label={cameraMode === 'follow' ? 'Explore map' : 'Recenter and follow'}><span className="text-2xl" aria-hidden="true">◎</span><span>{cameraMode === 'follow' ? 'Explore' : 'Follow'}</span></button>
-        <button type="button" onClick={() => void toggleAr()} className={`grid min-h-12 min-w-12 place-items-center rounded-2xl px-2 text-xs font-bold active:bg-white/15 ${cameraMode === 'ar' ? 'bg-sky-400/25 ring-1 ring-sky-300/60' : ''}`} aria-pressed={cameraMode === 'ar'} aria-label="Toggle immersive AR-style map"><span className="text-xl" aria-hidden="true">◈</span><span>{cameraMode === 'ar' ? 'AR On' : 'AR'}</span></button>
+        <button type="button" onClick={() => void toggleAr()} className={`grid min-h-12 min-w-12 place-items-center rounded-2xl px-2 text-xs font-bold active:bg-white/15 ${cameraMode === 'ar' ? 'bg-sky-400/25 ring-1 ring-sky-300/60' : ''}`} aria-pressed={cameraMode === 'ar'} aria-label="Toggle live camera augmented-reality map"><span className="text-xl" aria-hidden="true">◈</span><span>{cameraMode === 'ar' ? 'AR On' : 'AR'}</span></button>
         <button type="button" onClick={() => dispatch('buddies:open-dogid')} className="grid min-h-12 min-w-12 place-items-center rounded-2xl px-2 text-xs font-bold active:bg-white/15" aria-label="Open Buddies DogID badge"><span className="text-xl" aria-hidden="true">▣</span><span>DogID</span></button>
       </div>
     </div>
