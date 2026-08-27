@@ -31,6 +31,12 @@ export async function GET() {
     capability[realtimeChannels.lostDog(dog.id)] = ['subscribe'];
   }
 
+  // Neighborhood cells are not enumerable per-user: a client subscribes to whichever cell it
+  // is currently standing in, and that changes as it moves. Without this grant the subscribe
+  // is rejected by Ably and the map silently degrades to snapshot polling. Read-only, and the
+  // same presence data is already served to any authenticated user by GET /api/social-map.
+  capability['nearby:*'] = ['subscribe'];
+
   const client = new Ably.Rest(apiKey);
   const tokenRequest = await client.auth.createTokenRequest({
     clientId: `user:${user.id}`,
