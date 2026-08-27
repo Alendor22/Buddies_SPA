@@ -44,10 +44,14 @@ Open http://localhost:3000.
 ## Validation
 
 ```bash
+npm test
+npm run test:coverage
 npm run typecheck
 npm run lint
 npm run build:ci
 ```
+
+Database invariants and browser journeys run against a guarded disposable PostgreSQL database in CI. See [tests/README.md](./tests/README.md) for layer-specific commands, the test-database safety contract, the application capability matrix, and the process for expanding coverage.
 
 ## Phase 3 deployment
 

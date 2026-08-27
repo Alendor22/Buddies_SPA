@@ -9,6 +9,9 @@ Buddies deploys from the private GitHub repository's `main` branch to Vercel pro
    - installs dependencies on Node 24;
    - validates and generates the Prisma client;
    - typechecks and lints;
+   - runs unit, component, route-integration, contract, and coverage gates;
+   - applies migrations to a disposable PostgreSQL database and tests database invariants;
+   - builds the production application and runs critical Chromium journeys;
    - creates a Next.js production build without changing the database.
 3. Vercel builds the same commit and runs the configured production build command.
 4. After CI succeeds, `Production Smoke` waits for Vercel to expose the exact commit SHA.
