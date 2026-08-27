@@ -9,11 +9,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run audit:phases && prisma generate && prisma migrate deploy && next build",
-    "build:ci": "npm run audit:phases && prisma generate && next build",
+    "build:ci": "npm run audit:phases && npm run verify:gps-stability && prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "audit:phases": "node scripts/verify-phase-contracts.mjs",
+    "verify:gps-stability": "node scripts/verify-gps-stability.mjs",
     "check": "npm run audit:phases && npm run typecheck && npm run lint && npm run build:ci",
     "smoke:production": "node scripts/smoke-production.mjs",
     "prisma:generate": "prisma generate",
