@@ -68,14 +68,28 @@ export default function ArSpatialLabels({ activeDogs, reports }: Props) {
   const cameraMode = useMapRuntimeStore((state) => state.cameraMode);
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
   const bearing = useMapRuntimeStore((state) => state.bearing);
+  const trackedLatitude = useMapRuntimeStore((state) => state.arTracking.anchorLatitude);
+  const trackedLongitude = useMapRuntimeStore((state) => state.arTracking.anchorLongitude);
+  const trackedHeading = useMapRuntimeStore((state) => state.arTracking.heading);
+  const trackingSource = useMapRuntimeStore((state) => state.arTracking.source);
+  const trackingState = useMapRuntimeStore((state) => state.arTracking.state);
   const fieldOfView = useMapRuntimeStore((state) => state.arFieldOfViewDegrees);
   const devicePitch = useMapRuntimeStore((state) => state.arDevicePitch);
   const layers = useMapRuntimeStore((state) => state.layers);
   const selectEntity = useMapRuntimeStore((state) => state.selectEntity);
 
   const labels = useMemo(() => {
-    if (cameraMode !== 'ar' || telemetry.latitude == null || telemetry.longitude == null) return [];
+    if (cameraMode !== 'ar') return [];
 
+    const userLatitude = trackedLatitude ?? telemetry.latitude;
+    const userLongitude = trackedLongitude ?? telemetry.longitude;
+    if (userLatitude == null || userLongitude == null) return [];
+
+    const slamHeadingActive = trackingState === 'tracking'
+      && trackingSource !== 'sensor-fusion'
+      && trackingSource !== 'none'
+      && trackedHeading != null;
+    const cameraBearing = slamHeadingActive ? trackedHeading as number : bearing;
     const entities: CameraEntity[] = [];
 
     if (layers.dogs || layers.buddies) {
@@ -116,18 +130,18 @@ export default function ArSpatialLabels({ activeDogs, reports }: Props) {
     return entities
       .map((entity) => {
         const distance = distanceMeters(
-          telemetry.latitude as number,
-          telemetry.longitude as number,
+          userLatitude,
+          userLongitude,
           entity.latitude,
           entity.longitude
         );
         const targetBearing = bearingDegrees(
-          telemetry.latitude as number,
-          telemetry.longitude as number,
+          userLatitude,
+          userLongitude,
           entity.latitude,
           entity.longitude
         );
-        const delta = angularDelta(bearing, targetBearing);
+        const delta = angularDelta(cameraBearing, targetBearing);
         const distanceFactor = 1 - clamp(distance / entity.maxDistanceMeters, 0, 1);
         return {
           ...entity,
@@ -142,7 +156,7 @@ export default function ArSpatialLabels({ activeDogs, reports }: Props) {
       .filter((entity) => entity.distance <= entity.maxDistanceMeters && Math.abs(entity.delta) <= halfFov)
       .sort((a, b) => a.distance - b.distance)
       .slice(0, 8);
-  }, [activeDogs, bearing, cameraMode, devicePitch, fieldOfView, layers.buddies, layers.dogs, layers.hazards, layers.reports, reports, telemetry.latitude, telemetry.longitude]);
+  }, [activeDogs, bearing, cameraMode, devicePitch, fieldOfView, layers.buddies, layers.dogs, layers.hazards, layers.reports, reports, telemetry.latitude, telemetry.longitude, trackedHeading, trackedLatitude, trackedLongitude, trackingSource, trackingState]);
 
   if (cameraMode !== 'ar' || !labels.length) return null;
 
