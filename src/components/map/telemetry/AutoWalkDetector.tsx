@@ -2,32 +2,24 @@
 
 import { useEffect, useRef } from 'react';
 import { classifyMotion } from '@/lib/telemetry/classifyMotion';
+import {
+  distanceMeters,
+  filterPedestrianPosition,
+  type PositionFilterState
+} from '@/lib/telemetry/filterPosition';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
 
-type Sample = {
-  latitude: number;
-  longitude: number;
-  accuracyMeters: number;
+type Sample = PositionFilterState & {
   speedMph: number;
-  timestamp: number;
 };
 
 const METERS_PER_MILE = 1609.344;
 const MAX_SAMPLE_AGE_MS = 60_000;
 
-function distanceMeters(a: Pick<Sample, 'latitude' | 'longitude'>, b: Pick<Sample, 'latitude' | 'longitude'>) {
-  const radius = 6_371_000;
-  const lat1 = a.latitude * Math.PI / 180;
-  const lat2 = b.latitude * Math.PI / 180;
-  const dLat = (b.latitude - a.latitude) * Math.PI / 180;
-  const dLng = (b.longitude - a.longitude) * Math.PI / 180;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * radius * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
 export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean }) {
   const samplesRef = useRef<Sample[]>([]);
   const lastAcceptedRef = useRef<Sample | null>(null);
+  const positionFilterRef = useRef<PositionFilterState | null>(null);
   const totalDistanceMetersRef = useRef(0);
   const movingSecondsRef = useRef(0);
 
@@ -37,41 +29,50 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
     const watchId = navigator.geolocation.watchPosition((position) => {
       const now = position.timestamp || Date.now();
       const coords = position.coords;
-      const last = lastAcceptedRef.current;
       const accuracyMeters = Math.max(0, coords.accuracy || 999);
-      const dtSeconds = last ? Math.max(0.1, (now - last.timestamp) / 1000) : 0;
-      const deltaMeters = last ? distanceMeters(last, { latitude: coords.latitude, longitude: coords.longitude }) : 0;
-      const inferredSpeedMph = dtSeconds > 0 ? (deltaMeters / METERS_PER_MILE) / (dtSeconds / 3600) : 0;
       const gpsSpeedMph = coords.speed != null && coords.speed >= 0 ? coords.speed * 2.236936 : null;
-      const speedMph = Math.max(0, gpsSpeedMph ?? inferredSpeedMph);
+      const state = useMapRuntimeStore.getState();
 
-      const sample: Sample = {
+      const filtered = filterPedestrianPosition(positionFilterRef.current, {
         latitude: coords.latitude,
         longitude: coords.longitude,
         accuracyMeters,
-        speedMph,
-        timestamp: now
+        timestamp: now,
+        speedMph: gpsSpeedMph
+      });
+
+      if (!filtered.accepted) {
+        state.patchTelemetry({
+          accuracyMeters,
+          updatedAt: new Date(now).toISOString()
+        });
+        return;
+      }
+
+      positionFilterRef.current = filtered.state;
+      const last = lastAcceptedRef.current;
+      const dtSeconds = last ? Math.max(0.1, (now - last.timestamp) / 1000) : 0;
+      const deltaMeters = last ? distanceMeters(last, filtered.state) : 0;
+      const inferredSpeedMph = dtSeconds > 0 ? (deltaMeters / METERS_PER_MILE) / (dtSeconds / 3600) : 0;
+      const speedMph = Math.max(0, gpsSpeedMph ?? inferredSpeedMph);
+
+      const sample: Sample = {
+        ...filtered.state,
+        speedMph
       };
 
-      const plausibleMovement = !last || (
-        accuracyMeters <= 65
-        && deltaMeters <= 250
-        && inferredSpeedMph <= 20
-      );
-
-      if (last && plausibleMovement && deltaMeters >= 1.5) {
+      if (last && filtered.moved && deltaMeters >= 1.5) {
         totalDistanceMetersRef.current += deltaMeters;
         if (speedMph >= 0.5 && speedMph <= 8) movingSecondsRef.current += dtSeconds;
       }
 
-      if (plausibleMovement) lastAcceptedRef.current = sample;
+      lastAcceptedRef.current = sample;
       samplesRef.current = [...samplesRef.current, sample].filter((entry) => now - entry.timestamp <= MAX_SAMPLE_AGE_MS);
 
       const window = samplesRef.current;
       const first = window[0] ?? sample;
       const displacement = distanceMeters(first, sample);
       const windowSeconds = Math.max(1, (sample.timestamp - first.timestamp) / 1000);
-      const state = useMapRuntimeStore.getState();
       const classification = classifyMotion({
         speedMph,
         accuracyMeters,
