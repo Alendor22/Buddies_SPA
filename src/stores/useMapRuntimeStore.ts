@@ -53,6 +53,29 @@ export type ActiveSpatialWalk = {
   startLongitude: number | null;
 };
 
+export type ArTrackingSource =
+  | 'none'
+  | 'sensor-fusion'
+  | 'arcore-webxr'
+  | 'webxr-slam'
+  | 'arkit-native'
+  | 'arcore-native';
+
+export type ArTrackingState = 'idle' | 'initializing' | 'tracking' | 'limited' | 'unsupported' | 'error';
+
+export type ArSpatialTracking = {
+  source: ArTrackingSource;
+  state: ArTrackingState;
+  anchorLatitude: number | null;
+  anchorLongitude: number | null;
+  heading: number | null;
+  xMeters: number;
+  yMeters: number;
+  zMeters: number;
+  message: string | null;
+  updatedAt: string | null;
+};
+
 type MapRuntimeState = {
   cameraMode: MapCameraMode;
   uiMode: MapUiMode;
@@ -63,6 +86,7 @@ type MapRuntimeState = {
   arFieldOfViewDegrees: number;
   arDevicePitch: number | null;
   arDeviceRoll: number | null;
+  arTracking: ArSpatialTracking;
   selectedEntity: SpatialEntitySelection;
   layers: Record<MapLayerKey, boolean>;
   telemetry: WalkTelemetry;
@@ -74,6 +98,8 @@ type MapRuntimeState = {
   setArOverlayOpacity: (opacity: number) => void;
   setArFieldOfViewDegrees: (degrees: number) => void;
   setArOrientation: (input: { heading?: number | null; pitch?: number | null; roll?: number | null }) => void;
+  patchArTracking: (tracking: Partial<ArSpatialTracking>) => void;
+  resetArTracking: () => void;
   toggleLayer: (layer: MapLayerKey) => void;
   setLayerVisible: (layer: MapLayerKey, visible: boolean) => void;
   selectEntity: (selection: SpatialEntitySelection) => void;
@@ -108,6 +134,19 @@ const initialWalk: ActiveSpatialWalk = {
   startLongitude: null
 };
 
+const initialArTracking: ArSpatialTracking = {
+  source: 'none',
+  state: 'idle',
+  anchorLatitude: null,
+  anchorLongitude: null,
+  heading: null,
+  xMeters: 0,
+  yMeters: 0,
+  zMeters: 0,
+  message: null,
+  updatedAt: null
+};
+
 function normalizeBearing(value: number) {
   return ((value % 360) + 360) % 360;
 }
@@ -122,6 +161,7 @@ export const useMapRuntimeStore = create<MapRuntimeState>((set) => ({
   arFieldOfViewDegrees: 68,
   arDevicePitch: null,
   arDeviceRoll: null,
+  arTracking: initialArTracking,
   selectedEntity: null,
   layers: {
     buddies: true,
@@ -158,6 +198,18 @@ export const useMapRuntimeStore = create<MapRuntimeState>((set) => ({
     arDevicePitch: pitch === undefined ? state.arDevicePitch : pitch,
     arDeviceRoll: roll === undefined ? state.arDeviceRoll : roll
   })),
+  patchArTracking: (tracking) => set((state) => ({
+    arTracking: {
+      ...state.arTracking,
+      ...tracking,
+      heading: typeof tracking.heading === 'number'
+        ? normalizeBearing(tracking.heading)
+        : tracking.heading === null
+          ? null
+          : state.arTracking.heading
+    }
+  })),
+  resetArTracking: () => set({ arTracking: initialArTracking }),
   toggleLayer: (layer) => set((state) => ({
     layers: { ...state.layers, [layer]: !state.layers[layer] }
   })),
