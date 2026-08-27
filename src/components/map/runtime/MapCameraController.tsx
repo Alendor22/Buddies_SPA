@@ -12,6 +12,10 @@ type WindowWithLegacyOrientation = Window & {
   orientation?: number;
 };
 
+const AR_REFERENCE_FOV_DEGREES = 68;
+const AR_MIN_ZOOM = 18.2;
+const AR_MAX_ZOOM = 21;
+
 function normalizeDegrees(value: number) {
   return ((value % 360) + 360) % 360;
 }
@@ -31,12 +35,24 @@ function getScreenRotation() {
   return typeof legacy === 'number' ? legacy : 0;
 }
 
+function arZoomForFieldOfView(baseZoom: number, fieldOfViewDegrees: number) {
+  // Mapbox does not expose a supported runtime camera-FOV setter. Calibrate the
+  // map projection against the physical camera by converting horizontal FOV to
+  // an equivalent zoom delta. Narrower FOV zooms the map in; wider FOV zooms out.
+  const safeFov = Math.max(45, Math.min(100, fieldOfViewDegrees));
+  const referenceTangent = Math.tan((AR_REFERENCE_FOV_DEGREES * Math.PI / 180) / 2);
+  const requestedTangent = Math.tan((safeFov * Math.PI / 180) / 2);
+  const zoomDelta = Math.log2(referenceTangent / requestedTangent);
+  return Math.max(AR_MIN_ZOOM, Math.min(AR_MAX_ZOOM, Math.max(19.2, baseZoom) + zoomDelta));
+}
+
 export default function MapCameraController() {
   const maps = useMap();
   const cameraMode = useMapRuntimeStore((state) => state.cameraMode);
   const followZoom = useMapRuntimeStore((state) => state.followZoom);
   const followPitch = useMapRuntimeStore((state) => state.followPitch);
   const bearing = useMapRuntimeStore((state) => state.bearing);
+  const arFieldOfViewDegrees = useMapRuntimeStore((state) => state.arFieldOfViewDegrees);
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
   const setArOrientation = useMapRuntimeStore((state) => state.setArOrientation);
   const setCameraMode = useMapRuntimeStore((state) => state.setCameraMode);
@@ -99,14 +115,15 @@ export default function MapCameraController() {
       const arBearing = hasDeviceHeading
         ? bearing
         : telemetry.heading ?? bearing ?? map.getBearing();
+      const arZoom = arZoomForFieldOfView(followZoom, arFieldOfViewDegrees);
 
       map.easeTo({
         center,
-        zoom: Math.max(19.2, followZoom),
+        zoom: arZoom,
         pitch: 80,
         bearing: arBearing,
         offset: [0, 185],
-        duration: hasDeviceHeading ? 140 : 500,
+        duration: hasDeviceHeading ? 140 : 350,
         essential: true
       });
       return;
@@ -136,7 +153,7 @@ export default function MapCameraController() {
         essential: true
       });
     }
-  }, [bearing, cameraMode, followPitch, followZoom, hasDeviceHeading, maps, telemetry.heading, telemetry.latitude, telemetry.longitude]);
+  }, [arFieldOfViewDegrees, bearing, cameraMode, followPitch, followZoom, hasDeviceHeading, maps, telemetry.heading, telemetry.latitude, telemetry.longitude]);
 
   return null;
 }
