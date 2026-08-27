@@ -12,34 +12,40 @@ type MapboxConfigState = {
 
 const MapboxConfigContext = createContext<MapboxConfigState | null>(null);
 
-export function MapboxProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState('');
-  const [loading, setLoading] = useState(true);
+export function MapboxProvider({ children, initialToken = '' }: { children: ReactNode; initialToken?: string }) {
+  const [token, setToken] = useState(initialToken);
+  const [loading, setLoading] = useState(!initialToken);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/maps/config?ts=${Date.now()}`, { cache: 'no-store' });
+      const response = await fetch(`/api/maps/config?ts=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' }
+      });
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Map configuration service returned an unexpected response.');
+      }
       const payload = await response.json() as { token?: string; error?: string };
       if (!response.ok || !payload.token) {
-        setToken('');
         setError(payload.error || 'Map configuration is unavailable.');
         return;
       }
       setToken(payload.token);
-    } catch {
-      setToken('');
-      setError('Map configuration could not be loaded.');
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Map configuration could not be loaded.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (!initialToken) void refresh();
+  }, [initialToken, refresh]);
 
   const value = useMemo<MapboxConfigState>(() => ({
     token,

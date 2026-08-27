@@ -1,8 +1,10 @@
 import { DogStatus } from '@prisma/client';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getCurrentUser, slugify } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { findDuplicateDog, normalizeDogName, uniqueDogSlug } from '@/lib/dogWrites';
+import { cleanPlainText, optionalPlainText } from '@/lib/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,63 +40,57 @@ function optionalUrl(value: string) {
   }
 }
 
-async function uniqueSlug(name: string) {
-  const base = slugify(name) || 'new-buddy';
-  let slug = base;
-  let suffix = 2;
-
-  while (await prisma.dog.findUnique({ where: { slug }, select: { id: true } })) {
-    slug = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return slug;
-}
-
 async function createDogAction(formData: FormData) {
   'use server';
 
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const name = String(formData.get('name') ?? '').trim();
-  const breed = String(formData.get('breed') ?? '').trim();
-  const birthDateRaw = String(formData.get('birthDate') ?? '').trim();
-  const weightRaw = String(formData.get('weightLbs') ?? '').trim();
-  const photoUrlRaw = String(formData.get('photoUrl') ?? '').trim();
+  const name = normalizeDogName(formData.get('name'));
+  const birthDateRaw = cleanPlainText(formData.get('birthDate'), 32);
+  const weightRaw = cleanPlainText(formData.get('weightLbs'), 16);
+  const photoUrlRaw = cleanPlainText(formData.get('photoUrl'), 2048);
   const birthDate = parseOptionalDate(birthDateRaw);
   const weightLbs = parseOptionalInteger(weightRaw, 1, 300);
   const photoUrl = optionalUrl(photoUrlRaw);
 
-  if (!name || name.length > 80) redirect('/dogs/new?error=name');
+  if (!name) redirect('/dogs/new?error=name');
   if (birthDateRaw && !birthDate) redirect('/dogs/new?error=date');
   if (Number.isNaN(weightLbs)) redirect('/dogs/new?error=weight');
   if (photoUrlRaw && !photoUrl) redirect('/dogs/new?error=url');
 
-  const dog = await prisma.dog.create({
-    data: {
-      ownerId: user.id,
-      name,
-      slug: await uniqueSlug(name),
-      breed: breed.slice(0, 120) || null,
-      birthDate,
-      weightLbs,
-      gender: String(formData.get('gender') ?? '').trim().slice(0, 40) || null,
-      photoUrl,
-      status: parseStatus(String(formData.get('status') ?? 'SAFE')),
-      temperament: String(formData.get('temperament') ?? '').trim().slice(0, 500) || null,
-      medicalNotes: String(formData.get('medicalNotes') ?? '').trim().slice(0, 800) || null,
-      vaccinationNotes: String(formData.get('vaccinationNotes') ?? '').trim().slice(0, 800) || null,
-      emergencyContact: String(formData.get('emergencyContact') ?? '').trim().slice(0, 160) || null,
-      spayedNeutered: checkbox(formData.get('spayedNeutered')),
-      friendlyDogs: checkbox(formData.get('friendlyDogs')),
-      friendlyCats: checkbox(formData.get('friendlyCats')),
-      friendlyChildren: checkbox(formData.get('friendlyChildren'))
-    },
-    select: { slug: true }
-  });
+  const duplicate = await findDuplicateDog(user.id, name);
+  if (duplicate) redirect('/dogs/new?error=duplicate');
 
-  redirect(`/dogs/${encodeURIComponent(dog.slug)}?created=1`);
+  try {
+    const dog = await prisma.dog.create({
+      data: {
+        ownerId: user.id,
+        name,
+        slug: await uniqueDogSlug(name),
+        breed: optionalPlainText(formData.get('breed'), 120),
+        birthDate,
+        weightLbs,
+        gender: optionalPlainText(formData.get('gender'), 40),
+        photoUrl,
+        status: parseStatus(cleanPlainText(formData.get('status'), 16) || 'SAFE'),
+        temperament: optionalPlainText(formData.get('temperament'), 500),
+        medicalNotes: optionalPlainText(formData.get('medicalNotes'), 800),
+        vaccinationNotes: optionalPlainText(formData.get('vaccinationNotes'), 800),
+        emergencyContact: optionalPlainText(formData.get('emergencyContact'), 160),
+        spayedNeutered: checkbox(formData.get('spayedNeutered')),
+        friendlyDogs: checkbox(formData.get('friendlyDogs')),
+        friendlyCats: checkbox(formData.get('friendlyCats')),
+        friendlyChildren: checkbox(formData.get('friendlyChildren'))
+      },
+      select: { slug: true }
+    });
+
+    redirect(`/dogs/${encodeURIComponent(dog.slug)}?created=1`);
+  } catch (error) {
+    console.error('create dog action failed', error);
+    redirect('/dogs/new?error=create');
+  }
 }
 
 function errorMessage(error?: string) {
@@ -102,6 +98,7 @@ function errorMessage(error?: string) {
   if (error === 'date') return 'Enter a valid birth date.';
   if (error === 'weight') return 'Weight must be a whole number from 1 to 300 lb.';
   if (error === 'url') return 'Photo URL must be a valid http or https address.';
+  if (error === 'duplicate') return 'You already have a dog profile with that name. Edit the existing profile instead of creating another.';
   return error ? 'The profile could not be created. Check the form and retry.' : null;
 }
 
@@ -123,7 +120,7 @@ export default async function NewDogPage({ searchParams }: { searchParams: Promi
         <Link href="/dashboard" className="rounded-lg border px-4 py-2">Cancel</Link>
       </div>
 
-      {message ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{message}</div> : null}
+      {message ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">{message}</div> : null}
 
       <form action={createDogAction} className="mt-8 grid gap-6 rounded-2xl border bg-white p-6 shadow-sm">
         <section>

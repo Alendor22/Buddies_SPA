@@ -5,6 +5,7 @@ import AppNavigation from '@/components/AppNavigation';
 import { MapboxProvider } from '@/components/providers/MapboxProvider';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -20,11 +21,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const user = await getCurrentUser();
   const notificationCount = user ? await getNotificationCount(user.id) : 0;
   const initial = user?.displayName?.slice(0, 1).toUpperCase() ?? 'A';
+  const mapboxToken = getPublicMapboxToken();
 
   return (
     <html lang="en">
       <body className="pb-24 sm:pb-0">
-        <MapboxProvider>
+        <MapboxProvider initialToken={mapboxToken}>
           <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
           {children}
         </MapboxProvider>

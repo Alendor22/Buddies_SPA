@@ -2,6 +2,7 @@ import { DogStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { findDuplicateDog, normalizeDogName } from '@/lib/dogWrites';
 import { cleanPlainText, mapPrismaWriteError, optionalPlainText } from '@/lib/mutations';
 
 function valueFrom(values: FormData, key: string) {
@@ -54,17 +55,22 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL('/auth/login', request.url), 303);
-
-  const values = await request.formData();
-  const id = cleanPlainText(values.get('id'), 64);
-  const dog = await prisma.dog.findFirst({ where: { id, ownerId: user.id }, select: { id: true, slug: true } });
-  if (!dog) return NextResponse.redirect(new URL('/dashboard?error=dog-not-found', request.url), 303);
-
-  const intent = cleanPlainText(values.get('_intent'), 24) || 'update';
+  let dogSlug = '';
+  let dogId = '';
+  let intent = 'update';
 
   try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.redirect(new URL('/auth/login', request.url), 303);
+
+    const values = await request.formData();
+    dogId = cleanPlainText(values.get('id'), 64);
+    const dog = await prisma.dog.findFirst({ where: { id: dogId, ownerId: user.id }, select: { id: true, slug: true } });
+    if (!dog) return NextResponse.redirect(new URL('/dogs?error=dog-not-found', request.url), 303);
+
+    dogSlug = dog.slug;
+    intent = cleanPlainText(values.get('_intent'), 24) || 'update';
+
     if (intent === 'remove') {
       await prisma.dog.delete({ where: { id: dog.id } });
       return NextResponse.redirect(new URL('/dashboard?removed=1', request.url), 303);
@@ -92,7 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?safe=1', request.url), 303);
     }
 
-    const name = cleanPlainText(values.get('name'), 80);
+    const name = normalizeDogName(values.get('name'));
     const birthDate = parseOptionalDate(valueFrom(values, 'birthDate'));
     const weight = parseOptionalNumber(valueFrom(values, 'weightLbs'), 1, 300, true);
     const latitude = parseOptionalNumber(valueFrom(values, 'latitude'), -90, 90);
@@ -106,11 +112,13 @@ export async function POST(request: NextRequest) {
     if (!latitude.valid) return validationRedirect(request, dog.slug, 'latitude');
     if (!longitude.valid) return validationRedirect(request, dog.slug, 'longitude');
 
+    const duplicate = await findDuplicateDog(user.id, name, dog.id);
+    if (duplicate) return validationRedirect(request, dog.slug, 'duplicateName');
+
     await prisma.dog.update({
       where: { id: dog.id },
       data: {
         name,
-        // Slug is a stable public identifier. Profile edits must not rewrite shared URLs/QR references.
         breed: optionalPlainText(values.get('breed'), 120),
         birthDate: birthDate.value,
         weightLbs: weight.value,
@@ -132,9 +140,10 @@ export async function POST(request: NextRequest) {
 
     return redirectToEdit(request, dog.slug, 'saved=1');
   } catch (error) {
-    console.error('dog write failed', { dogId: dog.id, intent, error });
+    console.error('dog write failed', { dogId, intent, error });
+    if (!dogSlug) return NextResponse.redirect(new URL('/dogs?error=save', request.url), 303);
     const failure = mapPrismaWriteError(error);
     const code = encodeURIComponent(failure.code ?? 'INTERNAL_ERROR');
-    return redirectToEdit(request, dog.slug, `error=form&code=${code}`);
+    return redirectToEdit(request, dogSlug, `error=form&code=${code}`);
   }
 }
