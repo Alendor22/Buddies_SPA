@@ -260,19 +260,6 @@ export default function WalkRoutePlanner({
     point: midpoint(point, tempLoopPoints[index + 1])
   })), [tempLoopPoints]);
 
-  function applyViewFeet(value: number) {
-    const next = normalizeFeet(value);
-    patchWalkPlanner({ viewFeet: next });
-    const map = mapRef.current;
-    const current = map?.getCenter();
-    const latitude = current?.lat ?? center.lat;
-    map?.flyTo({
-      center: current ? [current.lng, current.lat] : [center.lng, center.lat],
-      zoom: zoomForFeet(next, latitude),
-      duration: 250
-    });
-  }
-
   function setStartPoint(coordinate: Coordinate) {
     setSnapPreviewRoute([]);
     patchWalkPlanner({

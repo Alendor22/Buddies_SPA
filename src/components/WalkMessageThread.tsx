@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { channels, getRealtimeClient } from '@/lib/realtime';
 
 type MessageItem = {
@@ -44,7 +44,7 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
     return `${presenceLabels.length} online: ${presenceLabels.join(', ')}`;
   }, [presenceLabels]);
 
-  function appendMessages(incoming: MessageItem[]) {
+  const appendMessages = useCallback((incoming: MessageItem[]) => {
     if (!incoming.length) return;
     setMessages((current) => {
       const known = new Set(current.map((message) => message.id));
@@ -53,15 +53,15 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
       latestCreatedAtRef.current = next.at(-1)?.createdAt ?? latestCreatedAtRef.current;
       return next;
     });
-  }
+  }, []);
 
-  async function markRead() {
+  const markRead = useCallback(async () => {
     try {
       await fetch(`/api/walks/${walkId}/messages/read`, { method: 'POST' });
     } catch {
       // Read state is retried by polling and the next page load.
     }
-  }
+  }, [walkId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -141,9 +141,13 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
 
     let stopRealtime: (() => void) | undefined;
     void startRealtime().then((cleanup) => {
+      if (!active) {
+        cleanup?.();
+        return;
+      }
       stopRealtime = cleanup;
       // Realtime already delivers messages live; only poll as a fallback when it failed to connect.
-      if (!cleanup && active) {
+      if (!cleanup) {
         pollTimer = setInterval(() => { void pollMessages(); }, 15000);
       }
     });
@@ -155,7 +159,7 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
       stopRealtime?.();
       if (realtimeChannel) realtimeChannel.detach().catch(() => undefined);
     };
-  }, [walkId, currentLabel]);
+  }, [appendMessages, currentLabel, markRead, walkId]);
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

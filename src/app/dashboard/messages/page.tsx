@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
@@ -52,7 +53,7 @@ export default async function MessagesPage() {
           return (
             <Link key={walk.id} href={walkMessagesRoute(walk.id)} className="rounded-2xl border bg-white p-5 shadow-sm active:bg-slate-50">
               <div className="flex items-start gap-4">
-                {walk.dog.photoUrl ? <img src={walk.dog.photoUrl} alt={`${walk.dog.name} profile`} className="h-14 w-14 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
+                {walk.dog.photoUrl ? <Image src={walk.dog.photoUrl} alt={`${walk.dog.name} profile`} width={56} height={56} unoptimized className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold">{walk.dog.name} walk chat</h2><p className="text-sm text-slate-600">{walk.startsAt.toLocaleString()} · {walk.status}</p></div>{unread ? <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">{unread}</span> : null}</div>
                   <p className="mt-2 truncate text-sm text-slate-700">{lastMessage?.body ?? 'No messages yet.'}</p>

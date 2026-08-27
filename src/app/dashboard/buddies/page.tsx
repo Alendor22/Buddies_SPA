@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import DogBuddyRequestControl from '@/components/DogBuddyRequestControl';
@@ -56,7 +57,7 @@ function pageMessage(params: SearchParams) {
 }
 
 function DogAvatar({ dog }: { dog: { name: string; photoUrl: string | null } }) {
-  if (dog.photoUrl) return <img src={dog.photoUrl} alt={`${dog.name} avatar`} className="h-14 w-14 rounded-full object-cover" />;
+  if (dog.photoUrl) return <Image src={dog.photoUrl} alt={`${dog.name} avatar`} width={56} height={56} unoptimized className="h-14 w-14 shrink-0 rounded-full object-cover" />;
   return <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>;
 }
 

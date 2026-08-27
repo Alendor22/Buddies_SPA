@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import CheckInMapClient from '@/components/CheckInMapClient';
@@ -109,7 +110,7 @@ export default async function CheckInsPage({ searchParams }: { searchParams: Pro
           ) : checkIns.map((checkIn) => (
             <article key={checkIn.dog.id} className="rounded-2xl border bg-white p-5 shadow-sm">
               <div className="flex gap-3">
-                {checkIn.dog.photoUrl ? <img src={checkIn.dog.photoUrl} alt={`${checkIn.dog.name} profile`} className="h-14 w-14 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
+                {checkIn.dog.photoUrl ? <Image src={checkIn.dog.photoUrl} alt={`${checkIn.dog.name} profile`} width={56} height={56} unoptimized className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
                 <div className="min-w-0"><h3 className="font-semibold">{checkIn.dog.name}</h3><p className="text-sm text-slate-600">{checkIn.dog.breed ?? 'Breed not listed'}</p><p className="text-xs text-slate-500">Owner hidden</p></div>
               </div>
               <p className="mt-4 font-medium">{checkIn.placeName}</p>

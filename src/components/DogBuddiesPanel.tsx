@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 
@@ -23,7 +24,7 @@ export default async function DogBuddiesPanel({ dogId, dogName }: { dogId: strin
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {buddies.length === 0 ? <p className="text-sm text-slate-600">No accepted dog buddies yet.</p> : buddies.map((buddy) => (
           <Link key={buddy.id} href={`/dogs/${buddy.slug}`} className="flex gap-3 rounded-xl border bg-slate-50 p-3">
-            {buddy.photoUrl ? <img src={buddy.photoUrl} alt={`${buddy.name} profile`} className="h-12 w-12 rounded-full object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-xl text-white">🐶</div>}
+            {buddy.photoUrl ? <Image src={buddy.photoUrl} alt={`${buddy.name} profile`} width={48} height={48} unoptimized className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-xl text-white">🐶</div>}
             <div className="min-w-0">
               <p className="font-semibold">{buddy.name}</p>
               <p className="truncate text-sm text-slate-600">{buddy.breed ?? 'Breed not listed'} · {buddy.status}</p>

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -36,7 +37,7 @@ export default async function DogsPage() {
             return (
               <article key={dog.id} className="rounded-2xl border bg-white p-6 shadow-sm">
                 <Link href={`/dogs/${dog.slug}`} className="flex items-center gap-4">
-                  {dog.photoUrl ? <img src={dog.photoUrl} alt={`${dog.name} profile`} className="h-16 w-16 rounded-full object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
+                  {dog.photoUrl ? <Image src={dog.photoUrl} alt={`${dog.name} profile`} width={64} height={64} unoptimized className="h-16 w-16 shrink-0 rounded-full object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-2xl text-white">🐶</div>}
                   <div><h2 className="text-xl font-semibold">{dog.name}</h2><p className="mt-1 text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p></div>
                 </Link>
                 <div className={`mt-5 grid gap-2 text-center text-sm ${isOwner ? 'grid-cols-2' : 'grid-cols-1'}`}>

@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
-import { listActiveCheckIns } from '@/lib/checkIns';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';
 
@@ -29,17 +28,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   });
   const dogIds = dogs.map((dog) => dog.id);
 
-  const [dogBuddyCount, incomingBuddyCount, unreadMessages, activeCheckIns, activeDogPresences] = await Promise.all([
+  const [dogBuddyCount, incomingBuddyCount, unreadMessages, activeDogPresences] = await Promise.all([
     prisma.dogBuddy.count({ where: { OR: [{ dogAId: { in: dogIds } }, { dogBId: { in: dogIds } }] } }),
     prisma.dogBuddyRequest.count({ where: { receiverDogId: { in: dogIds }, status: 'PENDING' } }),
     prisma.notification.count({ where: { userId: user.id, routeKey: 'messages', readAt: null } }),
-    listActiveCheckIns(),
     prisma.dogPresence.count({ where: { expiresAt: { gt: new Date() } } })
-  ]).catch(() => [0, 0, 0, [], 0] as const);
-
-  const myActiveCheckIns = Array.isArray(activeCheckIns)
-    ? activeCheckIns.filter((checkIn) => checkIn.ownerId === user.id).length
-    : 0;
+  ]).catch(() => [0, 0, 0, 0] as const);
   const lostCount = dogs.filter((dog) => dog.status !== 'SAFE').length;
 
   return (
