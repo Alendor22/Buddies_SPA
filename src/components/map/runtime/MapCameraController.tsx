@@ -264,12 +264,13 @@ export default function MapCameraController() {
       ) {
         // AR pose updates arrive faster than a short ease animation can settle.
         // jumpTo prevents overlapping animations from amplifying sensor noise.
+        // Keep the tracked anchor at the viewport center in AR; adding a camera
+        // offset at this pitch makes heading changes look like lateral drift.
         map.jumpTo({
           center: [center.longitude, center.latitude],
           zoom: desiredZoom,
           pitch: 80,
-          bearing: desiredBearing,
-          offset: [0, 185]
+          bearing: desiredBearing
         });
       }
 
