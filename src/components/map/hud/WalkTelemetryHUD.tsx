@@ -1,6 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  LOCATION_STATUS_EVENT,
+  type LocationRuntimeStatusDetail
+} from '@/lib/telemetry/locationStatus';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
 
 function formatElapsed(totalSeconds: number) {
@@ -21,15 +25,50 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function locationLabel(detail: LocationRuntimeStatusDetail) {
+  switch (detail.status) {
+    case 'active':
+      return detail.accuracyMeters == null ? 'GPS LIVE' : `GPS ±${Math.round(detail.accuracyMeters)}m`;
+    case 'denied':
+      return 'GPS BLOCKED';
+    case 'unavailable':
+      return 'GPS UNAVAILABLE';
+    case 'timeout':
+      return 'GPS TIMEOUT';
+    case 'error':
+      return 'GPS ERROR';
+    default:
+      return 'GPS LOCATING';
+  }
+}
+
 export default function WalkTelemetryHUD() {
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
   const activeWalk = useMapRuntimeStore((state) => state.activeWalk);
   const uiMode = useMapRuntimeStore((state) => state.uiMode);
+  const [locationStatus, setLocationStatus] = useState<LocationRuntimeStatusDetail>({
+    status: telemetry.latitude != null && telemetry.longitude != null ? 'active' : 'requesting',
+    message: 'Acquiring device location…',
+    accuracyMeters: telemetry.accuracyMeters ?? undefined
+  });
+
+  useEffect(() => {
+    function handleLocationStatus(event: Event) {
+      const detail = (event as CustomEvent<LocationRuntimeStatusDetail>).detail;
+      if (detail) setLocationStatus(detail);
+    }
+
+    window.addEventListener(LOCATION_STATUS_EVENT, handleLocationStatus);
+    return () => window.removeEventListener(LOCATION_STATUS_EVENT, handleLocationStatus);
+  }, []);
 
   const motionLabel = useMemo(
     () => telemetry.motionClass.replaceAll('-', ' ').toUpperCase(),
     [telemetry.motionClass]
   );
+  const hasGpsFix = locationStatus.status === 'active'
+    && telemetry.latitude != null
+    && telemetry.longitude != null;
 
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-30 sm:inset-x-5 sm:top-5">
@@ -38,16 +77,21 @@ export default function WalkTelemetryHUD() {
           <span className="mr-2" aria-hidden="true">🐾</span>
           {activeWalk.startedAt ? (activeWalk.autoDetected ? 'AUTO WALK' : 'WALKING') : uiMode.replaceAll('-', ' ').toUpperCase()}
         </div>
-        <div className="rounded-full border border-white/25 bg-slate-950/55 px-3 py-2 text-[11px] font-semibold text-white/90 shadow-xl backdrop-blur-xl">
-          {motionLabel} · {Math.round(telemetry.confidence * 100)}%
+        <div
+          className="rounded-full border border-white/25 bg-slate-950/55 px-3 py-2 text-[11px] font-semibold text-white/90 shadow-xl backdrop-blur-xl"
+          title={locationStatus.message}
+        >
+          {hasGpsFix
+            ? `${motionLabel} · ${Math.round(telemetry.confidence * 100)}% · ${locationLabel(locationStatus)}`
+            : locationLabel(locationStatus)}
         </div>
       </div>
 
       <div className="mx-auto mt-2 grid max-w-3xl grid-cols-4 gap-2">
-        <Metric label="Distance" value={`${telemetry.distanceMiles.toFixed(2)} mi`} />
-        <Metric label="Time" value={formatElapsed(telemetry.elapsedSeconds)} />
-        <Metric label="Current" value={`${telemetry.currentSpeedMph.toFixed(1)} mph`} />
-        <Metric label="Average" value={`${telemetry.averageSpeedMph.toFixed(1)} mph`} />
+        <Metric label="Distance" value={hasGpsFix ? `${telemetry.distanceMiles.toFixed(2)} mi` : '—'} />
+        <Metric label="Time" value={hasGpsFix ? formatElapsed(telemetry.elapsedSeconds) : '—'} />
+        <Metric label="Current" value={hasGpsFix ? `${telemetry.currentSpeedMph.toFixed(1)} mph` : '—'} />
+        <Metric label="Average" value={hasGpsFix ? `${telemetry.averageSpeedMph.toFixed(1)} mph` : '—'} />
       </div>
     </div>
   );
