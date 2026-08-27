@@ -12,7 +12,6 @@ import WalkTelemetryHUD from '@/components/map/hud/WalkTelemetryHUD';
 import SpatialOverlaySheet from '@/components/map/interactions/SpatialOverlaySheet';
 import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
 import { useMapboxConfig } from '@/components/providers/MapboxProvider';
-import { channels, getRealtimeClient } from '@/lib/realtime';
 import {
   socialMapRealtimeEvents,
   type SocialMapPresenceLeftEvent,
@@ -34,6 +33,13 @@ type SocialMapPayload = {
   heatCells?: HeatCellMapItem[];
   reports?: ReportMapItem[];
   error?: string;
+};
+
+type RealtimeMessageHandler = (message: { data?: unknown }) => void;
+type RealtimeChannel = {
+  subscribe: (eventName: string, handler: RealtimeMessageHandler) => Promise<unknown>;
+  unsubscribe: (eventName: string, handler: RealtimeMessageHandler) => void;
+  detach: () => Promise<unknown>;
 };
 
 const RECONCILE_INTERVAL_MS = 60_000;
@@ -148,17 +154,14 @@ export default function BuddiesSpatialMap() {
   useEffect(() => {
     if (!currentNeighborhood) return;
 
-    // Captured after the guard: TypeScript does not carry the narrowing above into the
-    // nested startRealtime() declaration, so the channel name needs a definitely-string ref.
     const neighborhood = currentNeighborhood;
-
     let active = true;
-    let realtimeChannel: ReturnType<ReturnType<typeof getRealtimeClient>['channels']['get']> | null = null;
+    let realtimeChannel: RealtimeChannel | null = null;
 
-    const handlePresenceUpdated = (message: { data?: unknown }) => {
+    const handlePresenceUpdated: RealtimeMessageHandler = (message) => {
       if (!active || !isPresenceUpdatedEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const incoming = event.presence;
       const existing = activeDogsRef.current.find((dog) => dog.dogId === incoming.dogId);
 
@@ -181,32 +184,36 @@ export default function BuddiesSpatialMap() {
       } : dog));
     };
 
-    const handlePresenceLeft = (message: { data?: unknown }) => {
+    const handlePresenceLeft: RealtimeMessageHandler = (message) => {
       if (!active || !isPresenceLeftEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const dogId = event.dogId;
       setActiveDogs((current) => current.filter((dog) => dog.dogId !== dogId));
     };
 
-    const handleReportCreated = (message: { data?: unknown }) => {
+    const handleReportCreated: RealtimeMessageHandler = (message) => {
       if (!active || !isReportCreatedEvent(message.data)) return;
       const event = message.data;
-      if (event.neighborhoodKey !== currentNeighborhood) return;
+      if (event.neighborhoodKey !== neighborhood) return;
       const incoming = event.report;
       setReports((current) => current.some((report) => report.id === incoming.id) ? current : [incoming, ...current]);
     };
 
     async function startRealtime() {
       try {
-        const client = getRealtimeClient();
-        const channel = client.channels.get(channels.nearby(neighborhood));
+        // Realtime is an optional enhancement. Keep Ably out of the critical map hydration
+        // bundle so an incompatible browser runtime cannot take down the map itself.
+        const realtime = await import('@/lib/realtime');
+        if (!active) return;
+        const client = realtime.getRealtimeClient();
+        const channel = client.channels.get(realtime.channels.nearby(neighborhood)) as RealtimeChannel;
         realtimeChannel = channel;
         await channel.subscribe(socialMapRealtimeEvents.presenceUpdated, handlePresenceUpdated);
         await channel.subscribe(socialMapRealtimeEvents.presenceLeft, handlePresenceLeft);
         await channel.subscribe(socialMapRealtimeEvents.reportCreated, handleReportCreated);
-      } catch {
-        // The 60-second snapshot reconciliation remains the fallback when Ably is unavailable.
+      } catch (realtimeError) {
+        console.warn('Buddies realtime unavailable; using snapshot reconciliation.', realtimeError);
       }
     }
 
