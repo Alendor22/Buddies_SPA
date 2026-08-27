@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, { Marker } from 'react-map-gl/mapbox';
 import LiveMapLayers, {
   type ActiveDogMapItem,
@@ -12,6 +12,13 @@ import WalkTelemetryHUD from '@/components/map/hud/WalkTelemetryHUD';
 import SpatialOverlaySheet from '@/components/map/interactions/SpatialOverlaySheet';
 import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
 import { useMapboxConfig } from '@/components/providers/MapboxProvider';
+import { channels, getRealtimeClient } from '@/lib/realtime';
+import {
+  socialMapRealtimeEvents,
+  type SocialMapPresenceLeftEvent,
+  type SocialMapPresenceUpdatedEvent,
+  type SocialMapReportCreatedEvent
+} from '@/lib/socialMapRealtime';
 import { DEFAULT_CENTER } from '@/stores/useBuddiesStore';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
 import ArCameraPermissionHelp from './ArCameraPermissionHelp';
@@ -29,6 +36,39 @@ type SocialMapPayload = {
   error?: string;
 };
 
+const RECONCILE_INTERVAL_MS = 60_000;
+const UNKNOWN_PRESENCE_REFRESH_DELAY_MS = 1_000;
+
+function neighborhoodCell(latitude: number | null, longitude: number | null) {
+  if (latitude == null || longitude == null) return null;
+  return `${latitude.toFixed(2)},${longitude.toFixed(2)}`;
+}
+
+function isPresenceUpdatedEvent(value: unknown): value is SocialMapPresenceUpdatedEvent {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as Partial<SocialMapPresenceUpdatedEvent>;
+  return typeof event.neighborhoodKey === 'string'
+    && Boolean(event.presence)
+    && typeof event.presence?.dogId === 'string'
+    && typeof event.presence?.id === 'string';
+}
+
+function isPresenceLeftEvent(value: unknown): value is SocialMapPresenceLeftEvent {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as Partial<SocialMapPresenceLeftEvent>;
+  return typeof event.neighborhoodKey === 'string'
+    && typeof event.dogId === 'string'
+    && typeof event.presenceId === 'string';
+}
+
+function isReportCreatedEvent(value: unknown): value is SocialMapReportCreatedEvent {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as Partial<SocialMapReportCreatedEvent>;
+  return typeof event.neighborhoodKey === 'string'
+    && Boolean(event.report)
+    && typeof event.report?.id === 'string';
+}
+
 export default function BuddiesSpatialMap() {
   const { token, loading, error, refresh } = useMapboxConfig();
   const telemetry = useMapRuntimeStore((state) => state.telemetry);
@@ -43,13 +83,26 @@ export default function BuddiesSpatialMap() {
   const [status, setStatus] = useState('Map ready. Walk detection starts when location permission is available.');
   const [arOrientationStatus, setArOrientationStatus] = useState<'granted' | 'denied' | 'unavailable' | null>(null);
   const [arCameraStatus, setArCameraStatus] = useState<ArCameraStatus>('idle');
+  const activeDogsRef = useRef<ActiveDogMapItem[]>([]);
+  const delayedRefreshRef = useRef<number | null>(null);
+
+  const currentNeighborhood = useMemo(
+    () => neighborhoodCell(telemetry.latitude, telemetry.longitude),
+    [telemetry.latitude, telemetry.longitude]
+  );
+
+  useEffect(() => {
+    activeDogsRef.current = activeDogs;
+  }, [activeDogs]);
 
   const loadSocialMap = useCallback(async () => {
     const query = new URLSearchParams();
-    if (telemetry.latitude != null && telemetry.longitude != null) {
-      query.set('lat', telemetry.latitude.toFixed(6));
-      query.set('lng', telemetry.longitude.toFixed(6));
+    if (currentNeighborhood) {
+      const [latitude, longitude] = currentNeighborhood.split(',');
+      query.set('lat', latitude);
+      query.set('lng', longitude);
     }
+
     try {
       const response = await fetch(`/api/social-map${query.size ? `?${query.toString()}` : ''}`, { cache: 'no-store' });
       const payload = await response.json() as SocialMapPayload;
@@ -60,13 +113,114 @@ export default function BuddiesSpatialMap() {
     } catch (loadError) {
       setStatus(loadError instanceof Error ? loadError.message : 'Social map unavailable.');
     }
-  }, [telemetry.latitude, telemetry.longitude]);
+  }, [currentNeighborhood]);
+
+  const scheduleSnapshotRefresh = useCallback(() => {
+    if (delayedRefreshRef.current != null) return;
+    delayedRefreshRef.current = window.setTimeout(() => {
+      delayedRefreshRef.current = null;
+      void loadSocialMap();
+    }, UNKNOWN_PRESENCE_REFRESH_DELAY_MS);
+  }, [loadSocialMap]);
 
   useEffect(() => {
     void loadSocialMap();
-    const timer = window.setInterval(() => void loadSocialMap(), 8_000);
-    return () => window.clearInterval(timer);
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadSocialMap();
+    }, RECONCILE_INTERVAL_MS);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void loadSocialMap();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (delayedRefreshRef.current != null) {
+        window.clearTimeout(delayedRefreshRef.current);
+        delayedRefreshRef.current = null;
+      }
+    };
   }, [loadSocialMap]);
+
+  useEffect(() => {
+    if (!currentNeighborhood) return;
+
+    // Captured after the guard: TypeScript does not carry the narrowing above into the
+    // nested startRealtime() declaration, so the channel name needs a definitely-string ref.
+    const neighborhood = currentNeighborhood;
+
+    let active = true;
+    let realtimeChannel: ReturnType<ReturnType<typeof getRealtimeClient>['channels']['get']> | null = null;
+
+    const handlePresenceUpdated = (message: { data?: unknown }) => {
+      if (!active || !isPresenceUpdatedEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const incoming = event.presence;
+      const existing = activeDogsRef.current.find((dog) => dog.dogId === incoming.dogId);
+
+      if (!existing) {
+        scheduleSnapshotRefresh();
+        return;
+      }
+
+      setActiveDogs((current) => current.map((dog) => dog.dogId === incoming.dogId ? {
+        ...dog,
+        id: incoming.id,
+        dogId: incoming.dogId,
+        dogName: incoming.dogName,
+        dogSlug: incoming.dogSlug,
+        breed: incoming.breed,
+        status: incoming.status,
+        walkingScore: incoming.walkingScore,
+        avatar: incoming.avatar,
+        device_loc: incoming.device_loc
+      } : dog));
+    };
+
+    const handlePresenceLeft = (message: { data?: unknown }) => {
+      if (!active || !isPresenceLeftEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const dogId = event.dogId;
+      setActiveDogs((current) => current.filter((dog) => dog.dogId !== dogId));
+    };
+
+    const handleReportCreated = (message: { data?: unknown }) => {
+      if (!active || !isReportCreatedEvent(message.data)) return;
+      const event = message.data;
+      if (event.neighborhoodKey !== currentNeighborhood) return;
+      const incoming = event.report;
+      setReports((current) => current.some((report) => report.id === incoming.id) ? current : [incoming, ...current]);
+    };
+
+    async function startRealtime() {
+      try {
+        const client = getRealtimeClient();
+        const channel = client.channels.get(channels.nearby(neighborhood));
+        realtimeChannel = channel;
+        await channel.subscribe(socialMapRealtimeEvents.presenceUpdated, handlePresenceUpdated);
+        await channel.subscribe(socialMapRealtimeEvents.presenceLeft, handlePresenceLeft);
+        await channel.subscribe(socialMapRealtimeEvents.reportCreated, handleReportCreated);
+      } catch {
+        // The 60-second snapshot reconciliation remains the fallback when Ably is unavailable.
+      }
+    }
+
+    void startRealtime();
+
+    return () => {
+      active = false;
+      if (!realtimeChannel) return;
+      realtimeChannel.unsubscribe(socialMapRealtimeEvents.presenceUpdated, handlePresenceUpdated);
+      realtimeChannel.unsubscribe(socialMapRealtimeEvents.presenceLeft, handlePresenceLeft);
+      realtimeChannel.unsubscribe(socialMapRealtimeEvents.reportCreated, handleReportCreated);
+      void realtimeChannel.detach().catch(() => undefined);
+    };
+  }, [currentNeighborhood, scheduleSnapshotRefresh]);
 
   useEffect(() => {
     function beginReport(event: Event) {
@@ -117,11 +271,12 @@ export default function BuddiesSpatialMap() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: pendingReportType, latitude, longitude })
       });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Report could not be published.');
+      const payload = await response.json() as { error?: string; report?: ReportMapItem };
+      if (!response.ok || !payload.report) throw new Error(payload.error || 'Report could not be published.');
+      const report = payload.report;
+      setReports((current) => current.some((entry) => entry.id === report.id) ? current : [report, ...current]);
       setPendingReportType(null);
       setStatus('Report published to the local pack.');
-      await loadSocialMap();
     } catch (reportError) {
       setStatus(reportError instanceof Error ? reportError.message : 'Report could not be published.');
     }

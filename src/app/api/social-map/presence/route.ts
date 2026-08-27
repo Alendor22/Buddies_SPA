@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { realtimeChannels } from '@/lib/realtimeChannels';
+import { publishRealtime } from '@/lib/realtimeServer';
 import { neighborhoodKey, presenceStatusFromScore, walkingConfidence } from '@/lib/socialMap';
+import { socialMapRealtimeEvents, type SocialMapPresenceLeftEvent, type SocialMapPresenceUpdatedEvent } from '@/lib/socialMapRealtime';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   const dog = await prisma.dog.findFirst({
     where: { id: dogId, ownerId: user.id },
-    select: { id: true, ownerId: true }
+    select: { id: true, ownerId: true, name: true, slug: true, breed: true }
   });
   if (!dog) return NextResponse.json({ error: 'Dog not found.' }, { status: 404 });
 
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
 
   const previous = await prisma.dogPresence.findUnique({
     where: { dogId: dog.id },
-    select: { expiresAt: true }
+    select: { expiresAt: true, neighborhoodKey: true }
   });
   const isNewSession = !previous || previous.expiresAt <= now;
 
@@ -114,15 +117,51 @@ export async function POST(request: NextRequest) {
     ...(isNewSession ? { startedAt: now } : {})
   };
 
-  // Upsert on dogId: a heartbeat updates the dog's one live presence row rather than
-  // inserting a new row every call, which would grow the table unboundedly. startedAt
-  // resets when the prior session already expired, so it still reflects "this walk", not
-  // whenever the dog's row was first ever created.
   const presence = await prisma.dogPresence.upsert({
     where: { dogId: dog.id },
     create: { dogId: dog.id, ...presenceFields },
     update: presenceFields
   });
+
+  const realtimePresence: SocialMapPresenceUpdatedEvent = {
+    neighborhoodKey: key,
+    presence: {
+      id: presence.id,
+      dogId: presence.dogId,
+      dogName: dog.name,
+      dogSlug: dog.slug,
+      breed: dog.breed,
+      avatar: dog.name.trim().slice(0, 2).toUpperCase(),
+      status: presence.status,
+      walkingScore: presence.walkingScore,
+      neighborhoodKey: key,
+      device_loc: {
+        lat: presence.latitude,
+        lng: presence.longitude,
+        accuracyMeters: presence.accuracyMeters,
+        speedMph: presence.speedMph,
+        heading: presence.heading,
+        timestamp: presence.lastHeartbeatAt.toISOString()
+      }
+    }
+  };
+
+  const publishes: Promise<boolean>[] = [
+    publishRealtime(realtimeChannels.nearby(key), socialMapRealtimeEvents.presenceUpdated, realtimePresence)
+  ];
+
+  if (previous?.neighborhoodKey && previous.neighborhoodKey !== key) {
+    const leftEvent: SocialMapPresenceLeftEvent = {
+      neighborhoodKey: previous.neighborhoodKey,
+      dogId: presence.dogId,
+      presenceId: presence.id
+    };
+    publishes.push(
+      publishRealtime(realtimeChannels.nearby(previous.neighborhoodKey), socialMapRealtimeEvents.presenceLeft, leftEvent)
+    );
+  }
+
+  await Promise.all(publishes);
 
   return NextResponse.json({
     ok: true,

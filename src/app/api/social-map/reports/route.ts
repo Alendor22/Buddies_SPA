@@ -2,7 +2,10 @@ import { MapReportType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { realtimeChannels } from '@/lib/realtimeChannels';
+import { publishRealtime } from '@/lib/realtimeServer';
 import { neighborhoodKey } from '@/lib/socialMap';
+import { socialMapRealtimeEvents, type SocialMapReportCreatedEvent } from '@/lib/socialMapRealtime';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   const expiresAt = new Date(Date.now() + 90 * 60 * 1000);
+  const key = neighborhoodKey(latitude, longitude);
   const report = await prisma.mapReport.create({
     data: {
       reporterId: user.id,
@@ -56,10 +60,22 @@ export async function POST(request: NextRequest) {
       body,
       latitude,
       longitude,
-      neighborhoodKey: neighborhoodKey(latitude, longitude),
+      neighborhoodKey: key,
       expiresAt
     }
   });
+
+  const realtimeEvent: SocialMapReportCreatedEvent = {
+    neighborhoodKey: key,
+    report: {
+      id: report.id,
+      type: report.type,
+      title: report.title,
+      latitude: report.latitude,
+      longitude: report.longitude
+    }
+  };
+  await publishRealtime(realtimeChannels.nearby(key), socialMapRealtimeEvents.reportCreated, realtimeEvent);
 
   return NextResponse.json({
     ok: true,
