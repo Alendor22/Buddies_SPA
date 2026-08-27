@@ -33,15 +33,19 @@ export default function MapActionBar() {
 
   async function toggleAr() {
     if (cameraMode === 'ar') {
-      window.dispatchEvent(new CustomEvent('buddies:ar-camera-stop'));
+      window.dispatchEvent(new CustomEvent('buddies:ar-tracking-stop'));
       camera('follow');
       return;
     }
 
     camera('ar');
-    // Dispatch synchronously from the tap so iOS/Safari can associate the
-    // getUserMedia request with a direct user gesture.
-    window.dispatchEvent(new CustomEvent('buddies:ar-camera-request'));
+
+    // Keep the platform tracking request synchronous with the tap. Immersive
+    // WebXR (ARCore) and native AR bridges require an explicit user activation.
+    window.dispatchEvent(new CustomEvent('buddies:ar-tracking-request'));
+
+    // iOS Safari's stabilized fallback still needs explicit orientation access.
+    // Native ARKit/ARCore and WebXR provide 6DoF pose directly when available.
     const permission = await requestOrientationPermission();
     window.dispatchEvent(new CustomEvent('buddies:ar-orientation-permission', { detail: permission }));
   }
