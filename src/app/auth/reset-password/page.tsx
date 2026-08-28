@@ -17,7 +17,14 @@ async function resetPasswordAction(formData: FormData) {
   const user = await prisma.user.findFirst({ where: { id: payload.userId, email: payload.email }, select: { id: true } });
   if (!user) redirect('/auth/reset-password?error=expired');
 
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(password) } });
+  // Changing the password must invalidate every existing session. Without the version
+  // bump, someone who had stolen a session cookie would keep their access after the
+  // legitimate owner reset the password to lock them out -- which is usually the exact
+  // reason the reset is happening.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: hashPassword(password), sessionVersion: { increment: 1 } }
+  });
   redirect('/auth/login?reset=1');
 }
 
