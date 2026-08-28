@@ -62,6 +62,7 @@ async function createDogAction(formData: FormData) {
   const duplicate = await findDuplicateDog(user.id, name);
   if (duplicate) redirect('/dogs/new?error=duplicate');
 
+  let slug: string;
   try {
     const dog = await prisma.dog.create({
       data: {
@@ -85,12 +86,13 @@ async function createDogAction(formData: FormData) {
       },
       select: { slug: true }
     });
-
-    redirect(`/dogs/${encodeURIComponent(dog.slug)}?created=1`);
+    slug = dog.slug;
   } catch (error) {
     console.error('create dog action failed', error);
     redirect('/dogs/new?error=create');
   }
+
+  redirect(`/dogs/${encodeURIComponent(slug)}?created=1`);
 }
 
 function errorMessage(error?: string) {

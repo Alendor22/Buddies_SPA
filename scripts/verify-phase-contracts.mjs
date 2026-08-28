@@ -31,7 +31,8 @@ const phases = {
     '.github/workflows/ci.yml',
     '.github/workflows/production-smoke.yml',
     'DEPLOYMENT.md',
-    'next.config.mjs'
+    'next.config.mjs',
+    'prisma/schema.prisma'
   ]
 };
 
@@ -65,6 +66,7 @@ for (const model of ['DogBuddyRequest', 'DogBuddy', 'WalkInvitation', 'Notificat
 for (const field of ['routeGeometry', 'routeSteps', 'routeDistanceMiles', 'routeDurationMin']) {
   assertIncludes('Prisma walk route storage', schema, field);
 }
+assertIncludes('Prisma Vercel runtime target', schema, 'rhel-openssl-3.0.x');
 
 const createDog = await readFile('src/app/dogs/new/page.tsx', 'utf8');
 assertIncludes('Dog create', createDog, 'action={createDogAction}');

@@ -23,6 +23,7 @@
     "test:coverage": "vitest run --coverage tests/unit tests/component tests/integration tests/contracts",
     "test:database": "node scripts/assert-test-database.mjs && vitest run --config vitest.database.config.ts",
     "test:e2e": "playwright test --project=chromium",
+    "test:routes": "playwright test tests/e2e/route-state-200.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:audit": "node scripts/report-test-suite.mjs",
     "test:ci": "npm run test:audit && npm run test:coverage",

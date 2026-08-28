@@ -2,6 +2,11 @@ import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifest from '../test-suite.manifest.json';
+import {
+  discoverPageRouteTemplates,
+  dynamicParameterNames,
+  materializePageRoute
+} from '../support/app-routes';
 
 function walk(directory: string, files: string[] = []) {
   for (const entry of readdirSync(directory)) {
@@ -55,5 +60,17 @@ describe('progressive application test inventory', () => {
     );
 
     expect(withoutTests).toEqual([]);
+  });
+
+  it('keeps every page route in the HTTP 200 verification inventory', () => {
+    const templates = discoverPageRouteTemplates();
+    const parameters = manifest.routeState200.dynamicParameters;
+    const missingParameters = [...new Set(templates.flatMap(dynamicParameterNames))]
+      .filter((name) => !Object.prototype.hasOwnProperty.call(parameters, name));
+    const concreteRoutes = templates.map((template) => materializePageRoute(template, parameters));
+
+    expect(missingParameters).toEqual([]);
+    expect(new Set(concreteRoutes).size).toBe(concreteRoutes.length);
+    expect(concreteRoutes).toContain('/');
   });
 });
