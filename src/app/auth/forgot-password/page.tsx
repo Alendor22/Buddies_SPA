@@ -1,6 +1,8 @@
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createAuthToken, normalizeEmail } from '@/lib/auth';
+import { clientIdentifier, rateLimit } from '@/lib/rateLimit';
 import { absoluteAppUrl, sendTransactionalEmail } from '@/lib/email';
 import { prisma } from '@/lib/db';
 
@@ -8,7 +10,17 @@ async function forgotPasswordAction(formData: FormData) {
   'use server';
   const email = normalizeEmail(String(formData.get('email') ?? ''));
 
-  if (email) {
+  // Without a limit, this endpoint will send an unlimited number of password-reset
+  // emails to any address that has an account. The response is deliberately identical
+  // whether or not we throttled, to preserve the existing non-enumerable behaviour.
+  const ip = clientIdentifier((await headers()).get('x-forwarded-for'));
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit('forgot:ip', ip, 5, 60 * 60),
+    rateLimit('forgot:email', email || 'empty', 3, 60 * 60)
+  ]);
+  const throttled = !byIp.allowed || !byEmail.allowed;
+
+  if (email && !throttled) {
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, emailVerifiedAt: true } });
     if (user?.emailVerifiedAt) {
       const token = createAuthToken(user.id, user.email, 'reset-password');
