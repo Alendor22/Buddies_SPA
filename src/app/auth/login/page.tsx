@@ -5,6 +5,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error, reset } = await searchParams;
   const errorMessage = error === 'missing'
     ? 'Email and password are required.'
+    : error === 'throttled'
+      ? 'Too many sign-in attempts. Wait a few minutes and try again.'
     : error === 'exists'
       ? 'An account already exists for that email. Sign in or reset the password.'
       : error
