@@ -36,7 +36,7 @@ describe('migrated PostgreSQL invariants', () => {
 
     await expect(prisma.dog.create({
       data: { ownerId: owner.id, name: 'luna', slug: uniqueTestId('luna-duplicate') }
-    })).rejects.toThrow(/duplicate dog name for owner/i);
+    })).rejects.toMatchObject({ code: 'P2002' });
   });
 
   it('allows the same normalized dog name for different owners', async () => {
