@@ -1,9 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const cookieStore = vi.hoisted(() => ({
+  get: vi.fn(),
+  set: vi.fn(),
+  delete: vi.fn()
+}));
+const prismaMock = vi.hoisted(() => ({
+  user: {
+    findUnique: vi.fn(),
+    update: vi.fn()
+  }
+}));
+
+vi.mock('next/headers', () => ({ cookies: vi.fn(async () => cookieStore) }));
+vi.mock('@/lib/db', () => ({ prisma: prismaMock }));
+
 import {
+  clearSession,
   createAuthToken,
+  createSession,
   encodeSession,
+  getCurrentUser,
   hashPassword,
+  LOGOUT_COOKIE,
   normalizeEmail,
+  requireCurrentUser,
+  SESSION_COOKIE,
   sessionCookieOptions,
   slugify,
   verifyAuthToken,
@@ -13,6 +35,7 @@ import {
 describe('authentication primitives', () => {
   beforeEach(() => {
     vi.stubEnv('AUTH_SECRET', 'unit-test-auth-secret-at-least-32-characters');
+    cookieStore.get.mockReturnValue(undefined);
   });
 
   it('normalizes identities and stable URL slugs', () => {
@@ -66,5 +89,100 @@ describe('authentication primitives', () => {
       maxAge: 2_592_000,
       path: '/'
     });
+  });
+
+  it('creates a versioned session and clears the logout marker', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ sessionVersion: 4 });
+
+    await createSession('user-1');
+
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      select: { sessionVersion: true }
+    });
+    expect(cookieStore.set).toHaveBeenCalledWith(
+      SESSION_COOKIE,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
+    expect(cookieStore.set).toHaveBeenCalledWith(
+      LOGOUT_COOKIE,
+      '',
+      expect.objectContaining({ maxAge: 0 })
+    );
+  });
+
+  it('revokes the stored session version when signing out', async () => {
+    cookieStore.get.mockImplementation((name: string) => name === SESSION_COOKIE
+      ? { value: encodeSession('user-1', 2) }
+      : undefined);
+    prismaMock.user.update.mockResolvedValue({ id: 'user-1' });
+
+    await clearSession();
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { sessionVersion: { increment: 1 } }
+    });
+    expect(cookieStore.delete).toHaveBeenCalledWith(SESSION_COOKIE);
+    expect(cookieStore.set).toHaveBeenCalledWith(
+      LOGOUT_COOKIE,
+      '1',
+      expect.objectContaining({ maxAge: 2_592_000 })
+    );
+  });
+
+  it('accepts only a verified user with the current session version', async () => {
+    cookieStore.get.mockImplementation((name: string) => name === SESSION_COOKIE
+      ? { value: encodeSession('user-1', 3) }
+      : undefined);
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.test',
+      displayName: 'Dog Parent',
+      role: 'OWNER',
+      emailVerifiedAt: new Date(),
+      sessionVersion: 3
+    });
+
+    await expect(getCurrentUser()).resolves.toEqual({
+      id: 'user-1',
+      email: 'owner@example.test',
+      displayName: 'Dog Parent',
+      role: 'OWNER'
+    });
+
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.test',
+      displayName: 'Dog Parent',
+      role: 'OWNER',
+      emailVerifiedAt: new Date(),
+      sessionVersion: 4
+    });
+    await expect(getCurrentUser()).resolves.toBeNull();
+  });
+
+  it('honors the signed-out marker without querying the database', async () => {
+    cookieStore.get.mockImplementation((name: string) => name === LOGOUT_COOKIE
+      ? { value: '1' }
+      : undefined);
+
+    await expect(getCurrentUser()).resolves.toBeNull();
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when an authenticated user is required', async () => {
+    await expect(requireCurrentUser()).rejects.toThrow('Authentication required');
+  });
+
+  it('still clears local cookies when server-side revocation fails', async () => {
+    cookieStore.get.mockImplementation((name: string) => name === SESSION_COOKIE
+      ? { value: encodeSession('missing-user', 1) }
+      : undefined);
+    prismaMock.user.update.mockRejectedValue(new Error('user already removed'));
+
+    await expect(clearSession()).resolves.toBeUndefined();
+    expect(cookieStore.delete).toHaveBeenCalledWith(SESSION_COOKIE);
   });
 });
