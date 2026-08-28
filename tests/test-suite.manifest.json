@@ -4,7 +4,9 @@
     "dynamicParameters": {
       "slug": "route-state-dog",
       "publicId": "route-state-dog-public",
-      "id": "route-state-walk"
+      "id": "route-state-walk",
+      "sign-in": "continue",
+      "sign-up": "continue"
     }
   },
   "capabilities": [
@@ -28,7 +30,9 @@
         "src/app/logout/",
         "src/app/api/auth/",
         "src/app/api/session/",
-        "src/lib/auth.ts"
+        "src/lib/auth.ts",
+        "src/app/sign-in/",
+        "src/app/sign-up/"
       ],
       "testPrefixes": ["tests/unit/auth/", "tests/integration/auth/", "tests/e2e/"]
     },

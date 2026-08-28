@@ -1,3 +1,4 @@
+import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Analytics } from '@vercel/analytics/next';
@@ -26,11 +27,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en">
       <body className="pb-24 sm:pb-0">
-        <MapboxProvider initialToken={mapboxToken}>
+        <ClerkProvider>
+          <MapboxProvider initialToken={mapboxToken}>
           <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
           {children}
-        </MapboxProvider>
-        <Analytics />
+          </MapboxProvider>
+          <Analytics />
+        </ClerkProvider>
       </body>
     </html>
   );
