@@ -52,7 +52,8 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'image/svg+xml; charset=utf-8',
-        'Cache-Control': 'no-store, max-age=0'
+        // Deterministic output for a given id; regenerating on every scan was pure waste.
+        'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
       }
     });
   }
@@ -67,7 +68,7 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': 'image/png',
-      'Cache-Control': 'no-store, max-age=0'
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
     }
   });
 }
