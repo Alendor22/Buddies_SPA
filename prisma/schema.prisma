@@ -81,6 +81,7 @@ model User {
   passwordHash          String?
   role                  UserRole        @default(OWNER)
   emailVerifiedAt       DateTime?
+  sessionVersion        Int             @default(0)
   avatarUrl             String?
   bio                    String?
   city                   String?
