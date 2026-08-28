@@ -8,12 +8,15 @@ export const revalidate = 0;
 // tables grew without bound. Vercel Cron hits this on a schedule (see vercel.json) to purge
 // rows once they've aged out of the live map.
 export async function GET(request: NextRequest) {
+  // Fail closed. The previous `if (secret)` guard meant a missing CRON_SECRET left this
+  // endpoint completely public, which is the opposite of what you want when the variable
+  // goes missing by accident.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-    }
+  if (!secret) {
+    return NextResponse.json({ error: 'Cron secret is not configured.' }, { status: 503 });
+  }
+  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
   const now = new Date();
