@@ -18,6 +18,7 @@ const testFiles = walk('tests').filter((file) => /\.(test|spec)\.(ts|tsx)$/.test
 const layers = ['unit', 'component', 'integration', 'database', 'contracts', 'e2e'];
 const covered = manifest.apiPolicies.filter((entry) => entry.testState === 'covered').length;
 const total = manifest.apiPolicies.length;
+const pageRouteCount = walk('src/app').filter((file) => file.endsWith('/page.tsx')).length;
 
 console.log('Buddies progressive test suite');
 console.log('-------------------------------');
@@ -27,5 +28,6 @@ for (const layer of layers) {
 }
 console.log('');
 console.log('Capabilities mapped: ' + manifest.capabilities.length);
+console.log('Route-state HTTP 200 checks: ' + pageRouteCount + ' page routes');
 console.log('API policies covered: ' + covered + '/' + total);
 console.log('API policy backlog: ' + (total - covered));

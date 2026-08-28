@@ -1,5 +1,12 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "routeState200": {
+    "dynamicParameters": {
+      "slug": "route-state-dog",
+      "publicId": "route-state-dog-public",
+      "id": "route-state-walk"
+    }
+  },
   "capabilities": [
     {
       "id": "application-shell",

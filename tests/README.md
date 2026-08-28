@@ -21,6 +21,7 @@ This package surrounds the application with tests at several speeds. It is inten
 - npm run test:coverage writes text, HTML, JSON, and LCOV reports.
 - npm run test:database runs guarded, serial PostgreSQL tests.
 - npm run test:e2e runs the Chromium critical journeys.
+- npm run test:routes discovers every App Router page and verifies that it resolves to a final HTTP 200 state. Redirects are followed, and dynamic route parameters come from the manifest.
 - npm run test:all runs every layer when a test database and browser are available.
 - npm run test:audit prints current suite and API-policy progress.
 
@@ -34,11 +35,12 @@ Apply migrations with prisma migrate deploy. Do not use the production seed or p
 
 1. Add or update its capability mapping in tests/test-suite.manifest.json.
 2. Classify every new API route as public, authenticated, service-secret, development-only, mixed, or review-required.
-3. Start with a focused unit or route test.
-4. Add a database test for behavior that depends on PostgreSQL constraints or concurrency.
-5. Add Playwright coverage when cookies, redirects, async Server Components, Server Actions, or multiple users are part of the truth.
-6. Move the API entry from backlog to covered only when its authorization, validation, success, and important failure paths are asserted.
-7. Raise coverage thresholds after the baseline improves; never lower them to make a change pass.
+3. Add a `routeState200.dynamicParameters` fixture when a new page introduces a dynamic parameter name.
+4. Start with a focused unit or route test.
+5. Add a database test for behavior that depends on PostgreSQL constraints or concurrency.
+6. Add Playwright coverage when cookies, redirects, async Server Components, Server Actions, or multiple users are part of the truth.
+7. Move the API entry from backlog to covered only when its authorization, validation, success, and important failure paths are asserted.
+8. Raise coverage thresholds after the baseline improves; never lower them to make a change pass.
 
 ## Determinism rules
 
