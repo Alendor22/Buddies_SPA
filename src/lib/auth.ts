@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
 
 export const SESSION_COOKIE = 'buddies_session';
@@ -36,11 +36,14 @@ export function verifyPassword(password: string, storedHash: string | null | und
 }
 
 function authSecret() {
-  return process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'dev-only-buddies-secret';
-}
-
-function signSession(userId: string) {
-  return createHash('sha256').update(`${userId}.${authSecret()}`).digest('hex');
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (secret) return secret;
+  // Falling back to a hardcoded default in production would let anyone who can read this
+  // repository forge a session for any user id. Fail closed instead.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('AUTH_SECRET is not configured; refusing to sign sessions with a default secret.');
+  }
+  return 'dev-only-buddies-secret';
 }
 
 function signAuthPayload(encodedPayload: string) {
@@ -69,18 +72,38 @@ export function verifyAuthToken(token: string, purpose: AuthTokenPurpose): AuthT
   }
 }
 
-export function encodeSession(userId: string) {
-  return Buffer.from(JSON.stringify({ userId, signature: signSession(userId) })).toString('base64url');
+export type SessionPayload = { userId: string; version: number; expiresAt: number };
+
+export function encodeSession(userId: string, version = 0) {
+  const payload: SessionPayload = {
+    userId,
+    version,
+    expiresAt: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `${encoded}.${signAuthPayload(encoded)}`;
 }
 
-function decodeSession(value: string | undefined) {
+// Verifies the signature and expiry only. The caller must still compare `version`
+// against the user's current sessionVersion -- that comparison is what makes
+// server-side revocation possible.
+function decodeSession(value: string | undefined): SessionPayload | null {
   if (!value) return null;
+  const [encoded, signature] = value.split('.');
+  if (!encoded || !signature) return null;
+
+  const expected = Buffer.from(signAuthPayload(encoded));
+  const received = Buffer.from(signature);
+  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
+
   try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { userId?: string; signature?: string };
-    if (!parsed.userId || !parsed.signature) return null;
-    if (parsed.signature !== signSession(parsed.userId)) return null;
-    return parsed.userId;
-  } catch { return null; }
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as SessionPayload;
+    if (!payload.userId || typeof payload.version !== 'number') return null;
+    if (!payload.expiresAt || payload.expiresAt < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 export function sessionCookieOptions() {
@@ -89,12 +112,21 @@ export function sessionCookieOptions() {
 
 export async function createSession(userId: string) {
   const store = await cookies();
-  store.set(SESSION_COOKIE, encodeSession(userId), sessionCookieOptions());
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
+  store.set(SESSION_COOKIE, encodeSession(userId, user?.sessionVersion ?? 0), sessionCookieOptions());
   store.set(LOGOUT_COOKIE, '', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 0, path: '/' });
 }
 
 export async function clearSession() {
   const store = await cookies();
+  // Bump the stored version so every copy of the old cookie stops working, not just
+  // the one in this browser.
+  const existing = decodeSession(store.get(SESSION_COOKIE)?.value);
+  if (existing) {
+    await prisma.user
+      .update({ where: { id: existing.userId }, data: { sessionVersion: { increment: 1 } } })
+      .catch(() => undefined);
+  }
   store.delete(SESSION_COOKIE);
   store.set(LOGOUT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 30, path: '/' });
 }
@@ -103,10 +135,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const store = await cookies();
   if (store.get(LOGOUT_COOKIE)?.value === '1') return null;
 
-  const userId = decodeSession(store.get(SESSION_COOKIE)?.value);
-  if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, displayName: true, role: true, emailVerifiedAt: true } });
-  return user?.emailVerifiedAt ? { id: user.id, email: user.email, displayName: user.displayName, role: user.role.toString() } : null;
+  const session = decodeSession(store.get(SESSION_COOKIE)?.value);
+  if (!session) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, email: true, displayName: true, role: true, emailVerifiedAt: true, sessionVersion: true }
+  });
+  if (!user || !user.emailVerifiedAt) return null;
+  if (user.sessionVersion !== session.version) return null;
+  return { id: user.id, email: user.email, displayName: user.displayName, role: user.role.toString() };
 }
 
 export async function requireCurrentUser() { const user = await getCurrentUser(); if (!user) throw new Error('Authentication required'); return user; }

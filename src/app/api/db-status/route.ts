@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,11 @@ function getDatabaseIdentity() {
 }
 
 export async function GET() {
+  // This reports the database host, name and row counts, which is reconnaissance
+  // material. Diagnostics stay available, but only to signed-in users.
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+
   const identity = getDatabaseIdentity();
 
   try {
@@ -68,7 +74,7 @@ export async function GET() {
       {
         ok: false,
         database: identity,
-        error: error instanceof Error ? error.message : 'Unknown database error',
+        error: 'Database query failed.',
         checkedAt: new Date().toISOString()
       },
       {
