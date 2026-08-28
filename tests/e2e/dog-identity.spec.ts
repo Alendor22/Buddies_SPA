@@ -33,7 +33,7 @@ test('creates a dog identity and exposes an owner-safe public profile', async ({
   await page.goto('/auth/login');
   await page.getByLabel('Email').fill(testEmail);
   await page.getByLabel('Password').fill('test-password-123');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto('/dogs/new');
