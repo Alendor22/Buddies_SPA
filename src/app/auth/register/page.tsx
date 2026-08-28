@@ -1,6 +1,8 @@
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createAuthToken, hashPassword, normalizeEmail } from '@/lib/auth';
+import { clientIdentifier, rateLimit } from '@/lib/rateLimit';
 import { absoluteAppUrl, sendTransactionalEmail } from '@/lib/email';
 import { prisma } from '@/lib/db';
 
@@ -14,6 +16,16 @@ async function registerAction(formData: FormData) {
   const password = String(formData.get('password') ?? '');
 
   if (!displayName || !email || password.length < 8) redirect('/auth/register?error=invalid');
+
+  // Unbounded registration let anyone create accounts in a loop and, worse, make us send
+  // verification email to any address they chose -- a spam cannon pointed at our sending
+  // reputation.
+  const ip = clientIdentifier((await headers()).get('x-forwarded-for'));
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit('register:ip', ip, 5, 60 * 60),
+    rateLimit('register:email', email, 3, 60 * 60)
+  ]);
+  if (!byIp.allowed || !byEmail.allowed) redirect('/auth/register?error=throttled');
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, emailVerifiedAt: true } });
   if (existing?.emailVerifiedAt) redirect('/auth/login?error=exists');
@@ -43,6 +55,8 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const { error } = await searchParams;
   const errorMessage = error === 'email'
     ? 'The account was created, but the verification email could not be sent. Try again after email delivery is configured.'
+    : error === 'throttled'
+      ? 'Too many sign-up attempts. Wait a while and try again.'
     : error
       ? 'Enter a valid name, email, and password of at least 8 characters.'
       : null;
