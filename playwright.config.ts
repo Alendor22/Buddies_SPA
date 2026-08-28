@@ -41,7 +41,9 @@ export default defineConfig({
           ...process.env,
           AUTH_SECRET: process.env.AUTH_SECRET || 'test-only-auth-secret-at-least-32-characters',
           NEXT_PUBLIC_APP_URL: baseURL,
-          NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.test-placeholder'
+          NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.test-placeholder',
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+            process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA'
         }
       }
 });
