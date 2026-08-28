@@ -1,4 +1,4 @@
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
 
@@ -99,29 +99,9 @@ export async function clearSession() {
   store.set(LOGOUT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 30, path: '/' });
 }
 
-function displayNameFromEmail(email: string) {
-  return (email.split('@')[0] || 'Buddies User').replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-async function getAccessUser(): Promise<CurrentUser | null> {
-  const h = await headers();
-  const email = normalizeEmail(h.get('cf-access-authenticated-user-email') ?? '');
-  if (!email) return null;
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { emailVerifiedAt: new Date() },
-    create: { email, displayName: displayNameFromEmail(email), emailVerifiedAt: new Date() },
-    select: { id: true, email: true, displayName: true, role: true }
-  });
-  return { ...user, role: user.role.toString() };
-}
-
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const store = await cookies();
   if (store.get(LOGOUT_COOKIE)?.value === '1') return null;
-
-  const accessUser = await getAccessUser();
-  if (accessUser) return accessUser;
 
   const userId = decodeSession(store.get(SESSION_COOKIE)?.value);
   if (!userId) return null;
