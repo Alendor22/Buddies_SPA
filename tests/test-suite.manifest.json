@@ -93,10 +93,7 @@
     }
   ],
   "apiPolicies": [
-    { "route": "src/app/api/auth/demo-login/route.ts", "access": "development-only", "testState": "backlog" },
-    { "route": "src/app/api/auth/login/route.ts", "access": "public", "testState": "covered" },
     { "route": "src/app/api/auth/logout/route.ts", "access": "public", "testState": "backlog" },
-    { "route": "src/app/api/auth/register/route.ts", "access": "public", "testState": "covered" },
     { "route": "src/app/api/buddies/group/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/buddies/mute/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/buddies/remove/route.ts", "access": "authenticated", "testState": "backlog" },
