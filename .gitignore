@@ -4,6 +4,10 @@ out
 .env
 .env.local
 coverage
+playwright-report
+test-results
+blob-report
+.env.test.local
 *.log
 .DS_Store
 prisma/dev.db

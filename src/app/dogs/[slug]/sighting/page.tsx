@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { DogStatus, NotificationType } from '@prisma/client';
@@ -58,7 +59,7 @@ export default async function SightingPage({ params, searchParams }: { params: P
       <h1 className="mt-2 text-3xl font-bold">Report sighting</h1>
       <p className="mt-2 text-slate-600">Submit a last-seen location for {dog.name}. The owner receives a persistent alert linked to the recovery map.</p>
 
-      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex gap-4">{dog.photoUrl ? <img src={dog.photoUrl} alt={`${dog.name} profile`} className="h-20 w-20 rounded-2xl object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-3xl">🐶</div>}<div><h2 className="text-xl font-semibold">{dog.name}</h2><p className="text-sm text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p></div></div></section>
+      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex gap-4">{dog.photoUrl ? <Image src={dog.photoUrl} alt={`${dog.name} profile`} width={80} height={80} unoptimized className="h-20 w-20 shrink-0 rounded-2xl object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-3xl">🐶</div>}<div><h2 className="text-xl font-semibold">{dog.name}</h2><p className="text-sm text-slate-600">{dog.breed ?? 'Breed not listed'} · {dog.status}</p></div></div></section>
 
       {error ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Enter valid latitude and longitude values.</div> : null}
 

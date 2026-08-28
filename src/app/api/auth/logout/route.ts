@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ function expiredCookie(httpOnly: boolean) {
   ].filter(Boolean).join('; ');
 }
 
-function logout(_request: NextRequest) {
+function logout() {
   const response = new NextResponse(`<!doctype html>
 <html lang="en">
 <head>
@@ -57,10 +57,10 @@ function logout(_request: NextRequest) {
   return response;
 }
 
-export async function GET(request: NextRequest) {
-  return logout(request);
+export async function GET() {
+  return logout();
 }
 
-export async function POST(request: NextRequest) {
-  return logout(request);
+export async function POST() {
+  return logout();
 }

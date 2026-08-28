@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "capabilities": [
+    {
+      "id": "application-shell",
+      "sourcePrefixes": [
+        "src/app/page.tsx",
+        "src/app/layout.tsx",
+        "src/app/loading.tsx",
+        "src/app/not-found.tsx",
+        "src/app/dashboard/page.tsx",
+        "src/app/dashboard/account/",
+        "src/app/dashboard/menu/"
+      ],
+      "testPrefixes": ["tests/e2e/public-shell.spec.ts"]
+    },
+    {
+      "id": "authentication",
+      "sourcePrefixes": [
+        "src/app/auth/",
+        "src/app/logout/",
+        "src/app/api/auth/",
+        "src/app/api/session/",
+        "src/lib/auth.ts"
+      ],
+      "testPrefixes": ["tests/unit/auth/", "tests/integration/auth/", "tests/e2e/"]
+    },
+    {
+      "id": "dog-identity",
+      "sourcePrefixes": [
+        "src/app/dogs/",
+        "src/app/qr-dog/",
+        "src/app/api/dogs/",
+        "src/app/api/qr/",
+        "src/app/api/uploads/"
+      ],
+      "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts"]
+    },
+    {
+      "id": "social-graph",
+      "sourcePrefixes": [
+        "src/app/dashboard/buddies/",
+        "src/app/api/buddies/",
+        "src/app/api/dog-buddies/"
+      ],
+      "testPrefixes": ["tests/integration/buddies/", "tests/unit/shared/"]
+    },
+    {
+      "id": "walks-and-messaging",
+      "sourcePrefixes": [
+        "src/app/walks/",
+        "src/app/dashboard/walks/",
+        "src/app/dashboard/messages/",
+        "src/app/api/walks/",
+        "src/app/api/walk-invitations/",
+        "src/app/api/walk-routes/",
+        "src/app/api/realtime/"
+      ],
+      "testPrefixes": ["tests/unit/shared/", "tests/contracts/security-backlog.test.ts"]
+    },
+    {
+      "id": "safety-records-notifications",
+      "sourcePrefixes": [
+        "src/app/dashboard/lost/",
+        "src/app/dashboard/records/",
+        "src/app/dashboard/notifications/",
+        "src/app/api/notifications/"
+      ],
+      "testPrefixes": ["tests/contracts/security-backlog.test.ts", "tests/e2e/"]
+    },
+    {
+      "id": "spatial-map",
+      "sourcePrefixes": [
+        "src/app/map/",
+        "src/app/dashboard/check-ins/",
+        "src/app/dashboard/social-map/",
+        "src/app/api/check-ins/",
+        "src/app/api/maps/",
+        "src/app/api/social-map/",
+        "src/lib/telemetry/",
+        "src/stores/useMapRuntimeStore.ts"
+      ],
+      "testPrefixes": ["tests/unit/map/", "tests/component/map/"]
+    },
+    {
+      "id": "operations",
+      "sourcePrefixes": [
+        "src/app/api/cron/",
+        "src/app/api/db-status/",
+        "src/app/api/health/"
+      ],
+      "testPrefixes": ["tests/unit/infrastructure/", "tests/contracts/"]
+    }
+  ],
+  "apiPolicies": [
+    { "route": "src/app/api/auth/demo-login/route.ts", "access": "development-only", "testState": "backlog" },
+    { "route": "src/app/api/auth/login/route.ts", "access": "public", "testState": "covered" },
+    { "route": "src/app/api/auth/logout/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/auth/register/route.ts", "access": "public", "testState": "covered" },
+    { "route": "src/app/api/buddies/group/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/buddies/mute/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/buddies/remove/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/buddies/request/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/buddies/respond/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/buddies/walk-invite/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/check-ins/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/cron/cleanup-expired/route.ts", "access": "service-secret", "testState": "backlog" },
+    { "route": "src/app/api/db-status/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/dog-buddies/respond/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/dogs/claim/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/dogs/manage/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/dogs/route.ts", "access": "mixed", "testState": "backlog" },
+    { "route": "src/app/api/health/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/maps/config/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/maps/directions/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/maps/static/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/notifications/read/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/qr/[id]/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/realtime/token/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/session/end/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/uploads/presign/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/walk-invitations/respond/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/walk-routes/favorites/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/walks/[id]/messages/read/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/walks/[id]/messages/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/walks/status/route.ts", "access": "authenticated", "testState": "covered" }
+  ]
+}

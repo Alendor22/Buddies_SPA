@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DogBuddiesPanel from '@/components/DogBuddiesPanel';
@@ -76,7 +77,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
 
       <article className="overflow-hidden rounded-3xl border bg-white shadow-sm">
         <div className={`px-6 py-4 text-sm font-semibold ${isSafe ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>Safety status: {dog.status}</div>
-        {dog.photoUrl ? <img src={dog.photoUrl} alt={`${dog.name} profile`} className="h-72 w-full object-cover" /> : <div className="flex h-72 items-center justify-center bg-slate-100 text-slate-500">No profile photo yet</div>}
+        {dog.photoUrl ? <Image src={dog.photoUrl} alt={`${dog.name} profile`} width={896} height={288} sizes="(max-width: 896px) 100vw, 896px" priority unoptimized className="h-72 w-full object-cover" /> : <div className="flex h-72 items-center justify-center bg-slate-100 text-slate-500">No profile photo yet</div>}
 
         <div className="p-6 sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Public dog ID · {dog.publicId ?? dog.id}</p>
