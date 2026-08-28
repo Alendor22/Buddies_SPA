@@ -13,15 +13,25 @@ async function forgotPasswordAction(formData: FormData) {
     if (user?.emailVerifiedAt) {
       const token = createAuthToken(user.id, user.email, 'reset-password');
       const resetUrl = absoluteAppUrl(`/auth/reset-password?token=${encodeURIComponent(token)}`);
-      await sendTransactionalEmail({
+      const delivery = await sendTransactionalEmail({
         to: user.email,
         subject: 'Reset your Buddies password',
         html: `<p>A password reset was requested for your Buddies account.</p><p><a href="${resetUrl}">Reset password</a></p><p>This link expires in 30 minutes. Ignore this message if you did not request it.</p>`,
         text: `Reset your Buddies password: ${resetUrl}\n\nThis link expires in 30 minutes. Ignore this message if you did not request it.`
-      }).catch(() => null);
+      });
+
+      if (!delivery.delivered) {
+        console.error('[auth-password-reset] reset email was not delivered', {
+          event: 'password_reset_email_delivery_failed',
+          reason: delivery.reason,
+          status: delivery.status,
+        });
+      }
     }
   }
 
+  // Keep the public response identical for existing, missing, verified, and
+  // unverified accounts. This prevents password-reset account enumeration.
   redirect('/auth/forgot-password?sent=1');
 }
 
@@ -32,7 +42,7 @@ export default async function ForgotPasswordPage({ searchParams }: { searchParam
       <p className="text-sm font-medium text-slate-500">Account recovery</p>
       <h1 className="mt-2 text-3xl font-bold">Forgot password</h1>
       <p className="mt-3 text-slate-600">Enter your verified email address. If the account exists, a time-limited reset link will be sent.</p>
-      {sent ? <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Check your inbox and spam folder. For security, this message is shown whether or not an account exists.</p> : null}
+      {sent ? <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">If that address belongs to a verified Buddies account, a reset link has been requested. Check your inbox and spam folder.</p> : null}
       <form action={forgotPasswordAction} className="mt-6 grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
         <label className="grid gap-2 text-sm font-medium">Email<input name="email" type="email" autoComplete="email" required className="rounded-lg border px-3 py-3 text-base" /></label>
         <button type="submit" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Send reset link</button>
