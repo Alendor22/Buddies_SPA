@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import { getMapboxToken } from '@/lib/mapboxToken';
+import { clientIdentifier, rateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,6 +65,14 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(request: NextRequest) {
+  // Route planning is a signed-in feature, and each call bills up to 25 coordinates
+  // against our Mapbox account.
+  const user = await getCurrentUser();
+  if (!user) return json({ error: 'Authentication required.' }, 401);
+
+  const limit = await rateLimit('maps:directions', user.id, 30, 60);
+  if (!limit.allowed) return json({ error: 'Too many routing requests.' }, 429);
+
   const token = getMapboxToken();
   if (!token) return json({ error: 'Mapbox access token is not configured.' }, 503);
 
