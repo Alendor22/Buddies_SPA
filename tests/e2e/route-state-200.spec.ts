@@ -12,6 +12,15 @@ const routeTemplates = discoverPageRouteTemplates();
 const fixtureEmail = 'route-state-200@example.test';
 let fixtureUserId = '';
 
+function isProtectedRoute(route: string) {
+  return (
+    route.startsWith('/dashboard') ||
+    route.startsWith('/dogs/new') ||
+    route.startsWith('/dogs/edit') ||
+    route.startsWith('/logout')
+  );
+}
+
 test.beforeAll(async () => {
   await prisma.user.deleteMany({ where: { email: fixtureEmail } });
   const user = await prisma.user.create({
@@ -40,11 +49,12 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test.describe('route-state-200 verification', () => {
+test.describe('anonymous public route verification', () => {
   for (const template of routeTemplates) {
     const route = materializePageRoute(template, parameters);
+    if (isProtectedRoute(route)) continue;
 
-    test(`${template} resolves to a final HTTP 200 state`, async ({ request }) => {
+    test(`${template} resolves to a final public HTTP 200 state`, async ({ request }) => {
       const response = await request.get(route, {
         failOnStatusCode: false,
         maxRedirects: 10

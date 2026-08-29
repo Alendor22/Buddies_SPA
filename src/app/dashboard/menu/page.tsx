@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function MenuPage() {
   const user = await getCurrentUser();
-  if (!user) redirect('/auth/login');
+  if (!user) redirect('/sign-in');
 
   const unread = await prisma.notification.findMany({
     where: { userId: user.id, readAt: null },
@@ -56,7 +56,7 @@ export default async function MenuPage() {
         <Link href={UI_ROUTES.lostReport} className="rounded-lg border px-4 py-4 font-medium">Lost dog mode</Link>
         <Link href={UI_ROUTES.records} className="rounded-lg border px-4 py-4 font-medium">Vet records</Link>
         <Link href={UI_ROUTES.alerts} className="rounded-lg border px-4 py-4 font-medium">Notifications</Link>
-        <a href="/logout" className="rounded-lg bg-red-600 px-4 py-4 text-center font-medium text-white">Sign out</a>
+        <Link href="/logout" className="rounded-lg bg-red-600 px-4 py-4 text-center font-medium text-white">Sign out</Link>
       </section>
     </main>
   );

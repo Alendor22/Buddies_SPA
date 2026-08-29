@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const clerkMock = vi.hoisted(() => ({
+  auth: vi.fn(),
+  currentUser: vi.fn()
+}));
+
 const cookieStore = vi.hoisted(() => ({
   get: vi.fn(),
   set: vi.fn(),
@@ -12,6 +17,7 @@ const prismaMock = vi.hoisted(() => ({
   }
 }));
 
+vi.mock('@clerk/nextjs/server', () => clerkMock);
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => cookieStore) }));
 vi.mock('@/lib/db', () => ({ prisma: prismaMock }));
 
@@ -34,6 +40,9 @@ import {
 
 describe('authentication primitives', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    clerkMock.auth.mockResolvedValue({ userId: null });
+    clerkMock.currentUser.mockResolvedValue(null);
     vi.stubEnv('AUTH_SECRET', 'unit-test-auth-secret-at-least-32-characters');
     cookieStore.get.mockReturnValue(undefined);
   });
@@ -132,17 +141,13 @@ describe('authentication primitives', () => {
     );
   });
 
-  it('accepts only a verified user with the current session version', async () => {
-    cookieStore.get.mockImplementation((name: string) => name === SESSION_COOKIE
-      ? { value: encodeSession('user-1', 3) }
-      : undefined);
+  it('resolves the Buddies user linked to the active Clerk identity', async () => {
+    clerkMock.auth.mockResolvedValue({ userId: 'clerk-user-1' });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'owner@example.test',
       displayName: 'Dog Parent',
-      role: 'OWNER',
-      emailVerifiedAt: new Date(),
-      sessionVersion: 3
+      role: 'OWNER'
     });
 
     await expect(getCurrentUser()).resolves.toEqual({
@@ -151,23 +156,13 @@ describe('authentication primitives', () => {
       displayName: 'Dog Parent',
       role: 'OWNER'
     });
-
-    prismaMock.user.findUnique.mockResolvedValue({
-      id: 'user-1',
-      email: 'owner@example.test',
-      displayName: 'Dog Parent',
-      role: 'OWNER',
-      emailVerifiedAt: new Date(),
-      sessionVersion: 4
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { clerkId: 'clerk-user-1' },
+      select: { id: true, email: true, displayName: true, role: true }
     });
-    await expect(getCurrentUser()).resolves.toBeNull();
   });
 
-  it('honors the signed-out marker without querying the database', async () => {
-    cookieStore.get.mockImplementation((name: string) => name === LOGOUT_COOKIE
-      ? { value: '1' }
-      : undefined);
-
+  it('treats a missing Clerk session as signed out without querying the database', async () => {
     await expect(getCurrentUser()).resolves.toBeNull();
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
   });
