@@ -1,0 +1,1 @@
+Trigger fresh production build after updating Clerk production environment variables in Vercel.
