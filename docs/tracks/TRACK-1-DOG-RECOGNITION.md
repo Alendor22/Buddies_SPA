@@ -1,16 +1,17 @@
 # Track 1 — Dog Recognition Core
 
 ## Objective
+Add visual dog recognition as an isolated, feature-flagged capability without weakening Buddies identity or ownership boundaries.
 
-Add visual dog recognition as an isolated, feature-flagged identity path without destabilizing the production Buddies identity/safety application.
+## Product and security rules
 
-## Context consolidated from Buddies work
-
-- Production remains the stable baseline.
-- Clerk is the authentication/workflow authority; do not reintroduce Resend as an application workflow dependency.
-- Existing QR scanning remains the deterministic fallback identity path.
-- Visual dog recognition is isolated from production until schema, services, enrollment, camera capture, and matching are validated in slices.
-- ARKit/ARCore SLAM/XR belongs behind the scanner/camera boundary and consumes recognition output; it must not be coupled to the recognition provider.
+- Clerk remains the authentication/workflow authority. Do not reintroduce Resend as an application workflow dependency.
+- Existing QR scanning remains the deterministic fallback.
+- Recognition never transfers ownership and a recognition candidate is never proof of ownership.
+- Enrollment mutations require authenticated Clerk identity plus server-side dog ownership authorization.
+- Raw captures are ephemeral by default; persistent enrollment storage is explicit and purpose-bound.
+- Provider/model credentials remain server-side.
+- Recognition providers and embedding processors fail closed until explicitly configured.
 
 ## Architecture
 
@@ -28,35 +29,60 @@ RecognitionResult
         |
         +--> identity candidate resolver
         +--> scanner UI
-        +--> XR overlay adapter (later slice)
+        +--> XR overlay adapter
         +--> QR fallback when confidence is insufficient
 ```
 
-## Slice order
+Enrollment path:
 
-1. Contracts + provider boundary (this framework).
-2. Persistence schema for enrollment assets, embeddings/model metadata, consent/state, and recognition audit records.
-3. Authenticated enrollment service using Clerk user identity and verified dog ownership.
-4. Recognition API/service with validation, rate limiting, observability, and confidence policy.
-5. Camera integration in `/scanner`, retaining QR fallback.
-6. ARKit/ARCore SLAM/XR native bridge consuming normalized recognition results.
-7. Feature flag rollout, test cohort, telemetry, then production promotion.
+```text
+Clerk user
+   |
+   v
+verified Dog.ownerId
+   |
+   v
+RecognitionEnrollment (explicit consent)
+   |
+   +--> presigned R2 enrollment image upload
+   |       - JPEG / PNG / WebP only
+   |       - actual declared Content-Length signed
+   |       - 8 MiB maximum
+   |       - owner/dog-scoped object prefix
+   |
+   +--> RecognitionAsset registration (SHA-256 hash)
+           |
+           v
+     RecognitionAssetProcessor
+           |
+           +--> embeddingRef
+           +--> modelVersion
+           +--> qualityScore
+```
 
-## Security invariants
+## Slice status
 
-- Recognition never transfers ownership.
-- A recognized dog candidate is not proof of ownership.
-- Enrollment mutations require authenticated Clerk identity plus server-side authorization against the dog owner record.
-- Public recognition results expose only fields already permitted by the public safety profile policy.
-- Raw captures should be ephemeral by default; persistence requires an explicit enrollment/storage purpose.
-- Provider credentials remain server-side.
+1. Contracts + recognition provider boundary — **done**
+2. Prisma enrollment/assets/audit persistence + migration — **done**
+3. Ownership-checked enrollment service — **done**
+4. Authenticated Clerk-backed enrollment API — **done**
+5. Server-side feature flag (`DOG_RECOGNITION_ENROLLMENT_ENABLED`) — **done**
+6. Bounded R2 enrollment upload signing + asset registration — **done**
+7. Asset processor/embedding adapter boundary — **done**
+8. Unit coverage for feature flag and upload validation — **done**
+9. Camera integration in `/scanner`, retaining QR fallback — **next**
+10. ARKit/ARCore SLAM/XR bridge consuming normalized recognition output — pending
+11. Test cohort, telemetry, and production promotion — pending
 
-## Core contracts
+## Current API surface
 
-`src/lib/recognition/contracts.ts` defines the provider-neutral request/result model.
+- `GET /api/recognition/enrollment?dogId=...` — owner-only enrollment state.
+- `POST /api/recognition/enrollment` — begin/reactivate enrollment with explicit consent.
+- `DELETE /api/recognition/enrollment` — revoke enrollment.
+- `POST /api/recognition/enrollment/upload` — create owner/dog-scoped R2 upload URL.
+- `POST /api/recognition/enrollment/assets` — register an uploaded asset with SHA-256 content hash.
+- `PATCH /api/recognition/enrollment/assets` — invoke the configured asset processor.
 
-`src/lib/recognition/provider.ts` defines the replaceable provider boundary. The default implementation intentionally fails closed until a real adapter is configured.
+## Rollout constraint
 
-## Next implementation slice
-
-Create the Prisma recognition/enrollment schema and server repository layer, then wire an authenticated enrollment endpoint behind a feature flag. Do not connect camera/XR to a placeholder matcher.
+Do not connect scanner camera frames or XR tracking to a placeholder recognition provider. The feature flag defaults off. Camera/XR integration should begin only after CI for the persistence/API slice is green and a concrete recognition/embedding adapter is selected for the test cohort.
