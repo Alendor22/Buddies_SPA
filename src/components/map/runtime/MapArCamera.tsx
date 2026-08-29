@@ -14,6 +14,7 @@ import {
   type SlamCalibration,
   type WindowWithArRuntimes,
   type XrCompatibleGl,
+  type XrFrameLike,
   type XrHitTestSourceLike,
   type XrQuaternion,
   type XrSessionLike,
@@ -149,10 +150,7 @@ export default function MapArCamera() {
         updatedAt: new Date().toISOString()
       });
       setStatus('ready');
-      emitStatus(
-        'ready',
-        'Rear camera live. Browser SLAM is unavailable here; stabilized GPS + inertial tracking is active.'
-      );
+      emitStatus('ready', 'Rear camera live. Browser SLAM is unavailable here; stabilized GPS + inertial tracking is active.');
     } catch (error) {
       if (generation !== runtimeGenerationRef.current) return;
       const denied = error instanceof DOMException
@@ -298,11 +296,14 @@ export default function MapArCamera() {
 
     const handleEnd = () => {
       session.removeEventListener('end', handleEnd);
-      if (xrSessionRef.current === session) xrSessionRef.current = null;
-      clearXrResources();
-      setOverlayTransparent(false);
+      const ownsRuntime = xrSessionRef.current === session;
+      if (ownsRuntime) {
+        xrSessionRef.current = null;
+        clearXrResources();
+        setOverlayTransparent(false);
+      }
 
-      if (explicitStopRef.current || generation !== runtimeGenerationRef.current) return;
+      if (!ownsRuntime || explicitStopRef.current || generation !== runtimeGenerationRef.current) return;
       if (useMapRuntimeStore.getState().cameraMode === 'ar') {
         beginFallback('The immersive SLAM session ended; stabilized sensor fusion is active.');
       }
@@ -310,7 +311,7 @@ export default function MapArCamera() {
 
     session.addEventListener('end', handleEnd);
 
-    const renderFrame = (_time: number, frame: Parameters<XrSessionLike['requestAnimationFrame']>[0] extends (time: number, frame: infer F) => void ? F : never) => {
+    const renderFrame = (_time: number, frame: XrFrameLike) => {
       if (xrSessionRef.current !== session || generation !== runtimeGenerationRef.current) return;
 
       const gl = xrGlRef.current;
@@ -324,8 +325,7 @@ export default function MapArCamera() {
 
       const hitSource = xrHitTestSourceRef.current;
       if (hitSource && frame.getHitTestResults) {
-        const hits = frame.getHitTestResults(hitSource);
-        xrSurfaceTrackedRef.current = hits.length > 0;
+        xrSurfaceTrackedRef.current = frame.getHitTestResults(hitSource).length > 0;
       }
 
       const pose = frame.getViewerPose(referenceSpace);
@@ -436,10 +436,9 @@ export default function MapArCamera() {
         .catch(() => {
           nativeBridgeStartedRef.current = false;
           trackingRequestActiveRef.current = false;
+          if (generation !== runtimeGenerationRef.current) return;
           setOverlayTransparent(false);
-          if (generation === runtimeGenerationRef.current) {
-            beginFallback('Native AR tracking could not start; stabilized sensor fusion is active.');
-          }
+          beginFallback('Native AR tracking could not start; stabilized sensor fusion is active.');
         });
       return;
     }
@@ -451,8 +450,8 @@ export default function MapArCamera() {
       return;
     }
 
-    // requestSession is deliberately called synchronously from the AR activation
-    // event. Immersive WebXR requires transient user activation in supporting browsers.
+    // Keep requestSession synchronous with the AR activation event: immersive
+    // sessions require transient user activation in supporting browsers.
     const sessionPromise = xr.requestSession(
       'immersive-ar',
       immersiveArSessionOptions(resolveOverlayRoot())
@@ -469,14 +468,17 @@ export default function MapArCamera() {
           await initializeXrSession(session, trackingSourceForWebXr(navigator.userAgent), generation);
           if (generation === runtimeGenerationRef.current) trackingRequestActiveRef.current = false;
         } catch {
-          if (xrSessionRef.current === session) xrSessionRef.current = null;
-          clearXrResources();
-          await session.end().catch(() => undefined);
-          trackingRequestActiveRef.current = false;
-          setOverlayTransparent(false);
-          if (generation === runtimeGenerationRef.current) {
-            beginFallback('Immersive WebXR SLAM initialization failed; stabilized sensor fusion is active.');
+          const ownsRuntime = xrSessionRef.current === session;
+          if (ownsRuntime) {
+            xrSessionRef.current = null;
+            clearXrResources();
+            setOverlayTransparent(false);
           }
+          await session.end().catch(() => undefined);
+
+          if (generation !== runtimeGenerationRef.current) return;
+          trackingRequestActiveRef.current = false;
+          beginFallback('Immersive WebXR SLAM initialization failed; stabilized sensor fusion is active.');
         }
       })
       .catch(() => {
