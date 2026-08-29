@@ -77,6 +77,7 @@ enum MapReportType {
 
 model User {
   id                    String          @id @default(cuid())
+  clerkId               String?         @unique
   email                 String          @unique
   displayName           String
   passwordHash          String?

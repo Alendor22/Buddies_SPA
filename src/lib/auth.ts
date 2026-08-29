@@ -1,3 +1,4 @@
+import { auth, currentUser as currentClerkUser } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/db';
@@ -132,18 +133,66 @@ export async function clearSession() {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const store = await cookies();
-  if (store.get(LOGOUT_COOKIE)?.value === '1') return null;
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return null;
 
-  const session = decodeSession(store.get(SESSION_COOKIE)?.value);
-  if (!session) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, email: true, displayName: true, role: true, emailVerifiedAt: true, sessionVersion: true }
+  const linked = await prisma.user.findUnique({
+    where: { clerkId },
+    select: { id: true, email: true, displayName: true, role: true }
   });
-  if (!user || !user.emailVerifiedAt) return null;
-  if (user.sessionVersion !== session.version) return null;
-  return { id: user.id, email: user.email, displayName: user.displayName, role: user.role.toString() };
+  if (linked) {
+    return { ...linked, role: linked.role.toString() };
+  }
+
+  const clerkUser = await currentClerkUser();
+  if (!clerkUser) return null;
+
+  const primaryEmail = clerkUser.emailAddresses.find(
+    (address) => address.id === clerkUser.primaryEmailAddressId
+  )?.emailAddress;
+  if (!primaryEmail) return null;
+
+  const email = normalizeEmail(primaryEmail);
+  const displayName =
+    clerkUser.fullName?.trim() ||
+    clerkUser.username?.trim() ||
+    email.split('@')[0] ||
+    'Buddies User';
+
+  const user = await prisma.$transaction(async (tx) => {
+    const existingByClerk = await tx.user.findUnique({ where: { clerkId } });
+    if (existingByClerk) return existingByClerk;
+
+    const existingByEmail = await tx.user.findUnique({ where: { email } });
+    if (existingByEmail) {
+      return tx.user.update({
+        where: { id: existingByEmail.id },
+        data: {
+          clerkId,
+          displayName: existingByEmail.displayName || displayName,
+          emailVerifiedAt: existingByEmail.emailVerifiedAt ?? new Date(),
+          avatarUrl: existingByEmail.avatarUrl ?? clerkUser.imageUrl
+        }
+      });
+    }
+
+    return tx.user.create({
+      data: {
+        clerkId,
+        email,
+        displayName,
+        emailVerifiedAt: new Date(),
+        avatarUrl: clerkUser.imageUrl
+      }
+    });
+  });
+
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role.toString()
+  };
 }
 
 export async function requireCurrentUser() { const user = await getCurrentUser(); if (!user) throw new Error('Authentication required'); return user; }

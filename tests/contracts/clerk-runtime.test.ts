@@ -2,6 +2,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('Clerk runtime contract', () => {
+  it('uses Clerk as the application identity authority', () => {
+    const authSource = readFileSync('src/lib/auth.ts', 'utf8');
+    const schema = readFileSync('prisma/schema.prisma', 'utf8');
+
+    expect(authSource).toContain("from '@clerk/nextjs/server'");
+    expect(authSource).toContain('where: { clerkId }');
+    expect(schema).toContain('clerkId');
+  });
+
   it('keeps Clerk middleware enabled', () => {
     const middleware = readFileSync('src/middleware.ts', 'utf8');
 
@@ -29,5 +38,11 @@ describe('Clerk runtime contract', () => {
     const config = readFileSync('playwright.config.ts', 'utf8');
 
     expect(config).toContain('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
+  });
+
+  it('routes legacy entry points into Clerk', () => {
+    const middleware = readFileSync('src/middleware.ts', 'utf8');
+    expect(middleware).toContain('/auth/login');
+    expect(middleware).toContain('/sign-in');
   });
 });

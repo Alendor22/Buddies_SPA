@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function AccountPage() {
   const user = await getCurrentUser();
-  if (!user) redirect('/auth/login');
+  if (!user) redirect('/sign-in');
 
   const [dogCount, buddyCount, pendingCount, alertCount] = await Promise.all([
     prisma.dog.count({ where: { ownerId: user.id } }),
@@ -45,7 +45,7 @@ export default async function AccountPage() {
         <Link href="/dashboard" className="rounded-lg border px-4 py-3 font-medium">Dashboard</Link>
         <Link href="/dogs" className="rounded-lg border px-4 py-3 font-medium">My dogs</Link>
         <Link href="/dashboard/notifications" className="rounded-lg border px-4 py-3 font-medium">Notifications</Link>
-        <Link href="/api/auth/logout" className="rounded-lg bg-red-600 px-4 py-3 text-center font-medium text-white">Sign out</Link>
+        <Link href="/logout" className="rounded-lg bg-red-600 px-4 py-3 text-center font-medium text-white">Sign out</Link>
       </section>
     </main>
   );
