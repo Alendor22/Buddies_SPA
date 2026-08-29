@@ -1,5 +1,5 @@
 CREATE TYPE "RecognitionEnrollmentStatus" AS ENUM ('PENDING', 'ACTIVE', 'PAUSED', 'REVOKED');
-CREATE TYPE "RecognitionAssetStatus" AS ENUM ('PENDING', 'READY', 'REJECTED', 'DELETED');
+CREATE TYPE "RecognitionAssetStatus" AS ENUM ('PENDING', 'PROCESSING', 'READY', 'REJECTED', 'DELETED');
 CREATE TYPE "RecognitionEventOutcome" AS ENUM ('MATCH', 'LOW_CONFIDENCE', 'NO_MATCH', 'ERROR');
 
 CREATE TABLE "RecognitionEnrollment" (
