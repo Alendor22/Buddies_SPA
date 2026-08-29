@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { getRecognitionAssetProcessor } from './processor';
 import { recognitionRepository } from './repository';
 
 const CONSENT_VERSION = 'dog-recognition-v1';
@@ -79,6 +80,36 @@ export async function addRecognitionEnrollmentAsset(input: {
     mimeType: input.mimeType,
     capturedAt: input.capturedAt
   });
+}
+
+export async function processRecognitionEnrollmentAsset(input: {
+  assetId: string;
+  ownerId: string;
+}) {
+  const asset = await recognitionRepository.findAsset(input.assetId);
+  if (!asset || asset.enrollment.ownerId !== input.ownerId) throw new RecognitionAuthorizationError();
+  if (asset.enrollment.status === 'REVOKED') throw new RecognitionStateError('Recognition enrollment is revoked');
+  if (asset.status === 'READY') return asset;
+
+  await recognitionRepository.markAssetProcessing(asset.id);
+  try {
+    const result = await getRecognitionAssetProcessor().process({
+      assetId: asset.id,
+      enrollmentId: asset.enrollmentId,
+      dogId: asset.enrollment.dogId,
+      storageKey: asset.storageKey,
+      mimeType: asset.mimeType
+    });
+    return recognitionRepository.markAssetReady(
+      asset.id,
+      result.modelVersion,
+      result.embeddingRef,
+      result.qualityScore
+    );
+  } catch (error) {
+    await recognitionRepository.markAssetRejected(asset.id, 'PROCESSOR_ERROR');
+    throw error;
+  }
 }
 
 export async function activateRecognitionEnrollment(input: {
