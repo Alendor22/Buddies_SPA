@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const source = readFileSync(resolve(process.cwd(), 'src/lib/doggy-recognition/camera.ts'), 'utf8');
+const route = readFileSync(resolve(process.cwd(), 'src/app/api/doggy-recognition/identify/route.ts'), 'utf8');
 
 describe('Doggy Recognition visual-first contract', () => {
   it('defines separate identify and confirmation thresholds', () => {
@@ -22,5 +23,20 @@ describe('Doggy Recognition visual-first contract', () => {
 
   it('does not encode ownership or authorization into visual recognition results', () => {
     expect(source).not.toMatch(/ownerId|userId|authorize|authenticated/i);
+  });
+
+  it('keeps recognition provider credentials server-side', () => {
+    expect(route).toContain('process.env.DOG_RECOGNITION_API_KEY');
+    expect(route).not.toContain('NEXT_PUBLIC_DOG_RECOGNITION_API_KEY');
+  });
+
+  it('bounds upload size and provider latency', () => {
+    expect(route).toContain('MAX_IMAGE_BYTES');
+    expect(route).toContain('AbortSignal.timeout(8_000)');
+  });
+
+  it('validates provider confidence before returning identity candidates', () => {
+    expect(route).toContain("confidence: z.number().min(0).max(1)");
+    expect(route).toContain('providerResponseSchema.safeParse');
   });
 });
