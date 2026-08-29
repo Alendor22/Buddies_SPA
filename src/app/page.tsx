@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const features = [
   ['Spatial dog network', 'A first-person map for nearby dogs, Buddies, routes, reports, resources, and live activity.'],
-  ['Digital dog ID', 'QR-ready safety profiles designed to extend into NFC and BLE identity exchange.'],
+  ['Digital dog ID', 'QR-ready safety profiles with a camera scanner designed to extend into NFC and BLE identity exchange.'],
   ['Automatic walks', 'Device telemetry detects walking, jogging, pauses, and likely driving to build route memory.'],
   ['Dog-centric reports', 'Share water, bag stations, loose dogs, hazards, crowded parks, and other neighborhood signals.']
 ];
@@ -27,6 +27,7 @@ export default async function HomePage() {
         <p className="mt-5 max-w-2xl text-lg text-slate-600">Buddies is becoming a map-first spatial network for walking, identity, nearby dogs, safety, community reports, resources, and route intelligence.</p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/map" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Open spatial map</Link>
+          <Link href="/scanner" className="rounded-lg bg-sky-600 px-5 py-3 font-medium text-white">Scan dog tag</Link>
           {user ? <Link href="/dashboard" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Open dashboard</Link> : <><Link href="/sign-in" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Sign in</Link><Link href="/sign-up" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Create account</Link></>}
           <Link href={publicProfileHref} className="rounded-lg border border-slate-300 px-5 py-3 font-medium">View public profile</Link>
         </div>

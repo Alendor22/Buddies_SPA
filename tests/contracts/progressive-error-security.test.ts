@@ -1,23 +1,26 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('progressive auth error-security harness', () => {
-  it('keeps password-reset responses enumeration-safe', () => {
+  it('routes legacy password recovery into Clerk instead of exposing account state', () => {
     const page = readFileSync('src/app/auth/forgot-password/page.tsx', 'utf8');
+    const middleware = readFileSync('src/middleware.ts', 'utf8');
 
-    expect(page).toContain("redirect('/auth/forgot-password?sent=1')");
-    expect(page).toContain('If that address belongs to a verified Buddies account');
-    expect(page).not.toContain('Email delivery failed');
+    expect(page).toContain("redirect('/sign-in')");
+    expect(middleware).toContain("'/auth/forgot-password': '/sign-in'");
+    expect(page).not.toContain('findUnique');
+    expect(page).not.toContain('emailVerifiedAt');
   });
 
-  it('does not silently discard password-reset delivery failures', () => {
-    const page = readFileSync('src/app/auth/forgot-password/page.tsx', 'utf8');
-    const email = readFileSync('src/lib/email.ts', 'utf8');
+  it('does not ship the legacy Resend password-reset delivery path', () => {
+    const forgotPassword = readFileSync('src/app/auth/forgot-password/page.tsx', 'utf8');
+    const resetPassword = readFileSync('src/app/auth/reset-password/page.tsx', 'utf8');
 
-    expect(page).not.toContain('.catch(() => null)');
-    expect(page).toContain('password_reset_email_delivery_failed');
-    expect(email).toContain('auth_email_not_configured');
-    expect(email).toContain('auth_email_provider_error');
+    expect(existsSync('src/lib/email.ts')).toBe(false);
+    expect(forgotPassword).not.toContain('sendTransactionalEmail');
+    expect(forgotPassword).not.toContain('RESEND_API_KEY');
+    expect(resetPassword).not.toContain('verifyAuthToken');
+    expect(resetPassword).toContain("redirect('/sign-in')");
   });
 
   it('requires the production Prisma runtime target and session-version migration', () => {

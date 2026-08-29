@@ -3,147 +3,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMapRuntimeStore, type ArTrackingSource } from '@/stores/useMapRuntimeStore';
 import type { ArCameraStatus } from './arTypes';
+import {
+  geodeticFromLocalPose,
+  immersiveArSessionOptions,
+  trackingSourceForNative,
+  trackingSourceForWebXr,
+  yawDegrees,
+  type NativeArPoseDetail,
+  type NavigatorWithXr,
+  type SlamCalibration,
+  type WindowWithArRuntimes,
+  type XrCompatibleGl,
+  type XrFrameLike,
+  type XrHitTestSourceLike,
+  type XrQuaternion,
+  type XrSessionLike,
+  type XrVector3,
+  type XrWebGLLayerLike
+} from './xrSlam';
 
-type XrVector3 = { x: number; y: number; z: number };
-type XrQuaternion = XrVector3 & { w: number };
-type XrPoseLike = {
-  transform: {
-    position: XrVector3;
-    orientation: XrQuaternion;
-  };
-};
-type XrReferenceSpaceLike = object;
-type XrFrameLike = {
-  getViewerPose: (space: XrReferenceSpaceLike) => XrPoseLike | null;
-};
-type XrWebGLLayerLike = {
-  framebuffer: WebGLFramebuffer | null;
-  framebufferWidth?: number;
-  framebufferHeight?: number;
-};
-type XrSessionLike = {
-  requestReferenceSpace: (type: 'local') => Promise<XrReferenceSpaceLike>;
-  requestAnimationFrame: (callback: (time: number, frame: XrFrameLike) => void) => number;
-  updateRenderState: (state: { baseLayer?: XrWebGLLayerLike }) => void;
-  addEventListener: (type: 'end', listener: () => void) => void;
-  removeEventListener: (type: 'end', listener: () => void) => void;
-  end: () => Promise<void>;
-};
-type XrSystemLike = {
-  requestSession: (
-    mode: 'immersive-ar',
-    options: {
-      requiredFeatures: string[];
-      domOverlay: { root: Element };
-    }
-  ) => Promise<XrSessionLike>;
-};
-type XrCompatibleGl = (WebGLRenderingContext | WebGL2RenderingContext) & {
-  makeXRCompatible?: () => Promise<void>;
-};
-type XrWebGLLayerConstructor = new (
-  session: XrSessionLike,
-  context: WebGLRenderingContext | WebGL2RenderingContext
-) => XrWebGLLayerLike;
-type NativeArSource = 'arkit' | 'arcore';
-type NativeArBridge = {
-  platform?: NativeArSource;
-  start?: () => void | Promise<void>;
-  stop?: () => void | Promise<void>;
-};
-type NativeArPoseDetail = {
-  source?: NativeArSource;
-  trackingState?: 'tracking' | 'limited';
-  position?: XrVector3;
-  orientation?: XrQuaternion;
-  latitude?: number;
-  longitude?: number;
-  heading?: number;
-};
-type NavigatorWithXr = Navigator & { xr?: XrSystemLike };
-type WindowWithArRuntimes = Window & {
-  XRWebGLLayer?: XrWebGLLayerConstructor;
-  BuddiesNativeAR?: NativeArBridge;
-};
-type SlamCalibration = {
-  latitude: number;
-  longitude: number;
-  heading: number;
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-};
-
-const METERS_PER_DEGREE_LATITUDE = 111_320;
 const POSE_PATCH_INTERVAL_MS = 33;
 
 function emitStatus(status: ArCameraStatus, message: string) {
   window.dispatchEvent(new CustomEvent('buddies:ar-camera-status', {
     detail: { status, message }
   }));
-}
-
-function normalizeDegrees(value: number) {
-  return ((value % 360) + 360) % 360;
-}
-
-function shortestAngularDelta(from: number, to: number) {
-  return ((to - from + 540) % 360) - 180;
-}
-
-function yawDegrees(orientation: XrQuaternion) {
-  const { x, y, z, w } = orientation;
-  const radians = Math.atan2(
-    2 * (w * y + x * z),
-    1 - 2 * (y * y + z * z)
-  );
-  return normalizeDegrees(radians * 180 / Math.PI);
-}
-
-function trackingSourceForNative(source: NativeArSource | undefined): ArTrackingSource {
-  return source === 'arcore' ? 'arcore-native' : 'arkit-native';
-}
-
-function trackingSourceForWebXr(): ArTrackingSource {
-  return /Android/i.test(navigator.userAgent) ? 'arcore-webxr' : 'webxr-slam';
-}
-
-function geodeticFromLocalPose(
-  calibration: SlamCalibration,
-  position: XrVector3,
-  orientation: XrQuaternion
-) {
-  const dx = position.x - calibration.x;
-  const dy = position.y - calibration.y;
-  const dz = position.z - calibration.z;
-  const localEast = dx;
-  const localNorth = -dz;
-
-  // WebXR/ARKit/ARCore local coordinates are right-handed (+X right, +Y up,
-  // -Z forward). Align that local frame to geographic north once at the session
-  // origin, then let visual-inertial SLAM drive short-range motion.
-  const localNorthBearing = normalizeDegrees(calibration.heading + calibration.yaw);
-  const angle = localNorthBearing * Math.PI / 180;
-  const eastMeters = localEast * Math.cos(angle) + localNorth * Math.sin(angle);
-  const northMeters = -localEast * Math.sin(angle) + localNorth * Math.cos(angle);
-  const latitude = calibration.latitude + northMeters / METERS_PER_DEGREE_LATITUDE;
-  const longitudeScale = METERS_PER_DEGREE_LATITUDE
-    * Math.max(0.15, Math.cos(calibration.latitude * Math.PI / 180));
-  const longitude = calibration.longitude + eastMeters / longitudeScale;
-  const currentYaw = yawDegrees(orientation);
-  const heading = normalizeDegrees(
-    calibration.heading - shortestAngularDelta(calibration.yaw, currentYaw)
-  );
-
-  return {
-    latitude,
-    longitude,
-    heading,
-    xMeters: dx,
-    yMeters: dy,
-    zMeters: dz
-  };
 }
 
 export default function MapArCamera() {
@@ -153,14 +37,17 @@ export default function MapArCamera() {
   const rootLocatorRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const xrSessionRef = useRef<XrSessionLike | null>(null);
+  const xrHitTestSourceRef = useRef<XrHitTestSourceLike | null>(null);
   const xrGlRef = useRef<XrCompatibleGl | null>(null);
   const xrLayerRef = useRef<XrWebGLLayerLike | null>(null);
+  const xrSurfaceTrackedRef = useRef(false);
   const nativeBridgeStartedRef = useRef(false);
   const calibrationRef = useRef<SlamCalibration | null>(null);
   const lastPosePatchRef = useRef(0);
   const explicitStopRef = useRef(false);
   const savedOverlayBackgroundRef = useRef<string | null>(null);
   const trackingRequestActiveRef = useRef(false);
+  const runtimeGenerationRef = useRef(0);
   const [status, setStatus] = useState<ArCameraStatus>('idle');
 
   const resolveOverlayRoot = useCallback((): HTMLElement => {
@@ -191,7 +78,18 @@ export default function MapArCamera() {
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
+  const clearXrResources = useCallback(() => {
+    xrHitTestSourceRef.current?.cancel?.();
+    xrHitTestSourceRef.current = null;
+    xrSurfaceTrackedRef.current = false;
+    xrGlRef.current = null;
+    xrLayerRef.current = null;
+    calibrationRef.current = null;
+  }, []);
+
   const startFallbackCamera = useCallback(async () => {
+    const generation = runtimeGenerationRef.current;
+
     if (streamRef.current) {
       setStatus('ready');
       emitStatus('ready', 'Rear camera is live with stabilized sensor-fusion tracking.');
@@ -223,11 +121,23 @@ export default function MapArCamera() {
         }
       });
 
+      if (generation !== runtimeGenerationRef.current || useMapRuntimeStore.getState().cameraMode !== 'ar') {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       streamRef.current = stream;
       const video = videoRef.current;
       if (video) {
         video.srcObject = stream;
         await video.play().catch(() => undefined);
+      }
+
+      if (generation !== runtimeGenerationRef.current || useMapRuntimeStore.getState().cameraMode !== 'ar') {
+        stream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === stream) streamRef.current = null;
+        if (videoRef.current?.srcObject === stream) videoRef.current.srcObject = null;
+        return;
       }
 
       const state = useMapRuntimeStore.getState();
@@ -240,11 +150,9 @@ export default function MapArCamera() {
         updatedAt: new Date().toISOString()
       });
       setStatus('ready');
-      emitStatus(
-        'ready',
-        'Rear camera live. Browser SLAM is unavailable here; stabilized GPS + inertial tracking is active.'
-      );
+      emitStatus('ready', 'Rear camera live. Browser SLAM is unavailable here; stabilized GPS + inertial tracking is active.');
     } catch (error) {
+      if (generation !== runtimeGenerationRef.current) return;
       const denied = error instanceof DOMException
         && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
       const nextStatus: ArCameraStatus = denied ? 'denied' : 'error';
@@ -263,6 +171,7 @@ export default function MapArCamera() {
   }, []);
 
   const beginFallback = useCallback((reason: string) => {
+    if (useMapRuntimeStore.getState().cameraMode !== 'ar') return;
     const state = useMapRuntimeStore.getState();
     state.patchArTracking({
       source: 'sensor-fusion',
@@ -285,7 +194,8 @@ export default function MapArCamera() {
     source: ArTrackingSource,
     position: XrVector3,
     orientation: XrQuaternion,
-    trackingState: 'tracking' | 'limited' = 'tracking'
+    trackingState: 'tracking' | 'limited' = 'tracking',
+    surfaceTracked = false
   ) => {
     const now = performance.now();
     if (now - lastPosePatchRef.current < POSE_PATCH_INTERVAL_MS) return;
@@ -298,7 +208,7 @@ export default function MapArCamera() {
       calibration = {
         latitude: state.telemetry.latitude,
         longitude: state.telemetry.longitude,
-        heading: state.bearing || state.telemetry.heading || 0,
+        heading: state.bearing,
         x: position.x,
         y: position.y,
         z: position.z,
@@ -312,7 +222,9 @@ export default function MapArCamera() {
         source,
         state: 'limited',
         heading: state.bearing,
-        message: 'SLAM pose acquired; waiting for a geographic origin.',
+        message: surfaceTracked
+          ? 'SLAM surface map acquired; waiting for a geographic origin.'
+          : 'SLAM pose acquired; waiting for a geographic origin.',
         updatedAt: new Date().toISOString()
       });
       return;
@@ -329,22 +241,40 @@ export default function MapArCamera() {
       yMeters: pose.yMeters,
       zMeters: pose.zMeters,
       message: trackingState === 'tracking'
-        ? 'Visual-inertial SLAM tracking locked.'
+        ? surfaceTracked
+          ? 'Visual-inertial SLAM and surface tracking locked.'
+          : 'Visual-inertial SLAM tracking locked.'
         : 'SLAM tracking is temporarily limited.',
       updatedAt: new Date().toISOString()
     });
   }, []);
 
-  const initializeXrSession = useCallback(async (session: XrSessionLike, source: ArTrackingSource) => {
+  const initializeXrSession = useCallback(async (
+    session: XrSessionLike,
+    source: ArTrackingSource,
+    generation: number
+  ) => {
     xrSessionRef.current = session;
-    calibrationRef.current = null;
+    clearXrResources();
     lastPosePatchRef.current = 0;
     setOverlayTransparent(true);
     stopCamera();
 
     const referenceSpace = await session.requestReferenceSpace('local');
-    const LayerCtor = (window as WindowWithArRuntimes).XRWebGLLayer;
+    if (generation !== runtimeGenerationRef.current) throw new Error('stale-xr-session');
 
+    if (session.requestHitTestSource) {
+      try {
+        const viewerSpace = await session.requestReferenceSpace('viewer');
+        if (generation !== runtimeGenerationRef.current) throw new Error('stale-xr-session');
+        xrHitTestSourceRef.current = await session.requestHitTestSource({ space: viewerSpace });
+      } catch (error) {
+        if (generation !== runtimeGenerationRef.current) throw error;
+        xrHitTestSourceRef.current = null;
+      }
+    }
+
+    const LayerCtor = (window as WindowWithArRuntimes).XRWebGLLayer;
     if (LayerCtor) {
       const canvas = document.createElement('canvas');
       canvas.width = 2;
@@ -356,6 +286,7 @@ export default function MapArCamera() {
 
       if (gl) {
         if (typeof gl.makeXRCompatible === 'function') await gl.makeXRCompatible();
+        if (generation !== runtimeGenerationRef.current) throw new Error('stale-xr-session');
         const layer = new LayerCtor(session, gl);
         xrGlRef.current = gl;
         xrLayerRef.current = layer;
@@ -365,13 +296,14 @@ export default function MapArCamera() {
 
     const handleEnd = () => {
       session.removeEventListener('end', handleEnd);
-      xrSessionRef.current = null;
-      xrGlRef.current = null;
-      xrLayerRef.current = null;
-      calibrationRef.current = null;
-      setOverlayTransparent(false);
+      const ownsRuntime = xrSessionRef.current === session;
+      if (ownsRuntime) {
+        xrSessionRef.current = null;
+        clearXrResources();
+        setOverlayTransparent(false);
+      }
 
-      if (explicitStopRef.current) return;
+      if (!ownsRuntime || explicitStopRef.current || generation !== runtimeGenerationRef.current) return;
       if (useMapRuntimeStore.getState().cameraMode === 'ar') {
         beginFallback('The immersive SLAM session ended; stabilized sensor fusion is active.');
       }
@@ -380,7 +312,7 @@ export default function MapArCamera() {
     session.addEventListener('end', handleEnd);
 
     const renderFrame = (_time: number, frame: XrFrameLike) => {
-      if (xrSessionRef.current !== session) return;
+      if (xrSessionRef.current !== session || generation !== runtimeGenerationRef.current) return;
 
       const gl = xrGlRef.current;
       const layer = xrLayerRef.current;
@@ -391,9 +323,20 @@ export default function MapArCamera() {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       }
 
+      const hitSource = xrHitTestSourceRef.current;
+      if (hitSource && frame.getHitTestResults) {
+        xrSurfaceTrackedRef.current = frame.getHitTestResults(hitSource).length > 0;
+      }
+
       const pose = frame.getViewerPose(referenceSpace);
       if (pose) {
-        patchLocalPose(source, pose.transform.position, pose.transform.orientation);
+        patchLocalPose(
+          source,
+          pose.transform.position,
+          pose.transform.orientation,
+          'tracking',
+          xrSurfaceTrackedRef.current
+        );
       } else {
         const state = useMapRuntimeStore.getState();
         if (state.arTracking.state !== 'limited') {
@@ -409,29 +352,38 @@ export default function MapArCamera() {
       session.requestAnimationFrame(renderFrame);
     };
 
+    const hitTestEnabled = session.enabledFeatures?.includes('hit-test') || Boolean(xrHitTestSourceRef.current);
     useMapRuntimeStore.getState().patchArTracking({
       source,
       state: 'initializing',
       message: source === 'arcore-webxr'
-        ? 'ARCore WebXR SLAM session started; acquiring visual features.'
-        : 'WebXR SLAM session started; acquiring visual features.',
+        ? hitTestEnabled
+          ? 'ARCore WebXR SLAM started; acquiring pose and real-world surfaces.'
+          : 'ARCore WebXR SLAM started; acquiring visual-inertial pose.'
+        : hitTestEnabled
+          ? 'WebXR SLAM started; acquiring pose and real-world surfaces.'
+          : 'WebXR SLAM started; acquiring visual-inertial pose.',
       updatedAt: new Date().toISOString()
     });
     setStatus('ready');
     emitStatus(
       'ready',
       source === 'arcore-webxr'
-        ? 'ARCore SLAM active. Move naturally while the visual map stabilizes.'
-        : 'WebXR SLAM active. Move naturally while the visual map stabilizes.'
+        ? 'ARCore SLAM active. Move naturally while the spatial map stabilizes.'
+        : 'WebXR SLAM active. Move naturally while the spatial map stabilizes.'
     );
     session.requestAnimationFrame(renderFrame);
-  }, [beginFallback, patchLocalPose, setOverlayTransparent, stopCamera]);
+  }, [beginFallback, clearXrResources, patchLocalPose, setOverlayTransparent, stopCamera]);
 
   const startTracking = useCallback(() => {
-    if (trackingRequestActiveRef.current) return;
+    if (trackingRequestActiveRef.current || xrSessionRef.current || nativeBridgeStartedRef.current) return;
+
+    const generation = runtimeGenerationRef.current + 1;
+    runtimeGenerationRef.current = generation;
     trackingRequestActiveRef.current = true;
     explicitStopRef.current = false;
     calibrationRef.current = null;
+    xrSurfaceTrackedRef.current = false;
     lastPosePatchRef.current = 0;
 
     const state = useMapRuntimeStore.getState();
@@ -465,8 +417,13 @@ export default function MapArCamera() {
         updatedAt: new Date().toISOString()
       });
 
-      Promise.resolve(nativeBridge.start())
-        .then(() => {
+      void Promise.resolve(nativeBridge.start())
+        .then(async () => {
+          if (generation !== runtimeGenerationRef.current) {
+            if (nativeBridge.stop) await Promise.resolve(nativeBridge.stop()).catch(() => undefined);
+            nativeBridgeStartedRef.current = false;
+            return;
+          }
           trackingRequestActiveRef.current = false;
           setStatus('ready');
           emitStatus(
@@ -479,6 +436,7 @@ export default function MapArCamera() {
         .catch(() => {
           nativeBridgeStartedRef.current = false;
           trackingRequestActiveRef.current = false;
+          if (generation !== runtimeGenerationRef.current) return;
           setOverlayTransparent(false);
           beginFallback('Native AR tracking could not start; stabilized sensor fusion is active.');
         });
@@ -492,28 +450,52 @@ export default function MapArCamera() {
       return;
     }
 
-    const sessionPromise = xr.requestSession('immersive-ar', {
-      requiredFeatures: ['dom-overlay'],
-      domOverlay: { root: resolveOverlayRoot() }
-    });
+    // Keep requestSession synchronous with the AR activation event: immersive
+    // sessions require transient user activation in supporting browsers.
+    const sessionPromise = xr.requestSession(
+      'immersive-ar',
+      immersiveArSessionOptions(resolveOverlayRoot())
+    );
 
     void sessionPromise
       .then(async (session) => {
-        await initializeXrSession(session, trackingSourceForWebXr());
-        trackingRequestActiveRef.current = false;
+        if (generation !== runtimeGenerationRef.current) {
+          await session.end().catch(() => undefined);
+          return;
+        }
+
+        try {
+          await initializeXrSession(session, trackingSourceForWebXr(navigator.userAgent), generation);
+          if (generation === runtimeGenerationRef.current) trackingRequestActiveRef.current = false;
+        } catch {
+          const ownsRuntime = xrSessionRef.current === session;
+          if (ownsRuntime) {
+            xrSessionRef.current = null;
+            clearXrResources();
+            setOverlayTransparent(false);
+          }
+          await session.end().catch(() => undefined);
+
+          if (generation !== runtimeGenerationRef.current) return;
+          trackingRequestActiveRef.current = false;
+          beginFallback('Immersive WebXR SLAM initialization failed; stabilized sensor fusion is active.');
+        }
       })
       .catch(() => {
+        if (generation !== runtimeGenerationRef.current) return;
         trackingRequestActiveRef.current = false;
         beginFallback('Immersive WebXR SLAM could not start; stabilized sensor fusion is active.');
       });
-  }, [beginFallback, initializeXrSession, resolveOverlayRoot, setOverlayTransparent, stopCamera]);
+  }, [beginFallback, clearXrResources, initializeXrSession, resolveOverlayRoot, setOverlayTransparent, stopCamera]);
 
   const stopTracking = useCallback(() => {
+    runtimeGenerationRef.current += 1;
     explicitStopRef.current = true;
     trackingRequestActiveRef.current = false;
 
     const session = xrSessionRef.current;
     xrSessionRef.current = null;
+    clearXrResources();
     if (session) void session.end().catch(() => undefined);
 
     const nativeBridge = (window as WindowWithArRuntimes).BuddiesNativeAR;
@@ -522,14 +504,11 @@ export default function MapArCamera() {
     }
     nativeBridgeStartedRef.current = false;
 
-    calibrationRef.current = null;
-    xrGlRef.current = null;
-    xrLayerRef.current = null;
     stopCamera();
     setOverlayTransparent(false);
     useMapRuntimeStore.getState().resetArTracking();
     setStatus('idle');
-  }, [setOverlayTransparent, stopCamera]);
+  }, [clearXrResources, setOverlayTransparent, stopCamera]);
 
   useEffect(() => {
     const requestTracking = () => startTracking();
@@ -554,10 +533,11 @@ export default function MapArCamera() {
   useEffect(() => {
     function handleNativePose(event: Event) {
       const detail = (event as CustomEvent<NativeArPoseDetail>).detail;
-      if (!detail) return;
+      if (!detail || !nativeBridgeStartedRef.current) return;
 
-      const source = trackingSourceForNative(detail.source);
       const state = useMapRuntimeStore.getState();
+      if (state.cameraMode !== 'ar') return;
+      const source = trackingSourceForNative(detail.source);
 
       if (typeof detail.latitude === 'number' && typeof detail.longitude === 'number') {
         state.patchArTracking({
@@ -568,14 +548,22 @@ export default function MapArCamera() {
           heading: typeof detail.heading === 'number' ? detail.heading : state.arTracking.heading,
           message: detail.trackingState === 'limited'
             ? 'Native SLAM tracking is temporarily limited.'
-            : 'Native visual-inertial SLAM tracking locked.',
+            : detail.surfaceTracked
+              ? 'Native visual-inertial SLAM and surface tracking locked.'
+              : 'Native visual-inertial SLAM tracking locked.',
           updatedAt: new Date().toISOString()
         });
         return;
       }
 
       if (detail.position && detail.orientation) {
-        patchLocalPose(source, detail.position, detail.orientation, detail.trackingState ?? 'tracking');
+        patchLocalPose(
+          source,
+          detail.position,
+          detail.orientation,
+          detail.trackingState ?? 'tracking',
+          detail.surfaceTracked ?? false
+        );
       }
     }
 
