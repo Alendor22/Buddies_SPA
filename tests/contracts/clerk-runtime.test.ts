@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('Clerk runtime contract', () => {
@@ -44,5 +44,17 @@ describe('Clerk runtime contract', () => {
     const middleware = readFileSync('src/middleware.ts', 'utf8');
     expect(middleware).toContain('/auth/login');
     expect(middleware).toContain('/sign-in');
+    expect(middleware).toContain('/auth/register');
+    expect(middleware).toContain('/sign-up');
+  });
+
+  it('does not ship the legacy Resend auth mailer or password login action', () => {
+    expect(existsSync('src/lib/email.ts')).toBe(false);
+    expect(existsSync('src/app/auth/login/actions.ts')).toBe(false);
+
+    const signIn = readFileSync('src/app/sign-in/[[...sign-in]]/page.tsx', 'utf8');
+    const signUp = readFileSync('src/app/sign-up/[[...sign-up]]/page.tsx', 'utf8');
+    expect(signIn).toContain('<SignIn');
+    expect(signUp).toContain('<SignUp');
   });
 });
