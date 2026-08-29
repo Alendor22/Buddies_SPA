@@ -57,7 +57,7 @@ function Tab({ href, icon, label, active, count }: { href: string; icon: string;
 
 function crumbLabel(path: string) { return titleForPath(path); }
 
-export default function AppNavigation({ signedIn, initial, notificationCount }: AppNavigationProps) {
+export default function AppNavigation({ signedIn, notificationCount }: AppNavigationProps) {
   const router = useRouter();
   const pathname = usePathname() || '/';
   const searchParams = useSearchParams();
