@@ -7,6 +7,7 @@ enum RecognitionEnrollmentStatus {
 
 enum RecognitionAssetStatus {
   PENDING
+  PROCESSING
   READY
   REJECTED
   DELETED
@@ -22,7 +23,9 @@ enum RecognitionEventOutcome {
 model RecognitionEnrollment {
   id              String                      @id @default(cuid())
   dogId           String
+  dog             Dog                         @relation("RecognitionEnrollmentDog", fields: [dogId], references: [id], onDelete: Cascade)
   ownerId         String
+  owner           User                        @relation("RecognitionEnrollmentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   status          RecognitionEnrollmentStatus @default(PENDING)
   modelVersion    String?
   consentVersion  String
@@ -66,6 +69,7 @@ model RecognitionEvent {
   source          String
   imageRef        String?
   matchedDogId    String?
+  matchedDog      Dog?                    @relation("RecognitionMatchedDog", fields: [matchedDogId], references: [id], onDelete: SetNull)
   confidence      Float?
   outcome         RecognitionEventOutcome
   modelVersion    String
