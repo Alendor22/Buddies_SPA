@@ -36,4 +36,9 @@ describe('resolveBuddiesScan', () => {
   it('rejects path injection in manual input', () => {
     expect(resolveBuddiesScan('../dashboard', ORIGIN)).toBeNull();
   });
+
+  it('rejects malformed percent encoding without throwing', () => {
+    expect(resolveBuddiesScan('https://buddies.vercel.app/dogs/%E0%A4%A', ORIGIN)).toBeNull();
+    expect(resolveBuddiesScan('%E0%A4%A', ORIGIN)).toBeNull();
+  });
 });
