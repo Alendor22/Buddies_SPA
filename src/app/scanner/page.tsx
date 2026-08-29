@@ -2,7 +2,7 @@ import DogRecognitionCamera from '@/components/scanner/DogRecognitionCamera';
 
 export const metadata = {
   title: 'Identify a Dog | Buddies',
-  description: 'Identify a dog visually with Buddies Doggy Recognition, with tag scanning as a secondary check.',
+  description: 'Camera-first visual dog identification with photo upload and secondary tag verification.',
 };
 
 export default function ScannerPage() {
