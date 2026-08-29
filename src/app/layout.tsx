@@ -25,16 +25,26 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const mapboxToken = getPublicMapboxToken();
 
   return (
-    <html lang="en">
-      <body className="pb-24 sm:pb-0">
-        <ClerkProvider>
+    <ClerkProvider
+      dynamic
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+    >
+      <html lang="en">
+        <body className="pb-24 sm:pb-0">
           <MapboxProvider initialToken={mapboxToken}>
-          <AppNavigation signedIn={Boolean(user)} initial={initial} notificationCount={notificationCount} />
-          {children}
+            <AppNavigation
+              signedIn={Boolean(user)}
+              initial={initial}
+              notificationCount={notificationCount}
+            />
+            {children}
           </MapboxProvider>
           <Analytics />
-        </ClerkProvider>
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
