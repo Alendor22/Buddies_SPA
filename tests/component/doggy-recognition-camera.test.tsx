@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DogRecognitionCamera from '@/components/scanner/DogRecognitionCamera';
 
 vi.mock('@/lib/doggy-recognition/client', () => ({ recognizeDogImage: vi.fn() }));
+
+afterEach(cleanup);
 
 describe('DogRecognitionCamera', () => {
   beforeEach(() => {
