@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Analytics } from '@vercel/analytics/next';
 import AppNavigation from '@/components/AppNavigation';
 import { MapboxProvider } from '@/components/providers/MapboxProvider';
+import { getClerkPublishableKey } from '@/lib/clerkConfig';
 import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import './globals.css';
 
@@ -14,10 +15,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const mapboxToken = getPublicMapboxToken();
+  const clerkPublishableKey = getClerkPublishableKey();
 
   return (
     <ClerkProvider
       dynamic
+      publishableKey={clerkPublishableKey}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
