@@ -35,6 +35,12 @@ describe('doggy recognition confidence policy', () => {
     expect(decideRecognition([{ dogId: 'bad', slug: 'bad', confidence: Number.NaN }])).toEqual({ kind: 'unknown', candidate: undefined });
   });
 
+  it('rejects finite confidence values outside the normalized range', () => {
+    expect(decideRecognition([buddy(1.2)])).toEqual({ kind: 'unknown', candidate: undefined });
+    expect(decideRecognition([buddy(-0.1)])).toEqual({ kind: 'unknown', candidate: undefined });
+    expect(decideRecognition([buddy(97)])).toEqual({ kind: 'unknown', candidate: undefined });
+  });
+
   it('maps recognition decisions directly to responsive camera UI states', () => {
     expect(recognitionStatus(decideRecognition([buddy(0.95)]))).toBe('identified');
     expect(recognitionStatus(decideRecognition([buddy(0.80)]))).toBe('confirm');
