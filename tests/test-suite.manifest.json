@@ -34,7 +34,7 @@
         "src/app/sign-in/",
         "src/app/sign-up/"
       ],
-      "testPrefixes": ["tests/unit/auth/", "tests/integration/auth/", "tests/e2e/"]
+      "testPrefixes": ["tests/unit/auth/", "tests/integration/auth/", "tests/e2e/", "tests/contracts/clerk-runtime.test.ts"]
     },
     {
       "id": "dog-identity",
@@ -43,9 +43,12 @@
         "src/app/qr-dog/",
         "src/app/api/dogs/",
         "src/app/api/qr/",
-        "src/app/api/uploads/"
+        "src/app/api/uploads/",
+        "src/app/scanner/",
+        "src/components/scanner/",
+        "src/lib/scanner.ts"
       ],
-      "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts"]
+      "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts", "tests/unit/scanner/"]
     },
     {
       "id": "social-graph",
@@ -88,6 +91,7 @@
         "src/app/api/check-ins/",
         "src/app/api/maps/",
         "src/app/api/social-map/",
+        "src/components/map/",
         "src/lib/telemetry/",
         "src/stores/useMapRuntimeStore.ts"
       ],
