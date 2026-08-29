@@ -81,6 +81,7 @@ export default function DogRecognitionCamera() {
       const next = decideRecognition(result.candidates);
       setDecision(next);
       setStatus(next.kind);
+      setError('');
     } catch (cause) {
       if (controller.signal.aborted || generationRef.current !== generation) return;
       setError(cause instanceof Error ? cause.message : 'Recognition request failed.');
@@ -102,7 +103,6 @@ export default function DogRecognitionCamera() {
         videoReady: video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
         documentVisible: document.visibilityState === 'visible',
       })) return;
-
       lastSampleRef.current = now;
       const blob = await videoFrameBlob(video);
       if (!blob || generationRef.current !== generation) return;
@@ -164,48 +164,21 @@ export default function DogRecognitionCamera() {
         <h1 id="recognition-title" className="mt-1 text-3xl font-black tracking-tight text-slate-950">Identify a dog</h1>
         <p className="mt-2 text-slate-600">Point your camera at the dog. Visual identity is primary; tag scanning remains available as a secondary check.</p>
       </header>
-
       <div className="relative aspect-[3/4] overflow-hidden rounded-3xl bg-slate-950 shadow-sm sm:aspect-video">
         <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-        <div className="pointer-events-none absolute inset-0 grid place-items-center p-7">
-          <div className="h-3/5 w-4/5 rounded-[2.5rem] border-2 border-white/80 shadow-[0_0_0_999px_rgba(2,6,23,0.18)]" />
-        </div>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center p-7"><div className="h-3/5 w-4/5 rounded-[2.5rem] border-2 border-white/80 shadow-[0_0_0_999px_rgba(2,6,23,0.18)]" /></div>
         <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-slate-950/75 p-4 text-white backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-semibold">{statusCopy(status)}</p>
-            {status === 'processing' ? <span className="animate-pulse text-sm">Analyzing</span> : null}
-          </div>
-          {candidate ? (
-            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-              <span>{decision?.kind === 'identified' ? 'Match' : 'Candidate'}: {candidate.slug}</span>
-              <span>{confidence}%</span>
-            </div>
-          ) : null}
+          <div className="flex items-center justify-between gap-3"><p className="font-semibold">{statusCopy(status)}</p>{status === 'processing' ? <span className="animate-pulse text-sm">Analyzing</span> : null}</div>
+          {candidate ? <div className="mt-2 flex items-center justify-between gap-3 text-sm"><span>{decision?.kind === 'identified' ? 'Match' : 'Candidate'}: {candidate.slug}</span><span>{confidence}%</span></div> : null}
         </div>
       </div>
-
-      {candidate && decision?.kind === 'identified' ? (
-        <Link href={`/dogs/${encodeURIComponent(candidate.slug)}`} className="rounded-xl bg-slate-950 px-5 py-3 text-center font-bold text-white">
-          View recognized dog
-        </Link>
-      ) : null}
-
+      {candidate && decision?.kind === 'identified' ? <Link href={`/dogs/${encodeURIComponent(candidate.slug)}`} className="rounded-xl bg-slate-950 px-5 py-3 text-center font-bold text-white">View recognized dog</Link> : null}
       <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-        <button type="button" onClick={() => void startCamera()} className="rounded-xl bg-slate-950 px-5 py-3 font-bold text-white">
-          {streamRef.current ? 'Restart camera' : 'Start camera'}
-        </button>
-        <label className="cursor-pointer rounded-xl border bg-white px-5 py-3 text-center font-bold text-slate-800">
-          Upload dog photo
-          <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void uploadPhoto(event.target.files?.[0] ?? null)} />
-        </label>
-        <Link href="/scanner/tag" className="col-span-2 rounded-xl border bg-white px-5 py-3 text-center font-bold text-slate-700">
-          Scan tag instead
-        </Link>
+        <button type="button" onClick={() => void startCamera()} className="rounded-xl bg-slate-950 px-5 py-3 font-bold text-white">Start camera</button>
+        <label className="cursor-pointer rounded-xl border bg-white px-5 py-3 text-center font-bold text-slate-800">Upload dog photo<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void uploadPhoto(event.target.files?.[0] ?? null)} /></label>
+        <Link href="/scanner/tag" className="col-span-2 rounded-xl border bg-white px-5 py-3 text-center font-bold text-slate-700">Scan tag instead</Link>
       </div>
-
-      <p className={`min-h-6 text-sm ${error ? 'font-semibold text-red-700' : 'text-slate-500'}`} aria-live="polite">
-        {error || `Live recognition samples at a controlled interval (~${CAMERA_SAMPLE_INTERVAL_MS} ms) to keep the camera responsive.`}
-      </p>
+      <p className={`min-h-6 text-sm ${error ? 'font-semibold text-red-700' : 'text-slate-500'}`} aria-live="polite">{error || `Live recognition samples at a controlled interval (~${CAMERA_SAMPLE_INTERVAL_MS} ms) to keep the camera responsive.`}</p>
     </section>
   );
 }
