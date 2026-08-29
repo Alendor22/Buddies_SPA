@@ -87,6 +87,10 @@ export function normalizeDegrees(value: number) {
   return ((value % 360) + 360) % 360;
 }
 
+export function normalizeLongitude(value: number) {
+  return ((value + 540) % 360) - 180;
+}
+
 export function shortestAngularDelta(from: number, to: number) {
   return ((to - from + 540) % 360) - 180;
 }
@@ -133,7 +137,7 @@ export function geodeticFromLocalPose(
   const latitude = calibration.latitude + northMeters / METERS_PER_DEGREE_LATITUDE;
   const longitudeScale = METERS_PER_DEGREE_LATITUDE
     * Math.max(0.15, Math.cos(calibration.latitude * Math.PI / 180));
-  const longitude = calibration.longitude + eastMeters / longitudeScale;
+  const longitude = normalizeLongitude(calibration.longitude + eastMeters / longitudeScale);
   const currentYaw = yawDegrees(orientation);
   const heading = normalizeDegrees(
     calibration.heading - shortestAngularDelta(calibration.yaw, currentYaw)
