@@ -12,98 +12,42 @@
   "capabilities": [
     {
       "id": "application-shell",
-      "sourcePrefixes": [
-        "src/app/page.tsx",
-        "src/app/layout.tsx",
-        "src/app/loading.tsx",
-        "src/app/not-found.tsx",
-        "src/app/dashboard/page.tsx",
-        "src/app/dashboard/account/",
-        "src/app/dashboard/menu/"
-      ],
+      "sourcePrefixes": ["src/app/page.tsx", "src/app/layout.tsx", "src/app/loading.tsx", "src/app/not-found.tsx", "src/app/dashboard/page.tsx", "src/app/dashboard/account/", "src/app/dashboard/menu/"],
       "testPrefixes": ["tests/e2e/public-shell.spec.ts"]
     },
     {
       "id": "authentication",
-      "sourcePrefixes": [
-        "src/app/auth/",
-        "src/app/logout/",
-        "src/app/api/auth/",
-        "src/app/api/session/",
-        "src/lib/auth.ts",
-        "src/app/sign-in/",
-        "src/app/sign-up/"
-      ],
+      "sourcePrefixes": ["src/app/auth/", "src/app/logout/", "src/app/api/auth/", "src/app/api/session/", "src/lib/auth.ts", "src/app/sign-in/", "src/app/sign-up/"],
       "testPrefixes": ["tests/unit/auth/", "tests/integration/auth/", "tests/e2e/", "tests/contracts/clerk-runtime.test.ts"]
     },
     {
       "id": "dog-identity",
-      "sourcePrefixes": [
-        "src/app/dogs/",
-        "src/app/qr-dog/",
-        "src/app/api/dogs/",
-        "src/app/api/qr/",
-        "src/app/api/uploads/",
-        "src/app/scanner/",
-        "src/components/scanner/",
-        "src/lib/scanner.ts"
-      ],
-      "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts", "tests/unit/scanner/"]
+      "sourcePrefixes": ["src/app/dogs/", "src/app/qr-dog/", "src/app/api/dogs/", "src/app/api/qr/", "src/app/api/uploads/", "src/app/api/doggy-recognition/", "src/app/scanner/", "src/components/scanner/", "src/lib/scanner.ts", "src/lib/doggy-recognition/"],
+      "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts", "tests/unit/scanner/", "tests/unit/doggy-recognition-camera.test.ts", "tests/component/doggy-recognition-camera.test.tsx", "tests/contracts/doggy-recognition-camera.contract.test.ts"]
     },
     {
       "id": "social-graph",
-      "sourcePrefixes": [
-        "src/app/dashboard/buddies/",
-        "src/app/api/buddies/",
-        "src/app/api/dog-buddies/"
-      ],
+      "sourcePrefixes": ["src/app/dashboard/buddies/", "src/app/api/buddies/", "src/app/api/dog-buddies/"],
       "testPrefixes": ["tests/integration/buddies/", "tests/unit/shared/"]
     },
     {
       "id": "walks-and-messaging",
-      "sourcePrefixes": [
-        "src/app/walks/",
-        "src/app/dashboard/walks/",
-        "src/app/dashboard/messages/",
-        "src/app/api/walks/",
-        "src/app/api/walk-invitations/",
-        "src/app/api/walk-routes/",
-        "src/app/api/realtime/"
-      ],
+      "sourcePrefixes": ["src/app/walks/", "src/app/dashboard/walks/", "src/app/dashboard/messages/", "src/app/api/walks/", "src/app/api/walk-invitations/", "src/app/api/walk-routes/", "src/app/api/realtime/"],
       "testPrefixes": ["tests/unit/shared/", "tests/contracts/security-backlog.test.ts"]
     },
     {
       "id": "safety-records-notifications",
-      "sourcePrefixes": [
-        "src/app/dashboard/lost/",
-        "src/app/dashboard/records/",
-        "src/app/dashboard/notifications/",
-        "src/app/api/notifications/"
-      ],
+      "sourcePrefixes": ["src/app/dashboard/lost/", "src/app/dashboard/records/", "src/app/dashboard/notifications/", "src/app/api/notifications/"],
       "testPrefixes": ["tests/contracts/security-backlog.test.ts", "tests/e2e/"]
     },
     {
       "id": "spatial-map",
-      "sourcePrefixes": [
-        "src/app/map/",
-        "src/app/dashboard/check-ins/",
-        "src/app/dashboard/social-map/",
-        "src/app/api/check-ins/",
-        "src/app/api/maps/",
-        "src/app/api/social-map/",
-        "src/components/map/",
-        "src/lib/telemetry/",
-        "src/stores/useMapRuntimeStore.ts"
-      ],
+      "sourcePrefixes": ["src/app/map/", "src/app/dashboard/check-ins/", "src/app/dashboard/social-map/", "src/app/api/check-ins/", "src/app/api/maps/", "src/app/api/social-map/", "src/components/map/", "src/lib/telemetry/", "src/stores/useMapRuntimeStore.ts"],
       "testPrefixes": ["tests/unit/map/", "tests/component/map/"]
     },
     {
       "id": "operations",
-      "sourcePrefixes": [
-        "src/app/api/cron/",
-        "src/app/api/db-status/",
-        "src/app/api/health/"
-      ],
+      "sourcePrefixes": ["src/app/api/cron/", "src/app/api/db-status/", "src/app/api/health/"],
       "testPrefixes": ["tests/unit/infrastructure/", "tests/contracts/"]
     }
   ],
@@ -119,6 +63,7 @@
     { "route": "src/app/api/cron/cleanup-expired/route.ts", "access": "service-secret", "testState": "backlog" },
     { "route": "src/app/api/db-status/route.ts", "access": "review-required", "testState": "backlog" },
     { "route": "src/app/api/dog-buddies/respond/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/doggy-recognition/identify/route.ts", "access": "public", "testState": "covered" },
     { "route": "src/app/api/dogs/claim/route.ts", "access": "review-required", "testState": "backlog" },
     { "route": "src/app/api/dogs/manage/route.ts", "access": "authenticated", "testState": "covered" },
     { "route": "src/app/api/dogs/route.ts", "access": "mixed", "testState": "backlog" },
