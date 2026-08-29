@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import { classifyMotion } from '@/lib/telemetry/classifyMotion';
+import {
+  locationErrorDetail,
+  publishLocationStatus
+} from '@/lib/telemetry/locationStatus';
 import { useMapRuntimeStore } from '@/stores/useMapRuntimeStore';
 
 type Sample = {
@@ -14,6 +18,11 @@ type Sample = {
 
 const METERS_PER_MILE = 1609.344;
 const MAX_SAMPLE_AGE_MS = 60_000;
+const GEOLOCATION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 2_000,
+  timeout: 15_000
+};
 
 function distanceMeters(a: Pick<Sample, 'latitude' | 'longitude'>, b: Pick<Sample, 'latitude' | 'longitude'>) {
   const radius = 6_371_000;
@@ -32,9 +41,25 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
   const movingSecondsRef = useRef(0);
 
   useEffect(() => {
-    if (!enabled || !navigator.geolocation) return;
+    if (!enabled) return;
 
-    const watchId = navigator.geolocation.watchPosition((position) => {
+    if (!navigator.geolocation) {
+      publishLocationStatus({
+        status: 'unavailable',
+        message: 'This browser does not expose device location.'
+      });
+      return;
+    }
+
+    let receivedFix = false;
+
+    publishLocationStatus({
+      status: 'requesting',
+      message: 'Acquiring a high-accuracy GPS fix…'
+    });
+
+    const handlePosition = (position: GeolocationPosition) => {
+      receivedFix = true;
       const now = position.timestamp || Date.now();
       const coords = position.coords;
       const last = lastAcceptedRef.current;
@@ -44,6 +69,12 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
       const inferredSpeedMph = dtSeconds > 0 ? (deltaMeters / METERS_PER_MILE) / (dtSeconds / 3600) : 0;
       const gpsSpeedMph = coords.speed != null && coords.speed >= 0 ? coords.speed * 2.236936 : null;
       const speedMph = Math.max(0, gpsSpeedMph ?? inferredSpeedMph);
+
+      publishLocationStatus({
+        status: 'active',
+        message: `GPS active within approximately ${Math.round(accuracyMeters)} meters.`,
+        accuracyMeters
+      });
 
       const sample: Sample = {
         latitude: coords.latitude,
@@ -115,13 +146,21 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
       } else if (classification.shouldStopWalk && state.activeWalk.startedAt) {
         state.endWalk();
       }
-    }, () => {
-      useMapRuntimeStore.getState().patchTelemetry({ confidence: 0, updatedAt: new Date().toISOString() });
-    }, {
-      enableHighAccuracy: true,
-      maximumAge: 5_000,
-      timeout: 15_000
-    });
+    };
+
+    const handleError = (error: GeolocationPositionError) => {
+      if (receivedFix && error.code === error.TIMEOUT) return;
+      publishLocationStatus(locationErrorDetail(error));
+      useMapRuntimeStore.getState().patchTelemetry({
+        currentSpeedMph: 0,
+        confidence: 0
+      });
+    };
+
+    // Bootstrap a fix immediately. On iOS this also makes location acquisition failures
+    // observable instead of leaving the telemetry HUD silently pinned at zero.
+    navigator.geolocation.getCurrentPosition(handlePosition, handleError, GEOLOCATION_OPTIONS);
+    const watchId = navigator.geolocation.watchPosition(handlePosition, handleError, GEOLOCATION_OPTIONS);
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, [enabled]);
