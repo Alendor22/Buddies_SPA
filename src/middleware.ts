@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { getClerkPublishableKey } from '@/lib/clerkConfig';
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -28,6 +29,8 @@ export default clerkMiddleware(async (auth, request) => {
   if (isProtectedRoute(request)) {
     await auth.protect();
   }
+}, {
+  publishableKey: getClerkPublishableKey()
 });
 
 export const config = {
