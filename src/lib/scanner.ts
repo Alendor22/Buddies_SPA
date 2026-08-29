@@ -10,8 +10,12 @@ function allowedHost(url: URL, currentOrigin: URL) {
 }
 
 function cleanSegment(value: string) {
-  const decoded = decodeURIComponent(value).trim();
-  return DOG_SEGMENT.test(decoded) ? decoded : null;
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    return DOG_SEGMENT.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
