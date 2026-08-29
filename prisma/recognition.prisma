@@ -1,0 +1,80 @@
+enum RecognitionEnrollmentStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  REVOKED
+}
+
+enum RecognitionAssetStatus {
+  PENDING
+  READY
+  REJECTED
+  DELETED
+}
+
+enum RecognitionEventOutcome {
+  MATCH
+  LOW_CONFIDENCE
+  NO_MATCH
+  ERROR
+}
+
+model RecognitionEnrollment {
+  id              String                      @id @default(cuid())
+  dogId           String
+  ownerId         String
+  status          RecognitionEnrollmentStatus @default(PENDING)
+  modelVersion    String?
+  consentVersion  String
+  consentedAt     DateTime
+  activatedAt     DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  assets          RecognitionAsset[]
+
+  @@unique([dogId])
+  @@index([ownerId, status])
+  @@index([status, updatedAt])
+}
+
+model RecognitionAsset {
+  id             String                 @id @default(cuid())
+  enrollmentId   String
+  enrollment     RecognitionEnrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  storageKey     String
+  contentHash    String
+  mimeType       String
+  status         RecognitionAssetStatus @default(PENDING)
+  modelVersion   String?
+  embeddingRef   String?
+  qualityScore   Float?
+  rejectionCode  String?
+  capturedAt     DateTime?
+  processedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([enrollmentId, contentHash])
+  @@index([enrollmentId, status])
+  @@index([status, createdAt])
+}
+
+model RecognitionEvent {
+  id              String                  @id @default(cuid())
+  requestId       String                  @unique
+  source          String
+  imageRef        String?
+  matchedDogId    String?
+  confidence      Float?
+  outcome         RecognitionEventOutcome
+  modelVersion    String
+  candidateCount  Int                     @default(0)
+  latencyMs       Int?
+  metadata        Json?
+  createdAt       DateTime                @default(now())
+
+  @@index([matchedDogId, createdAt])
+  @@index([outcome, createdAt])
+  @@index([modelVersion, createdAt])
+}
