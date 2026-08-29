@@ -60,6 +60,20 @@ export const recognitionRepository = {
     return prisma.recognitionAsset.create({ data: input });
   },
 
+  findAsset(assetId: string) {
+    return prisma.recognitionAsset.findUnique({
+      where: { id: assetId },
+      include: { enrollment: true }
+    });
+  },
+
+  markAssetProcessing(assetId: string) {
+    return prisma.recognitionAsset.update({
+      where: { id: assetId },
+      data: { status: 'PROCESSING', rejectionCode: null }
+    });
+  },
+
   markAssetReady(assetId: string, modelVersion: string, embeddingRef: string, qualityScore?: number) {
     return prisma.recognitionAsset.update({
       where: { id: assetId },
