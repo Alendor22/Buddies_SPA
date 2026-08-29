@@ -31,7 +31,9 @@ export function decideRecognition(
   confirmThreshold = CONFIRM_THRESHOLD,
 ): RecognitionDecision {
   const best = [...candidates]
-    .filter((candidate) => Number.isFinite(candidate.confidence))
+    .filter((candidate) => Number.isFinite(candidate.confidence)
+      && candidate.confidence >= 0
+      && candidate.confidence <= 1)
     .sort((a, b) => b.confidence - a.confidence)[0];
 
   if (!best || best.confidence < confirmThreshold) return { kind: 'unknown', candidate: best };
