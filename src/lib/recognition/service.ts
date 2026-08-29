@@ -120,11 +120,15 @@ export async function activateRecognitionEnrollment(input: {
   await requireOwnedDog(input.dogId, input.ownerId);
   const enrollment = await recognitionRepository.findEnrollmentByDogId(input.dogId);
   if (!enrollment || enrollment.ownerId !== input.ownerId) throw new RecognitionStateError('Recognition enrollment does not exist');
+  if (enrollment.status === 'REVOKED') {
+    throw new RecognitionStateError('Recognition enrollment is revoked; accept consent again before activation');
+  }
 
-  const ready = enrollment.assets.filter((asset) => asset.status === 'READY');
-  if (ready.length < 1) throw new RecognitionStateError('At least one processed enrollment asset is required');
-  if (ready.some((asset) => asset.modelVersion !== input.modelVersion)) {
-    throw new RecognitionStateError('Enrollment assets must use the activation model version');
+  const readyForModel = enrollment.assets.filter(
+    (asset) => asset.status === 'READY' && asset.modelVersion === input.modelVersion
+  );
+  if (readyForModel.length < 1) {
+    throw new RecognitionStateError('At least one processed enrollment asset for this model version is required');
   }
 
   return recognitionRepository.activateEnrollment(enrollment.id, input.modelVersion);
