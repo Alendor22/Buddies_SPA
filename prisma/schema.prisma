@@ -76,50 +76,51 @@ enum MapReportType {
 }
 
 model User {
-  id                    String          @id @default(cuid())
-  clerkId               String?         @unique
-  email                 String          @unique
-  displayName           String
-  passwordHash          String?
-  role                  UserRole        @default(OWNER)
-  emailVerifiedAt       DateTime?
-  sessionVersion        Int             @default(0)
-  avatarUrl             String?
+  id                     String                  @id @default(cuid())
+  clerkId                String?                 @unique
+  email                  String                  @unique
+  displayName            String
+  passwordHash           String?
+  role                   UserRole                @default(OWNER)
+  emailVerifiedAt        DateTime?
+  sessionVersion         Int                     @default(0)
+  avatarUrl              String?
   bio                    String?
   city                   String?
   phone                  String?
   latitude               Float?
   longitude              Float?
   dogs                   Dog[]
-  sentWalks              Walk[]          @relation("RequesterWalks")
-  assignedWalks          Walk[]          @relation("WalkerWalks")
+  sentWalks              Walk[]                  @relation("RequesterWalks")
+  assignedWalks          Walk[]                  @relation("WalkerWalks")
   messages               Message[]
   vetRecords             VetRecord[]
   favoriteRoutes         FavoriteRoute[]
   notifications          Notification[]
-  sentBuddyRequests      BuddyRequest[]  @relation("SentBuddyRequests")
-  receivedBuddyRequests  BuddyRequest[]  @relation("ReceivedBuddyRequests")
-  buddyLinksA            Buddy[]         @relation("BuddyUserA")
-  buddyLinksB            Buddy[]         @relation("BuddyUserB")
+  sentBuddyRequests      BuddyRequest[]          @relation("SentBuddyRequests")
+  receivedBuddyRequests  BuddyRequest[]          @relation("ReceivedBuddyRequests")
+  buddyLinksA            Buddy[]                 @relation("BuddyUserA")
+  buddyLinksB            Buddy[]                 @relation("BuddyUserB")
   dogPresences           DogPresence[]
   mapReports             MapReport[]
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  recognitionEnrollments RecognitionEnrollment[] @relation("RecognitionEnrollmentOwner")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model Dog {
-  id                       String             @id @default(cuid())
+  id                       String                  @id @default(cuid())
   ownerId                  String
-  owner                    User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner                    User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name                     String
-  slug                     String             @unique
-  publicId                 String?            @default(cuid())
+  slug                     String                  @unique
+  publicId                 String?                 @default(cuid())
   breed                    String?
   birthDate                DateTime?
   weightLbs                Int?
   gender                   String?
   photoUrl                 String?
-  status                   DogStatus          @default(SAFE)
+  status                   DogStatus               @default(SAFE)
   temperament              String?
   medicalNotes             String?
   vaccinationNotes         String?
@@ -128,10 +129,10 @@ model Dog {
   lastSeenLocation         String?
   lostReward               String?
   lostNotes                String?
-  spayedNeutered           Boolean            @default(false)
-  friendlyDogs             Boolean            @default(true)
-  friendlyCats             Boolean            @default(false)
-  friendlyChildren         Boolean            @default(true)
+  spayedNeutered           Boolean                 @default(false)
+  friendlyDogs             Boolean                 @default(true)
+  friendlyCats             Boolean                 @default(false)
+  friendlyChildren         Boolean                 @default(true)
   latitude                 Float?
   longitude                Float?
   qrScans                  QrScan[]
@@ -139,18 +140,20 @@ model Dog {
   walks                    Walk[]
   vetRecords               VetRecord[]
   favoriteRoutes           FavoriteRoute[]
-  sentWalkInvitations      WalkInvitation[]   @relation("WalkInviteSenderDog")
-  receivedWalkInvitations  WalkInvitation[]   @relation("WalkInviteInvitedDog")
-  sentDogBuddyRequests     DogBuddyRequest[]  @relation("SentDogBuddyRequests")
-  receivedDogBuddyRequests DogBuddyRequest[]  @relation("ReceivedDogBuddyRequests")
-  dogBuddyLinksA           DogBuddy[]         @relation("DogBuddyA")
-  dogBuddyLinksB           DogBuddy[]         @relation("DogBuddyB")
+  sentWalkInvitations      WalkInvitation[]        @relation("WalkInviteSenderDog")
+  receivedWalkInvitations  WalkInvitation[]        @relation("WalkInviteInvitedDog")
+  sentDogBuddyRequests     DogBuddyRequest[]       @relation("SentDogBuddyRequests")
+  receivedDogBuddyRequests DogBuddyRequest[]       @relation("ReceivedDogBuddyRequests")
+  dogBuddyLinksA           DogBuddy[]              @relation("DogBuddyA")
+  dogBuddyLinksB           DogBuddy[]              @relation("DogBuddyB")
   presences                DogPresence[]
   routeMemories            RouteMemory[]
   mapReports               MapReport[]
   notifications            Notification[]
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
+  recognitionEnrollment    RecognitionEnrollment?  @relation("RecognitionEnrollmentDog")
+  recognitionEvents        RecognitionEvent[]      @relation("RecognitionMatchedDog")
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
   @@index([ownerId])
   @@index([status])
@@ -208,10 +211,10 @@ model DogBuddyRequest {
 
 model DogBuddy {
   id        String   @id @default(cuid())
-  dogAId    String
-  dogBId    String
-  dogA      Dog      @relation("DogBuddyA", fields: [dogAId], references: [id], onDelete: Cascade)
-  dogB      Dog      @relation("DogBuddyB", fields: [dogBId], references: [id], onDelete: Cascade)
+  dogAId   String
+  dogBId   String
+  dogA     Dog      @relation("DogBuddyA", fields: [dogAId], references: [id], onDelete: Cascade)
+  dogB     Dog      @relation("DogBuddyB", fields: [dogBId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([dogAId, dogBId])
