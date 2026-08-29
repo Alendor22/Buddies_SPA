@@ -10,7 +10,7 @@ test.describe('public application shell', () => {
       name: 'Your dog community, visualized in the real world.'
     })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open spatial map' })).toHaveAttribute('href', '/map');
-    await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+    await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
   });
 
   test('redirects an anonymous visitor to Clerk for protected dog creation', async ({ page }) => {
