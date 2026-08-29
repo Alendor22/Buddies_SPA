@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { resolveBuddiesScan } from '@/lib/scanner';
 
@@ -116,7 +116,7 @@ export default function DogQrScanner() {
       try {
         await nativeBridge.start();
         if (generationRef.current !== generation) {
-          if (nativeBridge.stop) await nativeBridge.stop().catch(() => undefined);
+          if (nativeBridge.stop) await Promise.resolve(nativeBridge.stop()).catch(() => undefined);
           nativeStartedRef.current = false;
           return;
         }
@@ -129,12 +129,7 @@ export default function DogQrScanner() {
     }
 
     const Detector = scannerWindow.BarcodeDetector;
-    if (!Detector) {
-      setStatus('unsupported');
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!Detector || !navigator.mediaDevices?.getUserMedia) {
       setStatus('unsupported');
       return;
     }
