@@ -1,0 +1,84 @@
+name: Migrate Neon Preview
+
+on:
+  push:
+    branches:
+      - phase-0-1-foundation
+    paths:
+      - 'prisma/**'
+      - '.github/workflows/migrate-neon-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-preview-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: preview
+    env:
+      DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL }}
+      DATABASE_URL_UNPOOLED: ${{ secrets.NEON_PREVIEW_DATABASE_URL_UNPOOLED }}
+    steps:
+      - name: Checkout Phase 0–1 branch
+        uses: actions/checkout@v7
+
+      - name: Use Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Require dedicated Neon preview credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ] || [ -z "${DATABASE_URL_UNPOOLED:-}" ]; then
+            echo "Missing NEON_PREVIEW_DATABASE_URL or NEON_PREVIEW_DATABASE_URL_UNPOOLED in the GitHub preview environment."
+            exit 1
+          fi
+          node - <<'NODE'
+          for (const name of ['DATABASE_URL', 'DATABASE_URL_UNPOOLED']) {
+            const raw = process.env[name];
+            const url = new URL(raw);
+            if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+              throw new Error(`${name} is not a PostgreSQL URL`);
+            }
+            if (!url.hostname.endsWith('.neon.tech')) {
+              throw new Error(`${name} must point to a Neon hostname; got ${url.hostname}`);
+            }
+            if (!url.pathname || url.pathname === '/') {
+              throw new Error(`${name} is missing a database name`);
+            }
+          }
+          console.log('Dedicated Neon preview credential guard passed.');
+          NODE
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Inspect migration state before deploy
+        run: npx prisma migrate status
+
+      - name: Apply validated migration chain to Neon preview
+        run: npx prisma migrate deploy
+
+      - name: Verify migration state after deploy
+        run: npx prisma migrate status
+
+      - name: Run migrated PostgreSQL invariants
+        env:
+          TEST_DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL_UNPOOLED }}
+        run: npm run test:database
