@@ -15,6 +15,13 @@ enum UserRole {
   ADMIN
 }
 
+enum DogCustodianRole {
+  OWNER
+  CAREGIVER
+  WALKER
+  VIEWER
+}
+
 enum DogStatus {
   SAFE
   LOST
@@ -76,14 +83,14 @@ enum MapReportType {
 }
 
 model User {
-  id                    String          @id @default(cuid())
-  clerkId               String?         @unique
-  email                 String          @unique
+  id                    String            @id @default(cuid())
+  clerkId               String?           @unique
+  email                 String            @unique
   displayName           String
   passwordHash          String?
-  role                  UserRole        @default(OWNER)
+  role                  UserRole          @default(OWNER)
   emailVerifiedAt       DateTime?
-  sessionVersion        Int             @default(0)
+  sessionVersion        Int               @default(0)
   avatarUrl             String?
   bio                    String?
   city                   String?
@@ -91,20 +98,71 @@ model User {
   latitude               Float?
   longitude              Float?
   dogs                   Dog[]
-  sentWalks              Walk[]          @relation("RequesterWalks")
-  assignedWalks          Walk[]          @relation("WalkerWalks")
+  preferences            UserPreference?
+  householdMemberships   HouseholdMember[]
+  custodianships         DogCustodian[]
+  sentWalks              Walk[]            @relation("RequesterWalks")
+  assignedWalks          Walk[]            @relation("WalkerWalks")
   messages               Message[]
   vetRecords             VetRecord[]
   favoriteRoutes         FavoriteRoute[]
   notifications          Notification[]
-  sentBuddyRequests      BuddyRequest[]  @relation("SentBuddyRequests")
-  receivedBuddyRequests  BuddyRequest[]  @relation("ReceivedBuddyRequests")
-  buddyLinksA            Buddy[]         @relation("BuddyUserA")
-  buddyLinksB            Buddy[]         @relation("BuddyUserB")
+  sentBuddyRequests      BuddyRequest[]     @relation("SentBuddyRequests")
+  receivedBuddyRequests  BuddyRequest[]     @relation("ReceivedBuddyRequests")
+  buddyLinksA            Buddy[]            @relation("BuddyUserA")
+  buddyLinksB            Buddy[]            @relation("BuddyUserB")
   dogPresences           DogPresence[]
   mapReports             MapReport[]
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+}
+
+model UserPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme               String   @default("system")
+  locale              String   @default("en")
+  marketingEmails     Boolean  @default(false)
+  safetyAlerts        Boolean  @default(true)
+  marketplaceMessages Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Household {
+  id        String            @id @default(cuid())
+  name      String
+  members   HouseholdMember[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model HouseholdMember {
+  id          String    @id @default(cuid())
+  householdId String
+  userId      String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([householdId, userId])
+  @@index([userId])
+}
+
+model DogCustodian {
+  id        String           @id @default(cuid())
+  dogId     String
+  userId    String
+  role      DogCustodianRole @default(VIEWER)
+  dog       Dog              @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([dogId, userId])
+  @@index([userId, role])
+  @@index([dogId, role])
 }
 
 model Dog {
@@ -134,6 +192,7 @@ model Dog {
   friendlyChildren         Boolean            @default(true)
   latitude                 Float?
   longitude                Float?
+  custodians               DogCustodian[]
   qrScans                  QrScan[]
   sightings                Sighting[]
   walks                    Walk[]
@@ -390,30 +449,30 @@ model WalkInvitation {
 }
 
 model Notification {
-  id                 String            @id @default(cuid())
-  userId             String
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type               NotificationType
-  routeKey           String
-  href               String
-  title              String
-  body               String?
-  dogId              String?
-  dog                Dog?              @relation(fields: [dogId], references: [id], onDelete: SetNull)
-  walkId             String?
-  walk               Walk?             @relation(fields: [walkId], references: [id], onDelete: SetNull)
-  walkInvitationId   String?
-  walkInvitation     WalkInvitation?    @relation(fields: [walkInvitationId], references: [id], onDelete: SetNull)
-  buddyRequestId     String?
-  buddyRequest       BuddyRequest?      @relation(fields: [buddyRequestId], references: [id], onDelete: SetNull)
-  dogBuddyRequestId  String?
-  dogBuddyRequest    DogBuddyRequest?   @relation(fields: [dogBuddyRequestId], references: [id], onDelete: SetNull)
-  sightingId         String?
-  sighting           Sighting?          @relation(fields: [sightingId], references: [id], onDelete: SetNull)
-  messageId          String?
-  message            Message?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
-  readAt             DateTime?
-  createdAt          DateTime            @default(now())
+  id                String          @id @default(cuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              NotificationType
+  routeKey          String
+  href              String
+  title             String
+  body              String?
+  dogId             String?
+  dog               Dog?            @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  walkId            String?
+  walk              Walk?           @relation(fields: [walkId], references: [id], onDelete: SetNull)
+  walkInvitationId  String?
+  walkInvitation    WalkInvitation? @relation(fields: [walkInvitationId], references: [id], onDelete: SetNull)
+  buddyRequestId    String?
+  buddyRequest      BuddyRequest?    @relation(fields: [buddyRequestId], references: [id], onDelete: SetNull)
+  dogBuddyRequestId String?
+  dogBuddyRequest   DogBuddyRequest? @relation(fields: [dogBuddyRequestId], references: [id], onDelete: SetNull)
+  sightingId        String?
+  sighting          Sighting?        @relation(fields: [sightingId], references: [id], onDelete: SetNull)
+  messageId         String?
+  message           Message?         @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  readAt            DateTime?
+  createdAt         DateTime          @default(now())
 
   @@index([userId, readAt, createdAt])
   @@index([routeKey, createdAt])
