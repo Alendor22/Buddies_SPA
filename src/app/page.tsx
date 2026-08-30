@@ -28,7 +28,7 @@ export default async function HomePage() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/map" className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Open spatial map</Link>
           <Link href="/scanner" className="rounded-lg bg-sky-600 px-5 py-3 font-medium text-white">Scan dog tag</Link>
-          {user ? <Link href="/dashboard" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Open dashboard</Link> : <><Link href="/sign-in" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Sign in</Link><Link href="/sign-up" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Create account</Link></>}
+          {user ? <Link href="/dashboard" className="rounded-lg border border-slate-300 px-5 py-3 font-medium">Open dashboard</Link> : null}
           <Link href={publicProfileHref} className="rounded-lg border border-slate-300 px-5 py-3 font-medium">View public profile</Link>
         </div>
       </section>
