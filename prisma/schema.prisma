@@ -22,6 +22,23 @@ enum DogCustodianRole {
   VIEWER
 }
 
+enum DogIdentifierType {
+  QR
+  MICROCHIP
+  VISUAL_RECOGNITION
+  NFC
+  BLE
+}
+
+enum ConsentType {
+  LOCATION_SHARING
+  MEDICAL_ACCESS
+  SCANNER_DISCLOSURE
+  MARKETPLACE_ACCESS
+  PHOTO_USAGE
+  RECOGNITION_ENROLLMENT
+}
+
 enum DogStatus {
   SAFE
   LOST
@@ -101,6 +118,9 @@ model User {
   preferences            UserPreference?
   householdMemberships   HouseholdMember[]
   custodianships         DogCustodian[]
+  grantedConsents        ConsentGrant[]    @relation("ConsentGrantor")
+  grantedShares          DogShareGrant[]   @relation("DogShareGrantor")
+  auditEvents            AuditEvent[]
   sentWalks              Walk[]            @relation("RequesterWalks")
   assignedWalks          Walk[]            @relation("WalkerWalks")
   messages               Message[]
@@ -166,18 +186,18 @@ model DogCustodian {
 }
 
 model Dog {
-  id                       String             @id @default(cuid())
+  id                       String                 @id @default(cuid())
   ownerId                  String
-  owner                    User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner                    User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name                     String
-  slug                     String             @unique
-  publicId                 String?            @default(cuid())
+  slug                     String                 @unique
+  publicId                 String?                @default(cuid())
   breed                    String?
   birthDate                DateTime?
   weightLbs                Int?
   gender                   String?
   photoUrl                 String?
-  status                   DogStatus          @default(SAFE)
+  status                   DogStatus              @default(SAFE)
   temperament              String?
   medicalNotes             String?
   vaccinationNotes         String?
@@ -186,34 +206,161 @@ model Dog {
   lastSeenLocation         String?
   lostReward               String?
   lostNotes                String?
-  spayedNeutered           Boolean            @default(false)
-  friendlyDogs             Boolean            @default(true)
-  friendlyCats             Boolean            @default(false)
-  friendlyChildren         Boolean            @default(true)
+  spayedNeutered           Boolean                @default(false)
+  friendlyDogs             Boolean                @default(true)
+  friendlyCats             Boolean                @default(false)
+  friendlyChildren         Boolean                @default(true)
   latitude                 Float?
   longitude                Float?
   custodians               DogCustodian[]
+  media                    DogMedia[]
+  medicalProfile           DogMedicalProfile?
+  vaccinations             Vaccination[]
+  identifiers              DogIdentifier[]
+  emergencyContacts        DogEmergencyContact[]
+  consents                 ConsentGrant[]
+  shareGrants              DogShareGrant[]
   qrScans                  QrScan[]
   sightings                Sighting[]
   walks                    Walk[]
   vetRecords               VetRecord[]
   favoriteRoutes           FavoriteRoute[]
-  sentWalkInvitations      WalkInvitation[]   @relation("WalkInviteSenderDog")
-  receivedWalkInvitations  WalkInvitation[]   @relation("WalkInviteInvitedDog")
-  sentDogBuddyRequests     DogBuddyRequest[]  @relation("SentDogBuddyRequests")
-  receivedDogBuddyRequests DogBuddyRequest[]  @relation("ReceivedDogBuddyRequests")
-  dogBuddyLinksA           DogBuddy[]         @relation("DogBuddyA")
-  dogBuddyLinksB           DogBuddy[]         @relation("DogBuddyB")
+  sentWalkInvitations      WalkInvitation[]       @relation("WalkInviteSenderDog")
+  receivedWalkInvitations  WalkInvitation[]       @relation("WalkInviteInvitedDog")
+  sentDogBuddyRequests     DogBuddyRequest[]      @relation("SentDogBuddyRequests")
+  receivedDogBuddyRequests DogBuddyRequest[]      @relation("ReceivedDogBuddyRequests")
+  dogBuddyLinksA           DogBuddy[]             @relation("DogBuddyA")
+  dogBuddyLinksB           DogBuddy[]             @relation("DogBuddyB")
   presences                DogPresence[]
   routeMemories            RouteMemory[]
   mapReports               MapReport[]
   notifications            Notification[]
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 
   @@index([ownerId])
   @@index([status])
   @@index([publicId])
+}
+
+model DogMedia {
+  id        String   @id @default(cuid())
+  dogId     String
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  kind      String   @default("PHOTO")
+  url       String
+  width     Int?
+  height    Int?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([dogId, isPrimary])
+  @@index([dogId, createdAt])
+}
+
+model DogMedicalProfile {
+  id                  String   @id @default(cuid())
+  dogId               String   @unique
+  dog                 Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  allergies           String?
+  medications         String?
+  conditions          String?
+  dietaryRestrictions String?
+  veterinarianName    String?
+  veterinarianPhone   String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Vaccination {
+  id             String   @id @default(cuid())
+  dogId          String
+  dog            Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  name           String
+  administeredAt DateTime?
+  expiresAt      DateTime?
+  documentUrl    String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([dogId, expiresAt])
+  @@index([dogId, name])
+}
+
+model DogIdentifier {
+  id            String            @id @default(cuid())
+  dogId         String
+  dog           Dog               @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  type          DogIdentifierType
+  hashAlgorithm String            @default("sha256")
+  valueHash     String
+  label         String?
+  verifiedAt    DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@unique([type, hashAlgorithm, valueHash])
+  @@index([dogId, type])
+}
+
+model DogEmergencyContact {
+  id        String   @id @default(cuid())
+  dogId     String
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  relation  String?
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dogId, priority])
+}
+
+model ConsentGrant {
+  id          String      @id @default(cuid())
+  dogId       String
+  dog         Dog         @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  type        ConsentType
+  granted     Boolean
+  grantedById String
+  grantedBy   User        @relation("ConsentGrantor", fields: [grantedById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([dogId, type])
+  @@index([grantedById, createdAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([resource, resourceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model DogShareGrant {
+  id          String   @id @default(cuid())
+  dogId       String
+  dog         Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  grantedById String
+  grantedBy   User     @relation("DogShareGrantor", fields: [grantedById], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([dogId, expiresAt])
+  @@index([grantedById, createdAt])
 }
 
 model BuddyRequest {
