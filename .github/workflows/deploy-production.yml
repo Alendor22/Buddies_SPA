@@ -48,9 +48,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Reconcile existing sessionVersion migration
-        run: |
-          npx prisma migrate resolve --rolled-back 20260828040000_user_session_version || true
-          npx prisma migrate resolve --applied 20260828040000_user_session_version
+        run: npx prisma migrate resolve --applied 20260828040000_user_session_version || true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
