@@ -41,12 +41,12 @@ export default function AccountActions({ fallbackSignedIn = false, notificationC
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-11 w-11 items-center justify-center rounded-full border text-lg font-bold text-slate-800 active:bg-slate-100"
+        className="flex h-11 w-11 items-center justify-center rounded-full border text-lg text-slate-800 active:bg-slate-100"
       >
-        ♙
+        <span aria-hidden="true">👤</span>
       </button>
       {open ? (
-        <div role="menu" className="absolute right-0 top-13 z-50 w-44 overflow-hidden rounded-xl border bg-white p-1.5 shadow-xl">
+        <div role="menu" className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border bg-white p-1.5 shadow-xl">
           <Link
             role="menuitem"
             href="/sign-in"
