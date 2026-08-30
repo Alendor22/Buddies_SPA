@@ -21,9 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: preview
-    env:
-      DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL }}
-      DATABASE_URL_UNPOOLED: ${{ secrets.NEON_PREVIEW_DATABASE_URL_UNPOOLED }}
     steps:
       - name: Checkout Phase 0–1 branch
         uses: actions/checkout@v7
@@ -35,33 +32,82 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Require dedicated Neon preview credentials
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull branch-specific Preview environment
+        run: vercel env pull .env.neon-preview --yes --environment=preview --git-branch=phase-0-1-foundation --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Pull Production environment for isolation check
+        run: vercel env pull .env.neon-production --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Guard Neon Preview isolation and load credentials
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${DATABASE_URL:-}" ] || [ -z "${DATABASE_URL_UNPOOLED:-}" ]; then
-            echo "Missing NEON_PREVIEW_DATABASE_URL or NEON_PREVIEW_DATABASE_URL_UNPOOLED in the GitHub preview environment."
-            exit 1
-          fi
           node - <<'NODE'
-          for (const name of ['DATABASE_URL', 'DATABASE_URL_UNPOOLED']) {
-            const raw = process.env[name];
-            const url = new URL(raw);
-            if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
-              throw new Error(`${name} is not a PostgreSQL URL`);
-            }
-            if (!url.hostname.endsWith('.neon.tech')) {
-              throw new Error(`${name} must point to a Neon hostname; got ${url.hostname}`);
-            }
-            if (!url.pathname || url.pathname === '/') {
-              throw new Error(`${name} is missing a database name`);
-            }
-          }
-          console.log('Dedicated Neon preview credential guard passed.');
-          NODE
+          const fs = require('fs');
 
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+          function parseEnv(path) {
+            const result = {};
+            for (const line of fs.readFileSync(path, 'utf8').split(/\r?\n/)) {
+              if (!line || line.trimStart().startsWith('#')) continue;
+              const i = line.indexOf('=');
+              if (i < 1) continue;
+              const key = line.slice(0, i).trim();
+              let value = line.slice(i + 1).trim();
+              if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+              }
+              result[key] = value.replace(/\\n/g, '\n');
+            }
+            return result;
+          }
+
+          function inspect(name, raw) {
+            if (!raw) throw new Error(`${name} is missing`);
+            const url = new URL(raw);
+            if (!['postgresql:', 'postgres:'].includes(url.protocol)) throw new Error(`${name} is not PostgreSQL`);
+            if (!url.hostname.endsWith('.neon.tech')) throw new Error(`${name} is not a Neon endpoint`);
+            if (!url.pathname || url.pathname === '/') throw new Error(`${name} has no database name`);
+            return url;
+          }
+
+          function identity(url) {
+            return `${url.hostname}:${url.port || '5432'}${url.pathname}?${url.searchParams.get('options') || ''}`;
+          }
+
+          const preview = parseEnv('.env.neon-preview');
+          const production = parseEnv('.env.neon-production');
+
+          const previewPooled = inspect('Preview DATABASE_URL', preview.DATABASE_URL);
+          const previewDirect = inspect('Preview DATABASE_URL_UNPOOLED', preview.DATABASE_URL_UNPOOLED);
+          const prodDirect = inspect('Production DATABASE_URL_UNPOOLED', production.DATABASE_URL_UNPOOLED);
+
+          if (identity(previewDirect) === identity(prodDirect)) {
+            throw new Error('Preview and Production resolve to the same Neon database endpoint; refusing migration.');
+          }
+
+          for (const value of [preview.DATABASE_URL, preview.DATABASE_URL_UNPOOLED]) {
+            process.stdout.write(`::add-mask::${value}\n`);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL<<EOF\n${preview.DATABASE_URL}\nEOF\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL_UNPOOLED<<EOF\n${preview.DATABASE_URL_UNPOOLED}\nEOF\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `TEST_DATABASE_URL<<EOF\n${preview.DATABASE_URL_UNPOOLED}\nEOF\n`);
+
+          console.log(`Neon Preview isolation guard passed for ${previewDirect.hostname}.`);
+          console.log(`Preview pooled endpoint: ${previewPooled.hostname}.`);
+          NODE
 
       - name: Validate Prisma schema
         run: npx prisma validate
@@ -72,13 +118,11 @@ jobs:
       - name: Inspect migration state before deploy
         run: npx prisma migrate status
 
-      - name: Apply validated migration chain to Neon preview
+      - name: Apply validated migration chain to Neon Preview
         run: npx prisma migrate deploy
 
       - name: Verify migration state after deploy
         run: npx prisma migrate status
 
       - name: Run migrated PostgreSQL invariants
-        env:
-          TEST_DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL_UNPOOLED }}
         run: npm run test:database
