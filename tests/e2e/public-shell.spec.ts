@@ -21,7 +21,12 @@ test.describe('public application shell', () => {
     await expect(featuresNav.getByRole('link', { name: 'Scanner' })).toHaveAttribute('href', '/scanner');
     await expect(featuresNav.getByRole('link', { name: 'Profiles' })).toHaveAttribute('href', '/dogs');
 
-    await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+    const accountActions = page.getByRole('button', { name: 'Account actions' });
+    await expect(accountActions).toBeVisible();
+    await expect(accountActions).toHaveAttribute('aria-expanded', 'false');
+    await accountActions.click();
+    await expect(page.getByRole('menuitem', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+    await expect(page.getByRole('menuitem', { name: 'Create account' })).toHaveAttribute('href', '/sign-up');
   });
 
   test('redirects an anonymous visitor to Clerk for protected dog creation', async ({ page }) => {
