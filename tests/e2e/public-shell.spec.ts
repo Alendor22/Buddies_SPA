@@ -9,7 +9,18 @@ test.describe('public application shell', () => {
       level: 1,
       name: 'Your dog community, visualized in the real world.'
     })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open spatial map' })).toHaveAttribute('href', '/map');
+
+    const featuresButton = page.getByRole('button', { name: 'Features' });
+    await expect(featuresButton).toBeVisible();
+    await expect(featuresButton).toHaveAttribute('aria-expanded', 'false');
+    await featuresButton.click();
+
+    const featuresNav = page.getByRole('navigation', { name: 'Features' });
+    await expect(featuresNav).toBeVisible();
+    await expect(featuresNav.getByRole('link', { name: 'Map' })).toHaveAttribute('href', '/map');
+    await expect(featuresNav.getByRole('link', { name: 'Scanner' })).toHaveAttribute('href', '/scanner');
+    await expect(featuresNav.getByRole('link', { name: 'Profiles' })).toHaveAttribute('href', '/dogs');
+
     await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
   });
 
