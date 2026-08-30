@@ -1,0 +1,1 @@
+import { describe,expect,it } from 'vitest';import { fixedWindowRateLimit } from '@/lib/platform/redis/rateLimit';describe('Redis degraded behavior',()=>{it('fails open when unavailable',async()=>{const r=await fixedWindowRateLimit(null,{scope:'test',subject:'anonymous',limit:5,windowSeconds:60});expect(r.allowed).toBe(true);expect(r.degraded).toBe(true)})});

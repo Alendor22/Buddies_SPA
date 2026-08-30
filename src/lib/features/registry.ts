@@ -1,0 +1,13 @@
+import type { FeatureDefinition } from './types';
+export const featureRegistry: FeatureDefinition[] = [
+{id:'home',label:'Home',href:'/',icon:'⌂',description:'Buddies home',category:'core',status:'releasable',requiresAuth:false,telemetryNamespace:'feature.home',cloudflarePolicy:'public-read',match:p=>p==='/'},
+{id:'map',label:'Map',href:'/map',icon:'⌖',description:'Spatial dog network',category:'maps',status:'releasable',requiresAuth:false,telemetryNamespace:'feature.map',cloudflarePolicy:'public-read',match:p=>p.startsWith('/map')},
+{id:'scanner',label:'Scanner',href:'/scanner',icon:'⌗',description:'Dog identity scanner',category:'scanner',status:'releasable',requiresAuth:false,telemetryNamespace:'feature.scanner',cloudflarePolicy:'scanner-public',match:p=>p.startsWith('/scanner')},
+{id:'profiles',label:'Profiles',href:'/dogs',icon:'🐶',description:'Dog identity profiles',category:'identity',status:'releasable',requiresAuth:false,telemetryNamespace:'feature.profiles',cloudflarePolicy:'public-read',match:p=>p.startsWith('/dogs')},
+{id:'dashboard',label:'Dashboard',href:'/dashboard',icon:'▦',description:'Member dashboard',category:'core',status:'releasable',requiresAuth:true,telemetryNamespace:'feature.dashboard',cloudflarePolicy:'authenticated-api',match:p=>p==='/dashboard'},
+{id:'notifications',label:'Alerts',href:'/dashboard/notifications',icon:'🔔',description:'Notifications and safety alerts',category:'safety',status:'releasable',requiresAuth:true,telemetryNamespace:'feature.notifications',cloudflarePolicy:'authenticated-api',match:p=>p.startsWith('/dashboard/notifications')},
+{id:'marketplace',label:'Marketplace',href:'/marketplace',icon:'◫',description:'Pet care and services marketplace',category:'marketplace',status:'flagged',requiresAuth:false,flag:'marketplace',telemetryNamespace:'feature.marketplace',cloudflarePolicy:'public-read',match:p=>p.startsWith('/marketplace')},
+{id:'recognition',label:'Recognition',href:'/recognition',icon:'◎',description:'Dog visual recognition',category:'recognition',status:'flagged',requiresAuth:true,flag:'recognition',telemetryNamespace:'feature.recognition',cloudflarePolicy:'sensitive-write',match:p=>p.startsWith('/recognition')},
+{id:'xr',label:'XR',href:'/xr',icon:'◇',description:'Spatial/XR experiences',category:'xr',status:'registered',requiresAuth:true,flag:'xr',telemetryNamespace:'feature.xr',cloudflarePolicy:'authenticated-api',match:p=>p.startsWith('/xr')},
+];
+export function assertFeatureRegistry(){const ids=new Set<string>();for(const feature of featureRegistry){if(ids.has(feature.id))throw new Error(`Duplicate feature id: ${feature.id}`);ids.add(feature.id)}return true}

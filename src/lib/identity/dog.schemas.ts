@@ -1,0 +1,3 @@
+import { z } from 'zod';
+export const createDogSchema=z.object({name:z.string().trim().min(1).max(80),slug:z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(72),breed:z.string().trim().max(120).nullable().optional(),birthDate:z.coerce.date().nullable().optional(),weightLbs:z.number().int().positive().max(400).nullable().optional(),gender:z.string().trim().max(40).nullable().optional(),temperament:z.string().trim().max(500).nullable().optional()});
+export const updateDogSchema=createDogSchema.partial().omit({slug:true});export type CreateDogInput=z.infer<typeof createDogSchema>;export type UpdateDogInput=z.infer<typeof updateDogSchema>;

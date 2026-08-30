@@ -1,0 +1,2 @@
+import type { BuddiesRole, FeatureDefinition } from './types';
+export function canAccessFeature(feature: FeatureDefinition,input:{signedIn:boolean;role?:string|null;flagEnabled?:boolean}){if(feature.status==='deprecated')return false;if(feature.requiresAuth&&!input.signedIn)return false;if(feature.flag&&input.flagEnabled===false)return false;if(feature.roles?.length){const role=input.role as BuddiesRole|undefined;if(!role||!feature.roles.includes(role))return false}return true}

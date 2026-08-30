@@ -1,0 +1,1 @@
+import { describe,expect,it } from 'vitest';import { createDogSchema } from '@/lib/identity/dog.schemas';describe('dog validation',()=>{it('requires canonical slug',()=>expect(()=>createDogSchema.parse({name:'Milo',slug:'Milo Dog'})).toThrow());it('accepts core identity',()=>expect(createDogSchema.parse({name:'Milo',slug:'milo-dog',weightLbs:42}).name).toBe('Milo'))});

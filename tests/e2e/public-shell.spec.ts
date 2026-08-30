@@ -9,8 +9,24 @@ test.describe('public application shell', () => {
       level: 1,
       name: 'Your dog community, visualized in the real world.'
     })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open spatial map' })).toHaveAttribute('href', '/map');
-    await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+
+    const featuresButton = page.getByRole('button', { name: 'Features' });
+    await expect(featuresButton).toBeVisible();
+    await expect(featuresButton).toHaveAttribute('aria-expanded', 'false');
+    await featuresButton.click();
+
+    const featuresNav = page.getByRole('navigation', { name: 'Features' });
+    await expect(featuresNav).toBeVisible();
+    await expect(featuresNav.getByRole('link', { name: 'Map' })).toHaveAttribute('href', '/map');
+    await expect(featuresNav.getByRole('link', { name: 'Scanner' })).toHaveAttribute('href', '/scanner');
+    await expect(featuresNav.getByRole('link', { name: 'Profiles' })).toHaveAttribute('href', '/dogs');
+
+    const accountActions = page.getByRole('button', { name: 'Account actions' });
+    await expect(accountActions).toBeVisible();
+    await expect(accountActions).toHaveAttribute('aria-expanded', 'false');
+    await accountActions.click();
+    await expect(page.getByRole('menuitem', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+    await expect(page.getByRole('menuitem', { name: 'Create account' })).toHaveAttribute('href', '/sign-up');
   });
 
   test('redirects an anonymous visitor to Clerk for protected dog creation', async ({ page }) => {
