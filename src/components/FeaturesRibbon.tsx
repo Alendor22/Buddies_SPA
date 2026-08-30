@@ -34,14 +34,15 @@ const memberFeatures: FeatureItem[] = [
   { href: '/dashboard/notifications', label: 'Alerts', icon: '🔔', match: (pathname) => pathname.startsWith('/dashboard/notifications') },
 ];
 
-function FeatureLink({ item, pathname, count }: { item: FeatureItem; pathname: string; count?: number }) {
+function FeatureLink({ item, pathname, count, onNavigate }: { item: FeatureItem; pathname: string; count?: number; onNavigate: () => void }) {
   const active = item.match(pathname);
 
   return (
     <Link
       href={item.href}
       aria-current={active ? 'page' : undefined}
-      className={`relative inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+      onClick={onNavigate}
+      className={`relative inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm transition ${
         active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
       }`}
     >
@@ -57,34 +58,36 @@ function FeatureLink({ item, pathname, count }: { item: FeatureItem; pathname: s
 }
 
 export default function FeaturesRibbon({ pathname, signedIn, notificationCount }: FeaturesRibbonProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const features = signedIn ? [...publicFeatures, ...memberFeatures] : publicFeatures;
 
   return (
-    <div className="border-t bg-slate-50/95">
-      <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
-        <div className="flex items-center justify-start gap-2">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls="features-ribbon"
-            onClick={() => setExpanded((value) => !value)}
-            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900"
-          >
-            <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-            Features
-          </button>
-          {!expanded ? <span className="truncate text-xs font-medium text-slate-500">Feature navigation collapsed</span> : null}
-        </div>
+    <div className="pointer-events-none fixed left-3 top-20 z-[70] max-w-[calc(100vw-1.5rem)] sm:left-6 sm:top-20 sm:max-w-[min(56rem,calc(100vw-3rem))]">
+      <div className="pointer-events-auto flex flex-col items-start gap-2">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls="features-ribbon"
+          onClick={() => setExpanded((value) => !value)}
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-300 bg-white/95 px-4 text-sm font-bold text-slate-900 shadow-lg backdrop-blur active:bg-slate-100"
+        >
+          <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+          Features
+        </button>
 
         {expanded ? (
-          <nav id="features-ribbon" aria-label="Features" className="mt-2 flex justify-start gap-2 overflow-x-auto pb-1">
+          <nav
+            id="features-ribbon"
+            aria-label="Features"
+            className="flex max-h-[min(70vh,34rem)] max-w-full flex-wrap justify-start gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
+          >
             {features.map((item) => (
               <FeatureLink
                 key={item.href}
                 item={item}
                 pathname={pathname}
                 count={item.href === '/dashboard/notifications' ? notificationCount : undefined}
+                onNavigate={() => setExpanded(false)}
               />
             ))}
           </nav>
