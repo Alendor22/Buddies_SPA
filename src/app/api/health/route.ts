@@ -25,7 +25,7 @@ type HealthPayload = {
   };
   checks: {
     database: { status: CheckStatus; latencyMs?: number; error?: string };
-    auth: { status: CheckStatus };
+    auth: { status: CheckStatus; instance?: 'live' | 'test'; error?: string };
     mapbox: { status: CheckStatus };
     redis: { status: CheckStatus; latencyMs?: number; error?: string };
     ably: { status: CheckStatus };
@@ -85,6 +85,37 @@ async function redisCheck() {
   }
 }
 
+// Authentication is Clerk. Readiness must track the keys Clerk actually needs --
+// a missing publishable key takes down every request through middleware, which is
+// exactly the outage a health check exists to catch.
+function authCheck(): HealthPayload['checks']['auth'] {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+  const secretKey = process.env.CLERK_SECRET_KEY?.trim();
+
+  if (!configured(publishableKey, secretKey)) {
+    return {
+      status: 'not_configured',
+      error: 'Clerk publishable key or secret key is missing.'
+    };
+  }
+
+  const instance = publishableKey!.startsWith('pk_live_') ? 'live' : 'test';
+  const isProduction = (process.env.VERCEL_ENV || process.env.NODE_ENV) === 'production';
+
+  // Test keys resolve and authenticate, so this is not a readiness failure -- but a
+  // development Clerk instance in production caps users and breaks session handling
+  // on a real domain, so surface it rather than reporting a clean bill of health.
+  if (isProduction && instance === 'test') {
+    return {
+      status: 'unhealthy',
+      instance,
+      error: 'Clerk is running a development instance in production.'
+    };
+  }
+
+  return { status: 'configured', instance };
+}
+
 function deploymentMetadata() {
   return {
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown',
@@ -95,7 +126,7 @@ function deploymentMetadata() {
 }
 
 async function buildHealthPayload(deep: boolean): Promise<HealthPayload> {
-  const authConfigured = configured(process.env.AUTH_SECRET);
+  const auth = authCheck();
   const mapboxConfigured = Boolean(getPublicMapboxToken());
   const ablyConfigured = configured(process.env.ABLY_API_KEY, process.env.NEXT_PUBLIC_ABLY_KEY);
   const r2Configured = configured(
@@ -112,9 +143,9 @@ async function buildHealthPayload(deep: boolean): Promise<HealthPayload> {
         redis ? { status: 'configured' as const } : { status: 'not_configured' as const }
       ];
 
-  const ready = authConfigured && (!deep || database.status === 'healthy');
-  const optionalUnhealthy = deep && redisStatus.status === 'unhealthy';
-  const status = ready ? (optionalUnhealthy ? 'degraded' : 'ok') : 'unavailable';
+  const ready = auth.status !== 'not_configured' && (!deep || database.status === 'healthy');
+  const degraded = auth.status === 'unhealthy' || (deep && redisStatus.status === 'unhealthy');
+  const status = ready ? (degraded ? 'degraded' : 'ok') : 'unavailable';
 
   return {
     status,
@@ -124,7 +155,7 @@ async function buildHealthPayload(deep: boolean): Promise<HealthPayload> {
     deployment: deploymentMetadata(),
     checks: {
       database,
-      auth: { status: authConfigured ? 'configured' : 'not_configured' },
+      auth,
       mapbox: { status: mapboxConfigured ? 'configured' : 'not_configured' },
       redis: redisStatus,
       ably: { status: ablyConfigured ? 'configured' : 'not_configured' },
