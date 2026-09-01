@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getPublicMapboxToken } from '@/lib/mapboxToken';
+import { getClerkPublishableKey } from '@/lib/clerkConfig';
 import { redis } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
@@ -85,11 +86,10 @@ async function redisCheck() {
   }
 }
 
-// Authentication is Clerk. Readiness must track the keys Clerk actually needs --
-// a missing publishable key takes down every request through middleware, which is
-// exactly the outage a health check exists to catch.
+// Authentication is Clerk. Readiness must track the same publishable-key resolution
+// used by ClerkProvider and clerkMiddleware so health cannot disagree with runtime.
 function authCheck(): HealthPayload['checks']['auth'] {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+  const publishableKey = getClerkPublishableKey();
   const secretKey = process.env.CLERK_SECRET_KEY?.trim();
 
   if (!configured(publishableKey, secretKey)) {
