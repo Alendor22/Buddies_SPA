@@ -54,10 +54,18 @@
       "id": "social-graph",
       "sourcePrefixes": [
         "src/app/dashboard/buddies/",
+        "src/app/dashboard/social/",
         "src/app/api/buddies/",
-        "src/app/api/dog-buddies/"
+        "src/app/api/dog-buddies/",
+        "src/app/api/social/",
+        "src/lib/social/"
       ],
-      "testPrefixes": ["tests/integration/buddies/", "tests/unit/shared/"]
+      "testPrefixes": [
+        "tests/integration/buddies/",
+        "tests/unit/shared/",
+        "tests/contracts/phase2-social.test.ts",
+        "tests/database/phase2-social-schema.test.ts"
+      ]
     },
     {
       "id": "walks-and-messaging",
@@ -133,6 +141,15 @@
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
+    { "route": "src/app/api/social/conversations/[id]/messages/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/conversations/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/discovery/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/events/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/feed/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/groups/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/moderation/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/privacy/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/reputation/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/uploads/presign/route.ts", "access": "review-required", "testState": "backlog" },
     { "route": "src/app/api/walk-invitations/respond/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/walk-routes/favorites/route.ts", "access": "authenticated", "testState": "backlog" },
