@@ -47,12 +47,6 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Reconcile existing sessionVersion migration
-        run: npx prisma migrate resolve --applied 20260828040000_user_session_version || true
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-
       - name: Apply production database migrations
         run: npx prisma migrate deploy
         env:

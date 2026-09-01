@@ -35,8 +35,8 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?|ttf)$).*)',
-    '/(api|trpc)(.*)',
-    '/__clerk/(.*)'
+    // Health must remain reachable when Clerk itself is misconfigured so readiness
+    // probes can return the intended structured 503 instead of failing in middleware.
+    '/((?!api/health(?:/|$)|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?|ttf)$).*)'
   ]
 };
