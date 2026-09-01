@@ -25,6 +25,7 @@ const publicFeatures: FeatureItem[] = [
 
 const memberFeatures: FeatureItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦', match: (pathname) => pathname === '/dashboard' },
+  { href: '/dashboard/social', label: 'Social', icon: '◎', match: (pathname) => pathname.startsWith('/dashboard/social') },
   { href: '/dashboard/buddies', label: 'Buddies', icon: '👥', match: (pathname) => pathname.startsWith('/dashboard/buddies') },
   { href: '/dashboard/check-ins', label: 'Check-ins', icon: '✓', match: (pathname) => pathname.startsWith('/dashboard/check-ins') },
   { href: '/dashboard/walks', label: 'Walks', icon: '↝', match: (pathname) => pathname.startsWith('/dashboard/walks') },
