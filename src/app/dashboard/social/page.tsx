@@ -57,7 +57,7 @@ export default async function SocialDashboardPage() {
           {feed.length ? feed.slice(0, 10).map((item) => (
             <article key={item.id} className="rounded-xl border p-4">
               <p className="font-medium">{item.type.replaceAll('_', ' ')}</p>
-              <p className="mt-1 text-sm text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+              <p className="mt-1 text-sm text-slate-500">{item.createdAt.toLocaleString()}</p>
             </article>
           )) : <p className="text-sm text-slate-600">Your social feed is ready. Buddy and event activity will appear here.</p>}
         </div>
@@ -70,7 +70,7 @@ export default async function SocialDashboardPage() {
             <article key={event.id} className="rounded-xl border p-4">
               <h3 className="font-semibold">{event.title}</h3>
               <p className="mt-1 text-sm text-slate-600">{event.locationName ?? 'Location to be announced'}</p>
-              <p className="mt-1 text-sm text-slate-500">{new Date(event.startsAt).toLocaleString()}</p>
+              <p className="mt-1 text-sm text-slate-500">{event.startsAt.toLocaleString()}</p>
             </article>
           )) : <p className="text-sm text-slate-600">No upcoming events yet.</p>}
         </div>
