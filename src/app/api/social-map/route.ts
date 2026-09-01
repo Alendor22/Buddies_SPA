@@ -176,9 +176,20 @@ async function loadSharedMapData(key: string | undefined, now: Date): Promise<Sh
   return payload;
 }
 
+// Anonymous callers get the aggregate heat layer only.
+//
+// `activeDogs` pairs precise live coordinates and heartbeat timestamps with dog names,
+// slugs and photos. Served without a session that is a public, real-time feed of where
+// identifiable people are walking alone right now, which is not something this app
+// should hand out to unauthenticated callers.
+//
+// Heat cells stay public: neighborhoodKey rounds to two decimal places (~1.1km), so a
+// cell says "somewhere in this area there is walk activity" and nothing more. /map is
+// deliberately not behind auth.protect(), so logged-out visitors keep a working map.
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
+    const isAuthenticated = Boolean(user);
     const userWithLocation = user as (typeof user & {
       latitude?: number | null;
       longitude?: number | null;
@@ -229,34 +240,56 @@ export async function GET(request: NextRequest) {
       const cellKey = neighborhoodKey(entry.device_loc.lat, entry.device_loc.lng);
       buddiesByCell.set(cellKey, (buddiesByCell.get(cellKey) ?? 0) + 1);
     }
-    const heatCells = shared.heatCells.map((cell) => ({ ...cell, buddies: buddiesByCell.get(cell.key) ?? 0 }));
-
-    const activeDogs = shared.activeDogsBase.map((entry) => ({
-      ...entry,
-      isBuddy: buddyDogIds.has(entry.dogId),
-      halo: buddyDogIds.has(entry.dogId) ? 'ice-blue' : 'neutral'
+    const heatCells = shared.heatCells.map((cell) => ({
+      ...cell,
+      buddies: isAuthenticated ? buddiesByCell.get(cell.key) ?? 0 : 0
     }));
 
-    return NextResponse.json({
-      authenticated: Boolean(user),
-      source: 'device_loc',
-      heatWindowMinutes: LIVE_HEAT_WINDOW_MS / 60000,
-      center: latitude != null && longitude != null ? { latitude, longitude, neighborhoodKey: key } : null,
-      activeDogs,
-      heatCells,
-      reports: shared.reports,
-      routeMemories: routeMemories.map((route) => ({
-        id: route.id,
-        dogName: route.dog.name,
-        dogSlug: route.dog.slug,
-        name: route.name,
-        occurrences: route.occurrences,
-        confidence: route.confidence,
-        distanceMiles: route.routeDistanceMiles,
-        durationMin: route.routeDurationMin,
-        lastWalkedAt: route.lastWalkedAt.toISOString()
-      }))
-    });
+    const activeDogs = isAuthenticated
+      ? shared.activeDogsBase.map((entry) => ({
+          ...entry,
+          isBuddy: buddyDogIds.has(entry.dogId),
+          halo: buddyDogIds.has(entry.dogId) ? 'ice-blue' : 'neutral'
+        }))
+      : [];
+
+    // Report locations are fixed hazards rather than people in motion, so they stay
+    // visible. The attached dog identity does not -- it names a specific animal and
+    // links to its public profile.
+    const reports = isAuthenticated
+      ? shared.reports
+      : shared.reports.map((report) => ({ ...report, dog: null }));
+
+    return NextResponse.json(
+      {
+        authenticated: isAuthenticated,
+        source: 'device_loc',
+        heatWindowMinutes: LIVE_HEAT_WINDOW_MS / 60000,
+        center: latitude != null && longitude != null ? { latitude, longitude, neighborhoodKey: key } : null,
+        activeDogs,
+        heatCells,
+        reports,
+        routeMemories: routeMemories.map((route) => ({
+          id: route.id,
+          dogName: route.dog.name,
+          dogSlug: route.dog.slug,
+          name: route.name,
+          occurrences: route.occurrences,
+          confidence: route.confidence,
+          distanceMiles: route.routeDistanceMiles,
+          durationMin: route.routeDurationMin,
+          lastWalkedAt: route.lastWalkedAt.toISOString()
+        }))
+      },
+      {
+        headers: {
+          // Buddy halos and route memories make this response viewer-specific. The
+          // previous `public` directive allowed shared caches to store one user's
+          // payload and replay it to another.
+          'Cache-Control': 'private, no-store'
+        }
+      }
+    );
   } catch (error) {
     console.error('social-map api failed', error);
     return NextResponse.json({ error: 'Social map unavailable.' }, { status: 500 });
