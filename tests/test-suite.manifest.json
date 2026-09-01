@@ -51,6 +51,22 @@
       "testPrefixes": ["tests/integration/dogs/", "tests/database/", "tests/e2e/dog-identity.spec.ts", "tests/unit/scanner/"]
     },
     {
+      "id": "dog-recognition",
+      "sourcePrefixes": [
+        "src/app/api/recognition/",
+        "src/lib/recognition/",
+        "src/lib/doggy-recognition/",
+        "src/components/scanner/DogRecognitionCamera.tsx"
+      ],
+      "testPrefixes": [
+        "tests/unit/doggy-recognition-camera.test.ts",
+        "tests/component/doggy-recognition-camera.test.tsx",
+        "tests/unit/scanner/recognition-",
+        "tests/contracts/recognition-",
+        "tests/database/recognition-"
+      ]
+    },
+    {
       "id": "social-graph",
       "sourcePrefixes": [
         "src/app/dashboard/buddies/",
@@ -137,6 +153,9 @@
     { "route": "src/app/api/notifications/read/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/qr/[id]/route.ts", "access": "public", "testState": "backlog" },
     { "route": "src/app/api/realtime/token/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/enrollment/assets/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/enrollment/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/enrollment/upload/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/session/end/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },

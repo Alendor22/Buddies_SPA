@@ -26,7 +26,20 @@ async function handleClaim(request: NextRequest, values: URLSearchParams | FormD
   if (!dog) return NextResponse.redirect(new URL('/dashboard?claim=not-found', request.url));
 
   if (dog.ownerId !== user.id) {
-    await prisma.dog.update({ where: { id: dog.id }, data: { ownerId: user.id } });
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.dog.update({ where: { id: dog.id }, data: { ownerId: user.id } }),
+      prisma.recognitionEnrollment.updateMany({
+        where: { dogId: dog.id },
+        data: {
+          ownerId: user.id,
+          status: 'REVOKED',
+          revokedAt: now,
+          activatedAt: null,
+          modelVersion: null
+        }
+      })
+    ]);
   }
 
   return NextResponse.redirect(new URL('/dashboard?claim=success', request.url));
