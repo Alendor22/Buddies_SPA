@@ -1,6 +1,6 @@
 const ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
-type RecognitionFeatureEnvironment = {
+type RecognitionFeatureEnvironment = Record<string, string | undefined> & {
   DOG_RECOGNITION_ENROLLMENT_ENABLED?: string;
 };
 
