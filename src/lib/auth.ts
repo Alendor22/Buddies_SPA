@@ -1,6 +1,7 @@
 import { auth, currentUser as currentClerkUser } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { cache } from 'react';
 import { prisma } from '@/lib/db';
 
 export const SESSION_COOKIE = 'buddies_session';
@@ -132,7 +133,7 @@ export async function clearSession() {
   store.set(LOGOUT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 30, path: '/' });
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+async function resolveCurrentUser(): Promise<CurrentUser | null> {
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
 
@@ -147,10 +148,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const clerkUser = await currentClerkUser();
   if (!clerkUser) return null;
 
-  const primaryEmail = clerkUser.emailAddresses.find(
+  const primaryAddress = clerkUser.emailAddresses.find(
     (address) => address.id === clerkUser.primaryEmailAddressId
-  )?.emailAddress;
+  );
+  const primaryEmail = primaryAddress?.emailAddress;
   if (!primaryEmail) return null;
+
+  // Whether Clerk has actually proven the user controls this address. Password sign-up
+  // always verifies, but an OAuth provider can hand back an address it never checked.
+  const emailIsVerified = primaryAddress?.verification?.status === 'verified';
 
   const email = normalizeEmail(primaryEmail);
   const displayName =
@@ -165,6 +171,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     const existingByEmail = await tx.user.findUnique({ where: { email } });
     if (existingByEmail) {
+      // Adopting an existing account on an email match is the account-takeover path:
+      // sign up through a provider that does not verify addresses, claim someone
+      // else's email, and this attaches the new Clerk identity to their dogs, walks
+      // and messages. Only ever link on a verified address.
+      if (!emailIsVerified) return null;
+
       return tx.user.update({
         where: { id: existingByEmail.id },
         data: {
@@ -181,11 +193,17 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         clerkId,
         email,
         displayName,
-        emailVerifiedAt: new Date(),
+        // Do not assert verification the identity provider never performed.
+        emailVerifiedAt: emailIsVerified ? new Date() : null,
         avatarUrl: clerkUser.imageUrl
       }
     });
   });
+
+  if (!user) {
+    console.warn('Refused to link a Clerk identity to an existing account: primary email is unverified.', { clerkId });
+    return null;
+  }
 
   return {
     id: user.id,
@@ -194,5 +212,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     role: user.role.toString()
   };
 }
+
+// Memoized for the lifetime of a single server request. A route handler that calls
+// getCurrentUser() and then renders components that call it again was paying a
+// Postgres round trip each time, and at production latency that lookup dominates
+// the request. React's cache() is request-scoped, so this shares nothing between
+// users or between requests.
+export const getCurrentUser = cache(resolveCurrentUser);
 
 export async function requireCurrentUser() { const user = await getCurrentUser(); if (!user) throw new Error('Authentication required'); return user; }
