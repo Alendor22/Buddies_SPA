@@ -122,42 +122,57 @@ enum RecognitionEventOutcome {
 }
 
 model User {
-  id                     String                  @id @default(cuid())
-  clerkId                String?                 @unique
-  email                  String                  @unique
-  displayName            String
-  passwordHash           String?
-  role                   UserRole                @default(OWNER)
-  emailVerifiedAt        DateTime?
-  sessionVersion         Int                     @default(0)
-  avatarUrl              String?
-  bio                    String?
-  city                   String?
-  phone                   String?
-  latitude               Float?
-  longitude              Float?
-  dogs                    Dog[]
-  preferences             UserPreference?
-  householdMemberships    HouseholdMember[]
-  custodianships          DogCustodian[]
-  grantedConsents         ConsentGrant[]          @relation("ConsentGrantor")
-  grantedShares           DogShareGrant[]         @relation("DogShareGrantor")
-  auditEvents             AuditEvent[]
-  recognitionEnrollments  RecognitionEnrollment[] @relation("RecognitionEnrollmentOwner")
-  sentWalks               Walk[]                  @relation("RequesterWalks")
-  assignedWalks           Walk[]                  @relation("WalkerWalks")
-  messages                Message[]
-  vetRecords              VetRecord[]
-  favoriteRoutes          FavoriteRoute[]
-  notifications           Notification[]
-  sentBuddyRequests       BuddyRequest[]           @relation("SentBuddyRequests")
-  receivedBuddyRequests   BuddyRequest[]           @relation("ReceivedBuddyRequests")
-  buddyLinksA             Buddy[]                  @relation("BuddyUserA")
-  buddyLinksB             Buddy[]                  @relation("BuddyUserB")
-  dogPresences            DogPresence[]
-  mapReports              MapReport[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  id                       String                  @id @default(cuid())
+  clerkId                  String?                 @unique
+  email                    String                  @unique
+  displayName              String
+  passwordHash             String?
+  role                     UserRole                @default(OWNER)
+  emailVerifiedAt          DateTime?
+  sessionVersion           Int                     @default(0)
+  avatarUrl                String?
+  bio                      String?
+  city                     String?
+  phone                    String?
+  latitude                 Float?
+  longitude                Float?
+  dogs                     Dog[]
+  preferences              UserPreference?
+  householdMemberships     HouseholdMember[]
+  custodianships           DogCustodian[]
+  grantedConsents          ConsentGrant[]          @relation("ConsentGrantor")
+  grantedShares            DogShareGrant[]         @relation("DogShareGrantor")
+  auditEvents              AuditEvent[]
+  recognitionEnrollments   RecognitionEnrollment[] @relation("RecognitionEnrollmentOwner")
+  sentWalks                Walk[]                  @relation("RequesterWalks")
+  assignedWalks            Walk[]                  @relation("WalkerWalks")
+  messages                 Message[]
+  vetRecords               VetRecord[]
+  favoriteRoutes           FavoriteRoute[]
+  notifications            Notification[]
+  sentBuddyRequests        BuddyRequest[]          @relation("SentBuddyRequests")
+  receivedBuddyRequests    BuddyRequest[]          @relation("ReceivedBuddyRequests")
+  buddyLinksA              Buddy[]                 @relation("BuddyUserA")
+  buddyLinksB              Buddy[]                 @relation("BuddyUserB")
+  dogPresences             DogPresence[]
+  mapReports               MapReport[]
+  socialPrivacy            SocialPrivacy?
+  socialBlocksMade         SocialBlock[]           @relation("SocialBlocker")
+  socialBlocksReceived     SocialBlock[]           @relation("SocialBlocked")
+  checkIns                 CheckIn[]
+  conversationMemberships  ConversationMember[]
+  socialMessages           SocialMessage[]
+  ownedSocialGroups        SocialGroup[]
+  socialGroupMemberships   SocialGroupMember[]
+  activityFeedItems        ActivityFeedItem[]
+  hostedSocialEvents       SocialEvent[]
+  socialEventAttendance    SocialEventAttendee[]
+  reputationEvents         ReputationEvent[]       @relation("ReputationSubject")
+  reputationActions        ReputationEvent[]       @relation("ReputationActor")
+  moderationReportsFiled   ModerationReport[]      @relation("ModerationReporter")
+  moderationReportsAgainst ModerationReport[]      @relation("ModerationTargetUser")
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 }
 
 model UserPreference {
@@ -244,24 +259,27 @@ model Dog {
   consents                 ConsentGrant[]
   shareGrants              DogShareGrant[]
   recognitionEnrollment    RecognitionEnrollment?  @relation("RecognitionEnrollmentDog")
-  recognitionEvents        RecognitionEvent[]       @relation("RecognitionMatchedDog")
+  recognitionEvents        RecognitionEvent[]      @relation("RecognitionMatchedDog")
   qrScans                  QrScan[]
   sightings                Sighting[]
   walks                    Walk[]
   vetRecords               VetRecord[]
   favoriteRoutes           FavoriteRoute[]
-  sentWalkInvitations      WalkInvitation[]         @relation("WalkInviteSenderDog")
-  receivedWalkInvitations  WalkInvitation[]         @relation("WalkInviteInvitedDog")
-  sentDogBuddyRequests     DogBuddyRequest[]        @relation("SentDogBuddyRequests")
-  receivedDogBuddyRequests DogBuddyRequest[]        @relation("ReceivedDogBuddyRequests")
-  dogBuddyLinksA           DogBuddy[]               @relation("DogBuddyA")
-  dogBuddyLinksB           DogBuddy[]               @relation("DogBuddyB")
+  sentWalkInvitations      WalkInvitation[]        @relation("WalkInviteSenderDog")
+  receivedWalkInvitations  WalkInvitation[]        @relation("WalkInviteInvitedDog")
+  sentDogBuddyRequests     DogBuddyRequest[]       @relation("SentDogBuddyRequests")
+  receivedDogBuddyRequests DogBuddyRequest[]       @relation("ReceivedDogBuddyRequests")
+  dogBuddyLinksA           DogBuddy[]              @relation("DogBuddyA")
+  dogBuddyLinksB           DogBuddy[]              @relation("DogBuddyB")
   presences                DogPresence[]
   routeMemories            RouteMemory[]
   mapReports               MapReport[]
   notifications            Notification[]
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
+  checkIns                 CheckIn[]
+  activityFeedItems        ActivityFeedItem[]
+  moderationReports        ModerationReport[]
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 
   @@index([ownerId])
   @@index([status])
@@ -540,7 +558,11 @@ model DogPresence {
   @@unique([dogId])
   @@index([dogId, lastHeartbeatAt])
   @@index([ownerId, lastHeartbeatAt])
-  @@index([neighborhoodKey, status, expiresAt])
+  // Matches the social-map query exactly: equality on neighborhoodKey, a range on
+  // expiresAt, then the lastHeartbeatAt ordering. The previous index led with
+  // neighborhoodKey but then status, which that query never constrains, so only the
+  // first column was usable and the sort was unsupported.
+  @@index([neighborhoodKey, expiresAt, lastHeartbeatAt])
   @@index([latitude, longitude])
 }
 
@@ -746,4 +768,225 @@ model VetRecord {
 
   @@index([dogId, dueAt])
   @@index([ownerId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 Social
+//
+// These tables were created by 20260831_01_phase2_social_foundation and were
+// never declared here. Prisma computes migration diffs against this file, so a
+// `prisma migrate dev` run would have generated a migration DROPping all of
+// them. The declarations below describe the tables exactly as that migration
+// built them -- column types, defaults, FK actions and index names all match --
+// so this change is descriptive and produces no DDL.
+//
+// updatedAt columns are `@default(now())` rather than `@updatedAt` because the
+// migration created them with DEFAULT CURRENT_TIMESTAMP and no trigger. Adding
+// `@updatedAt` would be a behaviour change and belongs in its own commit.
+// ---------------------------------------------------------------------------
+
+model SocialPrivacy {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discoverable       Boolean  @default(true)
+  showCity           Boolean  @default(true)
+  allowBuddyRequests Boolean  @default(true)
+  allowWalkInvites   Boolean  @default(true)
+  allowMessages      Boolean  @default(true)
+  showCheckIns       Boolean  @default(true)
+  showActivity       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now())
+}
+
+model SocialBlock {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("SocialBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("SocialBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  dogId     String
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeName String
+  latitude  Float
+  longitude Float
+  note      String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([dogId, createdAt])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@index([latitude, longitude])
+}
+
+model Conversation {
+  id        String               @id @default(cuid())
+  kind      String               @default("DIRECT")
+  title     String?
+  members   ConversationMember[]
+  messages  SocialMessage[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @default(now())
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("MEMBER")
+  lastReadAt     DateTime?
+  mutedAt        DateTime?
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId, joinedAt])
+}
+
+model SocialMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model SocialGroup {
+  id          String              @id @default(cuid())
+  ownerId     String
+  owner       User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  city        String?
+  visibility  String              @default("PUBLIC")
+  members     SocialGroupMember[]
+  events      SocialEvent[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @default(now())
+
+  @@index([ownerId, createdAt])
+  @@index([city, visibility])
+}
+
+model SocialGroupMember {
+  id       String      @id @default(cuid())
+  groupId  String
+  group    SocialGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String      @default("MEMBER")
+  joinedAt DateTime    @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId, joinedAt])
+}
+
+model ActivityFeedItem {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  dogId      String?
+  dog        Dog?     @relation(fields: [dogId], references: [id], onDelete: SetNull)
+  type       String
+  targetType String?
+  targetId   String?
+  audience   String   @default("BUDDIES")
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([dogId, createdAt])
+  @@index([audience, createdAt])
+}
+
+model SocialEvent {
+  id           String                @id @default(cuid())
+  hostId       String
+  host         User                  @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        SocialGroup?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  title        String
+  description  String?
+  locationName String?
+  latitude     Float?
+  longitude    Float?
+  startsAt     DateTime
+  endsAt       DateTime?
+  visibility   String                @default("PUBLIC")
+  maxAttendees Int?
+  attendees    SocialEventAttendee[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @default(now())
+
+  @@index([hostId, startsAt])
+  @@index([groupId, startsAt])
+  @@index([visibility, startsAt])
+}
+
+model SocialEventAttendee {
+  id        String      @id @default(cuid())
+  eventId   String
+  event     SocialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String      @default("GOING")
+  createdAt DateTime    @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt])
+}
+
+model ReputationEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("ReputationSubject", fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?    @relation("ReputationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  kind      String
+  points    Int      @default(0)
+  reason    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model ModerationReport {
+  id           String   @id @default(cuid())
+  reporterId   String
+  reporter     User     @relation("ModerationReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetUserId String?
+  targetUser   User?    @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetDogId  String?
+  targetDog    Dog?     @relation(fields: [targetDogId], references: [id], onDelete: SetNull)
+  targetType   String
+  targetId     String?
+  category     String
+  details      String?
+  status       String   @default("OPEN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  @@index([reporterId, createdAt])
+  @@index([status, createdAt])
+  @@index([targetUserId, createdAt])
 }
