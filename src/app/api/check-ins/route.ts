@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { distanceMiles, removeCheckIn, saveCheckIn } from '@/lib/checkIns';
@@ -6,9 +7,29 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const MILES_PER_LATITUDE_DEGREE = 69.0;
+
 function finiteNumber(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+// A latitude/longitude box that fully contains the requested radius. It over-selects
+// at the corners -- the exact great-circle distance filter still runs afterwards --
+// but it lets Postgres discard the rest before LIMIT rather than after.
+function boundingBox(latitude: number, longitude: number, radiusMiles: number) {
+  const latitudeDelta = radiusMiles / MILES_PER_LATITUDE_DEGREE;
+  // Longitude degrees shrink toward the poles. Clamp the cosine so a near-polar
+  // request widens the box instead of dividing by zero.
+  const longitudeScale = Math.max(0.01, Math.cos((latitude * Math.PI) / 180));
+  const longitudeDelta = radiusMiles / (MILES_PER_LATITUDE_DEGREE * longitudeScale);
+
+  return {
+    minLatitude: Math.max(-90, latitude - latitudeDelta),
+    maxLatitude: Math.min(90, latitude + latitudeDelta),
+    minLongitude: longitude - longitudeDelta,
+    maxLongitude: longitude + longitudeDelta
+  };
 }
 
 type CheckInRow = {
@@ -31,12 +52,30 @@ export async function GET(request: NextRequest) {
   const longitude = finiteNumber(request.nextUrl.searchParams.get('lng'));
   const radius = Math.max(0.25, Math.min(25, finiteNumber(request.nextUrl.searchParams.get('radius')) ?? 5));
 
+  const hasLocation =
+    latitude !== null && longitude !== null &&
+    latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+
+  // The radius and dog-status filters used to run in JavaScript after the query, so
+  // the LIMIT was spent on the 200 newest check-ins anywhere in the world. Past a
+  // couple of hundred rows, a user's actual nearby check-ins stopped appearing at all.
+  // Both predicates now run in SQL, before the LIMIT.
+  const boundsClause = hasLocation
+    ? (() => {
+        const box = boundingBox(latitude, longitude, radius);
+        return Prisma.sql`AND c."latitude" BETWEEN ${box.minLatitude} AND ${box.maxLatitude}
+          AND c."longitude" BETWEEN ${box.minLongitude} AND ${box.maxLongitude}`;
+      })()
+    : Prisma.empty;
+
   const records = await prisma.$queryRaw<CheckInRow[]>`
     SELECT c."id", c."dogId", c."userId", c."placeName", c."latitude", c."longitude", c."note", c."createdAt", c."expiresAt"
     FROM "CheckIn" c
     LEFT JOIN "SocialPrivacy" p ON p."userId" = c."userId"
     WHERE c."expiresAt" > CURRENT_TIMESTAMP
       AND (c."userId" = ${user.id} OR COALESCE(p."showCheckIns", true) = true)
+      AND EXISTS (SELECT 1 FROM "Dog" d WHERE d."id" = c."dogId" AND d."status"::text = 'SAFE')
+      ${boundsClause}
     ORDER BY c."createdAt" DESC
     LIMIT 200
   `;
@@ -53,7 +92,7 @@ export async function GET(request: NextRequest) {
   const checkIns = records.flatMap((record) => {
     const dog = dogById.get(record.dogId);
     if (!dog) return [];
-    const distance = latitude !== null && longitude !== null
+    const distance = hasLocation
       ? distanceMiles({ latitude, longitude }, { latitude: record.latitude, longitude: record.longitude })
       : null;
     if (distance !== null && distance > radius) return [];
