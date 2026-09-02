@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 
 const LIVE_HEAT_WINDOW_MS = 15 * 60 * 1000;
 const SHARED_CACHE_TTL_SECONDS = 8;
+const MEMORY_CACHE_MAX_ENTRIES = 64;
+const PRESENCE_TAKE = 150;
+const REPORT_TAKE = 75;
 
 function numberParam(value: string | null) {
   if (!value) return null;
@@ -17,6 +20,24 @@ function numberParam(value: string | null) {
 
 function avatarFor(name: string) {
   return name.trim().slice(0, 2).toUpperCase();
+}
+
+// neighborhoodKey rounds to two decimals, so a key names a ~1.1km cell. Matching on a
+// single key put a hard wall down the middle of every cell boundary: a dog one block
+// away that rounded into the next cell was invisible. Query the 3x3 block around the
+// viewer instead, which makes the boundary continuous.
+function neighborhoodKeysAround(latitude: number, longitude: number) {
+  const [centerLatitude, centerLongitude] = neighborhoodKey(latitude, longitude).split(',').map(Number);
+  const latitudeUnits = Math.round(centerLatitude * 100);
+  const longitudeUnits = Math.round(centerLongitude * 100);
+
+  const keys: string[] = [];
+  for (let latitudeOffset = -1; latitudeOffset <= 1; latitudeOffset += 1) {
+    for (let longitudeOffset = -1; longitudeOffset <= 1; longitudeOffset += 1) {
+      keys.push(neighborhoodKey((latitudeUnits + latitudeOffset) / 100, (longitudeUnits + longitudeOffset) / 100));
+    }
+  }
+  return keys;
 }
 
 function deviceLocFor(presence: {
@@ -82,37 +103,76 @@ type SharedMapData = {
   }>;
 };
 
+const EMPTY_SHARED: SharedMapData = { activeDogsBase: [], heatCells: [], reports: [] };
+
+// Second-level fallback for the shared cache. Upstash is the real one -- it is shared
+// across lambdas -- but when UPSTASH_REDIS_REST_URL is unset every poll from every
+// viewer fell straight through to two Postgres queries. A warm lambda at least stops
+// re-running them for itself.
+const memoryCache = new Map<string, { expiresAtMs: number; payload: SharedMapData }>();
+
+function readMemoryCache(cacheKey: string, nowMs: number) {
+  const entry = memoryCache.get(cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAtMs <= nowMs) {
+    memoryCache.delete(cacheKey);
+    return null;
+  }
+  return entry.payload;
+}
+
+function writeMemoryCache(cacheKey: string, payload: SharedMapData, nowMs: number) {
+  if (memoryCache.size >= MEMORY_CACHE_MAX_ENTRIES) {
+    const oldest = memoryCache.keys().next();
+    if (!oldest.done) memoryCache.delete(oldest.value);
+  }
+  memoryCache.set(cacheKey, { expiresAtMs: nowMs + SHARED_CACHE_TTL_SECONDS * 1000, payload });
+}
+
 // The presence/report queries and heat-cell aggregation are identical for every viewer
-// looking at the same neighborhood cell, so they're cached in Redis for a few seconds and
-// shared across everyone polling that cell. Anything user-specific (buddy halos, route
-// memories) is layered on per-request below instead of going into this cache.
-async function loadSharedMapData(key: string | undefined, now: Date): Promise<SharedMapData> {
-  const cacheKey = `social-map:shared:${key ?? 'global'}`;
+// looking at the same block of neighborhood cells, so they're cached for a few seconds
+// and shared across everyone polling that block. Anything user-specific (buddy halos,
+// route memories) is layered on per-request below instead of going into this cache.
+async function loadSharedMapData(keys: string[] | null, now: Date): Promise<SharedMapData> {
+  // No coordinates means no neighborhood. The previous behaviour dropped the
+  // neighborhoodKey filter entirely and returned the 150 most recent presences
+  // anywhere on earth, which is both a full-table scan and the wrong answer.
+  if (!keys || keys.length === 0) return EMPTY_SHARED;
+
+  const cacheKey = `social-map:shared:${[...keys].sort().join('|')}`;
+  const nowMs = now.getTime();
+
+  const fromMemory = readMemoryCache(cacheKey, nowMs);
+  if (fromMemory) return fromMemory;
+
   if (redis) {
     const cached = await redis.get<SharedMapData>(cacheKey).catch(() => null);
-    if (cached) return cached;
+    if (cached) {
+      writeMemoryCache(cacheKey, cached, nowMs);
+      return cached;
+    }
   }
 
-  const heatCutoff = new Date(now.getTime() - LIVE_HEAT_WINDOW_MS);
+  const heatCutoff = new Date(nowMs - LIVE_HEAT_WINDOW_MS);
 
   const [presences, reports] = await Promise.all([
     prisma.dogPresence.findMany({
       where: {
         expiresAt: { gt: now },
         lastHeartbeatAt: { gte: heatCutoff },
-        ...(key ? { neighborhoodKey: key } : {})
+        neighborhoodKey: { in: keys }
       },
       orderBy: { lastHeartbeatAt: 'desc' },
-      take: 100,
+      take: PRESENCE_TAKE,
       include: {
         dog: { select: { id: true, name: true, slug: true, photoUrl: true, breed: true } },
         routeMemory: { select: { id: true, name: true, occurrences: true, confidence: true } }
       }
     }),
     prisma.mapReport.findMany({
-      where: { expiresAt: { gt: now }, ...(key ? { neighborhoodKey: key } : {}) },
+      where: { expiresAt: { gt: now }, neighborhoodKey: { in: keys } },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: REPORT_TAKE,
       include: { dog: { select: { name: true, slug: true, photoUrl: true } } }
     })
   ]);
@@ -169,6 +229,7 @@ async function loadSharedMapData(key: string | undefined, now: Date): Promise<Sh
     }))
   };
 
+  writeMemoryCache(cacheKey, payload, nowMs);
   if (redis) {
     await redis.set(cacheKey, payload, { ex: SHARED_CACHE_TTL_SECONDS }).catch(() => undefined);
   }
@@ -198,15 +259,27 @@ export async function GET(request: NextRequest) {
 
     const latitude = numberParam(request.nextUrl.searchParams.get('lat')) ?? userWithLocation?.latitude;
     const longitude = numberParam(request.nextUrl.searchParams.get('lng')) ?? userWithLocation?.longitude;
-    const key =
-      latitude != null && longitude != null
-        ? neighborhoodKey(latitude, longitude)
-        : userWithLocation?.neighborhoodKey ?? undefined;
+
+    const hasCoordinates =
+      latitude != null && longitude != null &&
+      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+
+    const key = hasCoordinates
+      ? neighborhoodKey(latitude, longitude)
+      : userWithLocation?.neighborhoodKey ?? undefined;
+
+    // A stored neighborhoodKey with no coordinates still gives us a cell to centre on.
+    const keys = hasCoordinates
+      ? neighborhoodKeysAround(latitude, longitude)
+      : key
+        ? neighborhoodKeysAround(...(key.split(',').map(Number) as [number, number]))
+        : null;
+
     const now = new Date();
 
     const [userDogs, shared] = await Promise.all([
       user ? prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } }) : Promise.resolve([]),
-      loadSharedMapData(key, now)
+      loadSharedMapData(keys, now)
     ]);
     const userDogIds = userDogs.map((dog) => dog.id);
     const activeDogIds = shared.activeDogsBase.map((entry) => entry.dogId);
@@ -265,7 +338,7 @@ export async function GET(request: NextRequest) {
         authenticated: isAuthenticated,
         source: 'device_loc',
         heatWindowMinutes: LIVE_HEAT_WINDOW_MS / 60000,
-        center: latitude != null && longitude != null ? { latitude, longitude, neighborhoodKey: key } : null,
+        center: hasCoordinates ? { latitude, longitude, neighborhoodKey: key } : null,
         activeDogs,
         heatCells,
         reports,
