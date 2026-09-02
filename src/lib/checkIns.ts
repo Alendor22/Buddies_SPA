@@ -2,6 +2,7 @@ import { redis } from '@/lib/redis';
 
 const INDEX_KEY = 'buddies:checkins:active';
 const KEY_PREFIX = 'buddies:checkin:';
+const MAX_TRACKED_CHECK_INS = 250;
 
 export type ActiveCheckIn = {
   dogId: string;
@@ -55,23 +56,28 @@ export async function listActiveCheckIns() {
   const members = await client.smembers(INDEX_KEY) as string[];
   if (!members.length) return [] as ActiveCheckIn[];
 
-  const records = await Promise.all(
-    members.slice(0, 250).map((dogId) => client.get<ActiveCheckIn>(keyForDog(dogId)))
-  );
+  const tracked = members.slice(0, MAX_TRACKED_CHECK_INS);
+
+  // One MGET rather than one GET per member. Upstash speaks HTTP, so the previous
+  // shape was up to 250 sequential round trips for a single map refresh.
+  const records = await client.mget<(ActiveCheckIn | null)[]>(...tracked.map(keyForDog));
+
   const staleIds: string[] = [];
   const now = Date.now();
   const active: ActiveCheckIn[] = [];
 
-  records.forEach((record, index) => {
+  tracked.forEach((dogId, index) => {
+    const record = records?.[index] ?? null;
     if (!record || new Date(record.expiresAt).getTime() <= now) {
-      staleIds.push(members[index]);
+      staleIds.push(dogId);
       return;
     }
     active.push(record);
   });
 
+  // Likewise one SREM with every stale member, not one call each.
   if (staleIds.length) {
-    await Promise.all(staleIds.map((dogId) => client.srem(INDEX_KEY, dogId)));
+    await client.srem(INDEX_KEY, ...staleIds);
   }
 
   return active;
