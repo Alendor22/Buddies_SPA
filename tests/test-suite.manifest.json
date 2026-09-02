@@ -28,8 +28,6 @@
       "sourcePrefixes": [
         "src/app/auth/",
         "src/app/logout/",
-        "src/app/api/auth/",
-        "src/app/api/session/",
         "src/lib/auth.ts",
         "src/app/sign-in/",
         "src/app/sign-up/"
@@ -132,7 +130,6 @@
     }
   ],
   "apiPolicies": [
-    { "route": "src/app/api/auth/logout/route.ts", "access": "public", "testState": "backlog" },
     { "route": "src/app/api/buddies/group/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/buddies/mute/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/buddies/remove/route.ts", "access": "authenticated", "testState": "backlog" },
@@ -156,7 +153,6 @@
     { "route": "src/app/api/recognition/enrollment/assets/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/upload/route.ts", "access": "authenticated", "testState": "backlog" },
-    { "route": "src/app/api/session/end/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
