@@ -16,7 +16,7 @@ export async function GET() {
   const [walks, dogs, memberships] = await Promise.all([
     prisma.walk.findMany({ where: walkParticipantWhere(user.id), select: { id: true } }),
     prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } }),
-    prisma.conversationMember.findMany({ where: { userId: user.id }, select: { conversationId: true } })
+    prisma.$queryRaw<Array<{ conversationId: string }>>`SELECT "conversationId" FROM "ConversationMember" WHERE "userId" = ${user.id}`
   ]);
 
   const capability: Record<string, string[]> = {};
