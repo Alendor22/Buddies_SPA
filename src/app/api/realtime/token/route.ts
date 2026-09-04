@@ -10,16 +10,13 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-
   const apiKey = process.env.ABLY_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'ABLY_API_KEY is not configured.' }, { status: 503 });
 
-  const [walks, dogs] = await Promise.all([
-    prisma.walk.findMany({
-      where: walkParticipantWhere(user.id),
-      select: { id: true }
-    }),
-    prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } })
+  const [walks, dogs, memberships] = await Promise.all([
+    prisma.walk.findMany({ where: walkParticipantWhere(user.id), select: { id: true } }),
+    prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true } }),
+    prisma.conversationMember.findMany({ where: { userId: user.id }, select: { conversationId: true } })
   ]);
 
   const capability: Record<string, string[]> = {};
@@ -27,22 +24,11 @@ export async function GET() {
     capability[realtimeChannels.messages(walk.id)] = ['subscribe', 'presence'];
     capability[realtimeChannels.walk(walk.id)] = ['subscribe'];
   }
-  for (const dog of dogs) {
-    capability[realtimeChannels.lostDog(dog.id)] = ['subscribe'];
-  }
-
-  // Neighborhood cells are not enumerable per-user: a client subscribes to whichever cell it
-  // is currently standing in, and that changes as it moves. Without this grant the subscribe
-  // is rejected by Ably and the map silently degrades to snapshot polling. Read-only, and the
-  // same presence data is already served to any authenticated user by GET /api/social-map.
+  for (const dog of dogs) capability[realtimeChannels.lostDog(dog.id)] = ['subscribe'];
+  for (const membership of memberships) capability[realtimeChannels.conversation(membership.conversationId)] = ['subscribe'];
   capability['nearby:*'] = ['subscribe'];
 
   const client = new Ably.Rest(apiKey);
-  const tokenRequest = await client.auth.createTokenRequest({
-    clientId: `user:${user.id}`,
-    capability: JSON.stringify(capability),
-    ttl: 60 * 60 * 1000
-  });
-
+  const tokenRequest = await client.auth.createTokenRequest({ clientId: `user:${user.id}`, capability: JSON.stringify(capability), ttl: 60 * 60 * 1000 });
   return NextResponse.json(tokenRequest);
 }
