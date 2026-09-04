@@ -25,14 +25,9 @@ export async function upsertSocialPrivacy(userId: string, value: Omit<SocialPriv
     INSERT INTO "SocialPrivacy" ("userId", "discoverable", "showCity", "allowBuddyRequests", "allowWalkInvites", "allowMessages", "showCheckIns", "showActivity", "updatedAt")
     VALUES (${userId}, ${value.discoverable}, ${value.showCity}, ${value.allowBuddyRequests}, ${value.allowWalkInvites}, ${value.allowMessages}, ${value.showCheckIns}, ${value.showActivity}, CURRENT_TIMESTAMP)
     ON CONFLICT ("userId") DO UPDATE SET
-      "discoverable" = EXCLUDED."discoverable",
-      "showCity" = EXCLUDED."showCity",
-      "allowBuddyRequests" = EXCLUDED."allowBuddyRequests",
-      "allowWalkInvites" = EXCLUDED."allowWalkInvites",
-      "allowMessages" = EXCLUDED."allowMessages",
-      "showCheckIns" = EXCLUDED."showCheckIns",
-      "showActivity" = EXCLUDED."showActivity",
-      "updatedAt" = CURRENT_TIMESTAMP
+      "discoverable" = EXCLUDED."discoverable", "showCity" = EXCLUDED."showCity", "allowBuddyRequests" = EXCLUDED."allowBuddyRequests",
+      "allowWalkInvites" = EXCLUDED."allowWalkInvites", "allowMessages" = EXCLUDED."allowMessages", "showCheckIns" = EXCLUDED."showCheckIns",
+      "showActivity" = EXCLUDED."showActivity", "updatedAt" = CURRENT_TIMESTAMP
     RETURNING "userId", "discoverable", "showCity", "allowBuddyRequests", "allowWalkInvites", "allowMessages", "showCheckIns", "showActivity"
   `;
   return rows[0];
@@ -40,8 +35,7 @@ export async function upsertSocialPrivacy(userId: string, value: Omit<SocialPriv
 
 export async function listBlockedUserIds(userId: string) {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT CASE WHEN "blockerId" = ${userId} THEN "blockedId" ELSE "blockerId" END AS id
-    FROM "SocialBlock"
+    SELECT CASE WHEN "blockerId" = ${userId} THEN "blockedId" ELSE "blockerId" END AS id FROM "SocialBlock"
     WHERE "blockerId" = ${userId} OR "blockedId" = ${userId}
   `;
   return rows.map((row) => row.id);
@@ -49,14 +43,20 @@ export async function listBlockedUserIds(userId: string) {
 
 export async function blockUser(blockerId: string, blockedId: string) {
   if (blockerId === blockedId) throw new Error('Cannot block self');
-  await prisma.$executeRaw`
-    INSERT INTO "SocialBlock" ("id", "blockerId", "blockedId")
-    VALUES (${randomUUID()}, ${blockerId}, ${blockedId})
-    ON CONFLICT ("blockerId", "blockedId") DO NOTHING
-  `;
+  await prisma.$executeRaw`INSERT INTO "SocialBlock" ("id", "blockerId", "blockedId") VALUES (${randomUUID()}, ${blockerId}, ${blockedId}) ON CONFLICT ("blockerId", "blockedId") DO NOTHING`;
 }
 
 export async function createConversation(ownerId: string, memberId: string) {
+  const existing = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT c."id" FROM "Conversation" c
+    WHERE c."kind" = 'DIRECT'
+      AND EXISTS (SELECT 1 FROM "ConversationMember" a WHERE a."conversationId" = c."id" AND a."userId" = ${ownerId})
+      AND EXISTS (SELECT 1 FROM "ConversationMember" b WHERE b."conversationId" = c."id" AND b."userId" = ${memberId})
+      AND (SELECT COUNT(*) FROM "ConversationMember" m WHERE m."conversationId" = c."id") = 2
+    LIMIT 1
+  `;
+  if (existing[0]?.id) return existing[0].id;
+
   const id = randomUUID();
   await prisma.$transaction([
     prisma.$executeRaw`INSERT INTO "Conversation" ("id", "kind") VALUES (${id}, 'DIRECT')`,
@@ -67,35 +67,39 @@ export async function createConversation(ownerId: string, memberId: string) {
 }
 
 export async function isConversationMember(conversationId: string, userId: string) {
-  const rows = await prisma.$queryRaw<Array<{ ok: boolean }>>`
-    SELECT true AS ok FROM "ConversationMember" WHERE "conversationId" = ${conversationId} AND "userId" = ${userId} LIMIT 1
-  `;
+  const rows = await prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT true AS ok FROM "ConversationMember" WHERE "conversationId" = ${conversationId} AND "userId" = ${userId} LIMIT 1`;
   return Boolean(rows[0]?.ok);
 }
 
 export async function listConversations(userId: string) {
-  return prisma.$queryRaw<Array<{ id: string; kind: string; title: string | null; updatedAt: Date }>>`
-    SELECT c."id", c."kind", c."title", c."updatedAt"
+  return prisma.$queryRaw<Array<{ id: string; kind: string; title: string | null; updatedAt: Date; peerId: string | null; peerName: string | null; peerAvatarUrl: string | null; lastBody: string | null; lastMessageAt: Date | null }>>`
+    SELECT c."id", c."kind", c."title", c."updatedAt",
+      peer."id" AS "peerId", peer."displayName" AS "peerName", peer."avatarUrl" AS "peerAvatarUrl",
+      lm."body" AS "lastBody", lm."createdAt" AS "lastMessageAt"
     FROM "Conversation" c
-    JOIN "ConversationMember" m ON m."conversationId" = c."id"
-    WHERE m."userId" = ${userId}
-    ORDER BY c."updatedAt" DESC
-    LIMIT 100
+    JOIN "ConversationMember" mine ON mine."conversationId" = c."id" AND mine."userId" = ${userId}
+    LEFT JOIN "ConversationMember" other ON other."conversationId" = c."id" AND other."userId" <> ${userId}
+    LEFT JOIN "User" peer ON peer."id" = other."userId"
+    LEFT JOIN LATERAL (
+      SELECT sm."body", sm."createdAt" FROM "SocialMessage" sm
+      WHERE sm."conversationId" = c."id" AND sm."deletedAt" IS NULL ORDER BY sm."createdAt" DESC LIMIT 1
+    ) lm ON true
+    ORDER BY COALESCE(lm."createdAt", c."updatedAt") DESC LIMIT 100
   `;
 }
 
 export async function listMessages(conversationId: string) {
-  return prisma.$queryRaw<Array<{ id: string; senderId: string; body: string; createdAt: Date }>>`
-    SELECT "id", "senderId", "body", "createdAt" FROM "SocialMessage"
-    WHERE "conversationId" = ${conversationId} AND "deletedAt" IS NULL
-    ORDER BY "createdAt" ASC LIMIT 200
+  return prisma.$queryRaw<Array<{ id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; senderDogPhotoUrl: string | null; body: string; createdAt: Date }>>`
+    SELECT sm."id", sm."senderId", sm."senderDogId", d."name" AS "senderDogName", d."photoUrl" AS "senderDogPhotoUrl", sm."body", sm."createdAt"
+    FROM "SocialMessage" sm LEFT JOIN "Dog" d ON d."id" = sm."senderDogId"
+    WHERE sm."conversationId" = ${conversationId} AND sm."deletedAt" IS NULL ORDER BY sm."createdAt" ASC LIMIT 200
   `;
 }
 
-export async function sendMessage(conversationId: string, senderId: string, body: string) {
+export async function sendMessage(conversationId: string, senderId: string, body: string, senderDogId: string) {
   const id = randomUUID();
   await prisma.$transaction([
-    prisma.$executeRaw`INSERT INTO "SocialMessage" ("id", "conversationId", "senderId", "body") VALUES (${id}, ${conversationId}, ${senderId}, ${body})`,
+    prisma.$executeRaw`INSERT INTO "SocialMessage" ("id", "conversationId", "senderId", "senderDogId", "body") VALUES (${id}, ${conversationId}, ${senderId}, ${senderDogId}, ${body})`,
     prisma.$executeRaw`UPDATE "Conversation" SET "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${conversationId}`
   ]);
   return id;
@@ -112,27 +116,19 @@ export async function createGroup(ownerId: string, name: string, description: st
 
 export async function listGroups(userId: string) {
   return prisma.$queryRaw<Array<{ id: string; name: string; description: string | null; city: string | null; joined: boolean }>>`
-    SELECT g."id", g."name", g."description", g."city", EXISTS(
-      SELECT 1 FROM "SocialGroupMember" gm WHERE gm."groupId" = g."id" AND gm."userId" = ${userId}
-    ) AS joined
-    FROM "SocialGroup" g WHERE g."visibility" = 'PUBLIC' OR g."ownerId" = ${userId}
-    ORDER BY g."createdAt" DESC LIMIT 100
+    SELECT g."id", g."name", g."description", g."city", EXISTS(SELECT 1 FROM "SocialGroupMember" gm WHERE gm."groupId" = g."id" AND gm."userId" = ${userId}) AS joined
+    FROM "SocialGroup" g WHERE g."visibility" = 'PUBLIC' OR g."ownerId" = ${userId} ORDER BY g."createdAt" DESC LIMIT 100
   `;
 }
 
 export async function addFeedItem(actorId: string, type: string, targetType?: string | null, targetId?: string | null) {
-  await prisma.$executeRaw`
-    INSERT INTO "ActivityFeedItem" ("id", "actorId", "type", "targetType", "targetId")
-    VALUES (${randomUUID()}, ${actorId}, ${type}, ${targetType ?? null}, ${targetId ?? null})
-  `;
+  await prisma.$executeRaw`INSERT INTO "ActivityFeedItem" ("id", "actorId", "type", "targetType", "targetId") VALUES (${randomUUID()}, ${actorId}, ${type}, ${targetType ?? null}, ${targetId ?? null})`;
 }
 
 export async function listFeed(userId: string) {
   return prisma.$queryRaw<Array<{ id: string; actorId: string; type: string; targetType: string | null; targetId: string | null; createdAt: Date }>>`
-    SELECT f."id", f."actorId", f."type", f."targetType", f."targetId", f."createdAt"
-    FROM "ActivityFeedItem" f
-    WHERE f."actorId" = ${userId}
-       OR EXISTS (SELECT 1 FROM "Buddy" b WHERE (b."userAId" = ${userId} AND b."userBId" = f."actorId") OR (b."userBId" = ${userId} AND b."userAId" = f."actorId"))
+    SELECT f."id", f."actorId", f."type", f."targetType", f."targetId", f."createdAt" FROM "ActivityFeedItem" f
+    WHERE f."actorId" = ${userId} OR EXISTS (SELECT 1 FROM "Buddy" b WHERE (b."userAId" = ${userId} AND b."userBId" = f."actorId") OR (b."userBId" = ${userId} AND b."userAId" = f."actorId"))
     ORDER BY f."createdAt" DESC LIMIT 100
   `;
 }
@@ -148,27 +144,18 @@ export async function createEvent(hostId: string, title: string, startsAt: Date,
 
 export async function listEvents(userId: string) {
   return prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; attending: boolean }>>`
-    SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", EXISTS(
-      SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING'
-    ) AS attending
-    FROM "SocialEvent" e
-    WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId}
-    ORDER BY e."startsAt" ASC LIMIT 100
+    SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", EXISTS(SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING') AS attending
+    FROM "SocialEvent" e WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId} ORDER BY e."startsAt" ASC LIMIT 100
   `;
 }
 
 export async function reportContent(reporterId: string, targetType: string, targetId: string | null, category: string, details: string | null, targetUserId: string | null, targetDogId: string | null) {
   const id = randomUUID();
-  await prisma.$executeRaw`
-    INSERT INTO "ModerationReport" ("id", "reporterId", "targetUserId", "targetDogId", "targetType", "targetId", "category", "details")
-    VALUES (${id}, ${reporterId}, ${targetUserId}, ${targetDogId}, ${targetType}, ${targetId}, ${category}, ${details})
-  `;
+  await prisma.$executeRaw`INSERT INTO "ModerationReport" ("id", "reporterId", "targetUserId", "targetDogId", "targetType", "targetId", "category", "details") VALUES (${id}, ${reporterId}, ${targetUserId}, ${targetDogId}, ${targetType}, ${targetId}, ${category}, ${details})`;
   return id;
 }
 
 export async function getReputation(userId: string) {
-  const rows = await prisma.$queryRaw<Array<{ score: number }>>`
-    SELECT COALESCE(SUM("points"), 0)::int AS score FROM "ReputationEvent" WHERE "userId" = ${userId}
-  `;
+  const rows = await prisma.$queryRaw<Array<{ score: number }>>`SELECT COALESCE(SUM("points"), 0)::int AS score FROM "ReputationEvent" WHERE "userId" = ${userId}`;
   return rows[0]?.score ?? 0;
 }
