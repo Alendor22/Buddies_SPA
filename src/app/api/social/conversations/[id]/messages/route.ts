@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { isConversationMember, listMessages, sendMessage } from '@/lib/social/repository';
+import { publishRealtime } from '@/lib/realtimeServer';
+import { realtimeChannels } from '@/lib/realtimeChannels';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +27,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!body) return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
   if (!senderDogId) return NextResponse.json({ error: 'Select a dog profile before sending.' }, { status: 400 });
 
-  const senderDog = await prisma.dog.findFirst({
-    where: { id: senderDogId, ownerId: user.id },
-    select: { id: true, name: true, slug: true, photoUrl: true }
-  });
+  const senderDog = await prisma.dog.findFirst({ where: { id: senderDogId, ownerId: user.id }, select: { id: true, name: true, slug: true, photoUrl: true } });
   if (!senderDog) return NextResponse.json({ error: 'Sender dog is not owned by this account.' }, { status: 403 });
 
   const messageId = await sendMessage(id, user.id, body, senderDog.id);
+  await publishRealtime(realtimeChannels.conversation(id), 'message.created', { messageId, conversationId: id });
   return NextResponse.json({ messageId, senderDog }, { status: 201 });
 }
