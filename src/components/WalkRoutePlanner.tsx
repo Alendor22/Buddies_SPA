@@ -62,6 +62,10 @@ const LONG_PRESS_MS = 650;
 const TOUCH_MOVE_CANCEL_PX = 12;
 const MAX_RANDOM_LOOP_MILES = 1;
 
+function createRandomRouteRolls(): [number, number] {
+  return [Math.random(), Math.random()];
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -722,7 +726,7 @@ export default function WalkRoutePlanner({
 
       <div className="grid gap-2 sm:grid-cols-4">
         <button type="button" onClick={locate} className="rounded-lg bg-slate-950/50 px-4 py-3 font-medium text-white backdrop-blur">Use location</button>
-        <button type="button" onClick={() => { if (routing) { cancelRouting(); return; } void generateStreetRoute(Math.random(), Math.random()); }} className={`rounded-lg px-4 py-3 font-medium text-white backdrop-blur ${routing ? 'bg-red-700/60' : 'bg-slate-950/50'}`}>{routing ? 'Cancel routing' : 'Route to streets'}</button>
+        <button type="button" onClick={() => { if (routing) { cancelRouting(); return; } void generateStreetRoute(...createRandomRouteRolls()); }} className={`rounded-lg px-4 py-3 font-medium text-white backdrop-blur ${routing ? 'bg-red-700/60' : 'bg-slate-950/50'}`}>{routing ? 'Cancel routing' : 'Route to streets'}</button>
         <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save route'}</button>
         <button type="button" onClick={clearRoute} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur">Clear route</button>
       </div>
