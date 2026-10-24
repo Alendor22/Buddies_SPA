@@ -66,7 +66,12 @@ for (const model of ['DogBuddyRequest', 'DogBuddy', 'WalkInvitation', 'Notificat
 for (const field of ['routeGeometry', 'routeSteps', 'routeDistanceMiles', 'routeDurationMin']) {
   assertIncludes('Prisma walk route storage', schema, field);
 }
-assertIncludes('Prisma Vercel runtime target', schema, 'rhel-openssl-3.0.x');
+assertIncludes('Prisma 7 generated client provider', schema, 'provider = "prisma-client"');
+assertIncludes('Prisma 7 generated client output', schema, 'output   = "../src/generated/prisma"');
+
+const prismaRuntime = await readFile('src/lib/db.ts', 'utf8');
+assertIncludes('Prisma PostgreSQL driver adapter', prismaRuntime, "import { PrismaPg } from '@prisma/adapter-pg';");
+assertIncludes('Prisma PostgreSQL driver adapter', prismaRuntime, 'new PrismaPg({ connectionString })');
 
 const createDog = await readFile('src/app/dogs/new/page.tsx', 'utf8');
 assertIncludes('Dog create', createDog, 'action={createDogAction}');
