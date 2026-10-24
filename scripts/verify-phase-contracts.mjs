@@ -69,6 +69,9 @@ for (const field of ['routeGeometry', 'routeSteps', 'routeDistanceMiles', 'route
 assertIncludes('Prisma 7 generated client provider', schema, 'provider = "prisma-client"');
 assertIncludes('Prisma 7 generated client output', schema, 'output   = "../src/generated/prisma"');
 
+const prismaConfig = await readFile('prisma.config.ts', 'utf8');
+assertIncludes('Prisma CLI datasource URL', prismaConfig, "url: env('DATABASE_URL_UNPOOLED')");
+
 const prismaRuntime = await readFile('src/lib/db.ts', 'utf8');
 assertIncludes('Prisma PostgreSQL driver adapter', prismaRuntime, "import { PrismaPg } from '@prisma/adapter-pg';");
 assertIncludes('Prisma PostgreSQL driver adapter', prismaRuntime, 'new PrismaPg({ connectionString })');
