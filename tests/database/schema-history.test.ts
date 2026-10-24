@@ -16,7 +16,7 @@ function getExpectedColumns(schema: string) {
     name: match[1],
     body: match[2]
   }));
-  const expectedColumns = new Set();
+  const expectedColumns = new Set<string>();
 
   for (const model of models) {
     const mappedTable = model.body.match(/^\s*@@map\("([^"]+)"\)/m)?.[1] ?? model.name;
