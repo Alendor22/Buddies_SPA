@@ -19,6 +19,7 @@ type WalkMessageThreadProps = {
 };
 
 const SEND_TIMEOUT_MS = 20000;
+const FALLBACK_POLL_MS = 30000;
 
 function isMessageItem(value: unknown): value is MessageItem {
   if (!value || typeof value !== 'object') return false;
@@ -134,7 +135,7 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
           void channel.presence.leave();
         };
       } catch {
-        if (active) setStatus('Realtime credentials are unavailable; polling every 15 seconds.');
+        if (active) setStatus('Realtime credentials are unavailable; polling every 30 seconds.');
         return undefined;
       }
     }
@@ -148,7 +149,8 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
       stopRealtime = cleanup;
       // Realtime already delivers messages live; only poll as a fallback when it failed to connect.
       if (!cleanup) {
-        pollTimer = setInterval(() => { void pollMessages(); }, 15000);
+        void pollMessages();
+        pollTimer = setInterval(() => { void pollMessages(); }, FALLBACK_POLL_MS);
       }
     });
     void markRead();
@@ -241,3 +243,4 @@ export default function WalkMessageThread({ walkId, currentUserId, currentLabel,
     </section>
   );
 }
+
