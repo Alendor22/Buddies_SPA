@@ -544,11 +544,7 @@ export default function WalkRoutePlanner({
     }, 35);
   }
 
-  async function generateStreetRoute() {
-    if (routing) {
-      cancelRouting();
-      return;
-    }
+  async function generateStreetRoute(outboundRoll: number, returnRoll: number) {
     const base = start || center;
     let selectedApex = apex;
     let coordinates: Coordinate[];
@@ -556,12 +552,12 @@ export default function WalkRoutePlanner({
       coordinates = [base, ...waypoints, base];
     } else {
       const safeMiles = clamp(apexMiles || 0.5, 0.1, MAX_RANDOM_LOOP_MILES);
-      const outboundBearing = apex ? bearingBetween(base, apex) : Math.random() * 360;
+      const outboundBearing = apex ? bearingBetween(base, apex) : outboundRoll * 360;
       selectedApex = apex || destination(base, safeMiles, outboundBearing);
       const returnWaypoint = destination(
         selectedApex,
         Math.max(0.05, safeMiles * 0.3),
-        outboundBearing + 135 + Math.random() * 90
+        outboundBearing + 135 + returnRoll * 90
       );
       coordinates = [base, selectedApex, returnWaypoint, base];
     }
@@ -726,7 +722,7 @@ export default function WalkRoutePlanner({
 
       <div className="grid gap-2 sm:grid-cols-4">
         <button type="button" onClick={locate} className="rounded-lg bg-slate-950/50 px-4 py-3 font-medium text-white backdrop-blur">Use location</button>
-        <button type="button" onClick={generateStreetRoute} className={`rounded-lg px-4 py-3 font-medium text-white backdrop-blur ${routing ? 'bg-red-700/60' : 'bg-slate-950/50'}`}>{routing ? 'Cancel routing' : 'Route to streets'}</button>
+        <button type="button" onClick={() => { if (routing) { cancelRouting(); return; } void generateStreetRoute(Math.random(), Math.random()); }} className={`rounded-lg px-4 py-3 font-medium text-white backdrop-blur ${routing ? 'bg-red-700/60' : 'bg-slate-950/50'}`}>{routing ? 'Cancel routing' : 'Route to streets'}</button>
         <button type="button" disabled={savingFavorite} onClick={saveFavorite} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur disabled:opacity-50">{savingFavorite ? 'Saving…' : 'Save route'}</button>
         <button type="button" onClick={clearRoute} className="rounded-lg border border-white/40 bg-white/50 px-4 py-3 font-medium text-slate-950 backdrop-blur">Clear route</button>
       </div>

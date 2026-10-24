@@ -130,8 +130,9 @@ export default function BuddiesSpatialMap() {
   }, [loadSocialMap]);
 
   useEffect(() => {
-    void loadSocialMap();
-
+    const initialSnapshotTimer = window.setTimeout(() => {
+      void loadSocialMap();
+    }, 0);
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadSocialMap();
     }, RECONCILE_INTERVAL_MS);
@@ -142,6 +143,7 @@ export default function BuddiesSpatialMap() {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      window.clearTimeout(initialSnapshotTimer);
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (delayedRefreshRef.current != null) {
@@ -378,7 +380,7 @@ export default function BuddiesSpatialMap() {
       ) : null}
 
       <ArSpatialLabels activeDogs={activeDogs} reports={reports} />
-      <ArOverlayControls />
+      <ArOverlayControls key={cameraMode} />
       <WalkTelemetryHUD />
       <MapActionBar />
       <SpatialOverlaySheet activeDogs={activeDogs} />

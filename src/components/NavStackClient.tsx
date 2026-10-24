@@ -1,12 +1,15 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useSyncExternalStore, useState } from 'react';
 
 type StackEntry = { path: string; title: string; ts: number };
 
 const STORAGE_KEY = 'buddies_nav_stack_v24';
 const MAX_STACK = 12;
+const EMPTY_STACK: StackEntry[] = [];
+let stackSnapshot: StackEntry[] | null = null;
+const stackListeners = new Set<() => void>();
 
 function titleForPath(pathname: string) {
   if (pathname === '/') return 'Home';
@@ -45,17 +48,36 @@ function writeStack(stack: StackEntry[]) {
   }
 }
 
+function getStackSnapshot() {
+  if (stackSnapshot === null) stackSnapshot = readStack();
+  return stackSnapshot;
+}
+
+function getServerStackSnapshot() {
+  return EMPTY_STACK;
+}
+
+function subscribeToStack(listener: () => void) {
+  stackListeners.add(listener);
+  return () => stackListeners.delete(listener);
+}
+
+function recordPath(pathname: string) {
+  const current: StackEntry = { path: pathname, title: titleForPath(pathname), ts: Date.now() };
+  const previous = readStack();
+  const last = previous[previous.length - 1];
+  const next = last?.path === pathname ? [...previous.slice(0, -1), current] : [...previous, current];
+  const bounded = next.slice(-MAX_STACK);
+  writeStack(bounded);
+  stackSnapshot = bounded;
+  stackListeners.forEach((listener) => listener());
+}
+
 export function useNavStack(pathname: string) {
-  const [stack, setStack] = useState<StackEntry[]>([]);
+  const stack = useSyncExternalStore(subscribeToStack, getStackSnapshot, getServerStackSnapshot);
 
   useEffect(() => {
-    const current: StackEntry = { path: pathname, title: titleForPath(pathname), ts: Date.now() };
-    const previous = readStack();
-    const last = previous[previous.length - 1];
-    const next = last?.path === pathname ? [...previous.slice(0, -1), current] : [...previous, current];
-    const bounded = next.slice(-MAX_STACK);
-    writeStack(bounded);
-    setStack(bounded);
+    recordPath(pathname);
   }, [pathname]);
 
   return stack;

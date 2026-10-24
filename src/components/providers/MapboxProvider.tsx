@@ -44,7 +44,11 @@ export function MapboxProvider({ children, initialToken = '' }: { children: Reac
   }, []);
 
   useEffect(() => {
-    if (!initialToken) void refresh();
+    if (initialToken) return;
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [initialToken, refresh]);
 
   const value = useMemo<MapboxConfigState>(() => ({
