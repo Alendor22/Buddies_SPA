@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WalkInvitationStatus, WalkStatus } from '@prisma/client';
+import { WalkInvitationStatus, WalkStatus } from '@/generated/prisma/client';
 import { formRequest } from '../../support/next-request';
 
 const getCurrentUserMock = vi.hoisted(() => vi.fn());

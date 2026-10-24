@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { DogStatus, NotificationType } from '@prisma/client';
+import { DogStatus, NotificationType } from '@/generated/prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { geocodePlace } from '@/lib/maps';

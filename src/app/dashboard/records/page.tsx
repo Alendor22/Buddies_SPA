@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '@/generated/prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';

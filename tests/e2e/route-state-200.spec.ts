@@ -1,4 +1,4 @@
-import { DogStatus, PrismaClient } from '@prisma/client';
+import { DogStatus, PrismaClient } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { discoverPageRouteTemplates, materializePageRoute } from '../support/app-routes';

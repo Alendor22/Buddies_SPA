@@ -1,4 +1,4 @@
-import { Prisma, WalkInvitationStatus } from '@prisma/client';
+import { Prisma, WalkInvitationStatus } from '@/generated/prisma/client';
 
 export function walkParticipantWhere(userId: string): Prisma.WalkWhereInput {
   return {

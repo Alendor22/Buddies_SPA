@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BuddyRequestStatus } from '@prisma/client';
+import { BuddyRequestStatus } from '@/generated/prisma/client';
 import { formRequest } from '../support/next-request';
 import { uniqueTestId } from '../support/unique';
 

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
 
 const prisma = new PrismaClient();
