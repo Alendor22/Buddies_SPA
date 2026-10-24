@@ -11,22 +11,22 @@ afterAll(async () => {
 const scalarTypes = new Set(['String', 'Boolean', 'Int', 'BigInt', 'Float', 'Decimal', 'DateTime', 'Json', 'Bytes']);
 
 function getExpectedColumns(schema) {
-  const enumTypes = new Set(Array.from(schema.matchAll(/^enum\\s+(\\w+)\\s+\\{/gm), (match) => match[1]));
-  const models = Array.from(schema.matchAll(/^model\\s+(\\w+)\\s+\\{([\\s\\S]*?)^\\}/gm), (match) => ({
+  const enumTypes = new Set(Array.from(schema.matchAll(/^enum\s+(\w+)\s+\{/gm), (match) => match[1]));
+  const models = Array.from(schema.matchAll(/^model\s+(\w+)\s+\{([\s\S]*?)^\}/gm), (match) => ({
     name: match[1],
     body: match[2]
   }));
   const expectedColumns = new Set();
 
   for (const model of models) {
-    const mappedTable = model.body.match(/^\\s*@@map\\("([^"]+)"\\)/m)?.[1] ?? model.name;
-    for (const line of model.body.split(/\\r?\\n/)) {
-      const field = line.trim().match(/^(\\w+)\\s+([\\w\\[\\]?]+)(?:\\s+(.*))?$/);
+    const mappedTable = model.body.match(/^\s*@@map\("([^"]+)"\)/m)?.[1] ?? model.name;
+    for (const line of model.body.split(/\r?\n/)) {
+      const field = line.trim().match(/^(\w+)\s+([\w\[\]?]+)(?:\s+(.*))?$/);
       if (!field) continue;
       const [, fieldName, declaredType, attributes = ''] = field;
-      const type = declaredType.replace(/[\\[\\]?]/g, '');
+      const type = declaredType.replace(/[\[\]?]/g, '');
       if (!scalarTypes.has(type) && !enumTypes.has(type)) continue;
-      const mappedField = attributes.match(/@map\\("([^"]+)"\\)/)?.[1] ?? fieldName;
+      const mappedField = attributes.match(/@map\("([^"]+)"\)/)?.[1] ?? fieldName;
       expectedColumns.add(mappedTable + '.' + mappedField);
     }
   }

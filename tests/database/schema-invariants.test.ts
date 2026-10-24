@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import { DogPresenceStatus, PrismaClient } from '@/generated/prisma/client';
+import { DogPresenceStatus } from '@/generated/prisma/client';
 import { createTestPrismaClient } from '../support/test-database';
 import { uniqueTestId } from '../support/unique';
 

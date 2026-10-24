@@ -1,4 +1,4 @@
-import { DogStatus, PrismaClient } from '@/generated/prisma/client';
+import { DogStatus } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
 import { createTestPrismaClient } from '../support/test-database';
 import { readFileSync } from 'node:fs';
