@@ -10,7 +10,7 @@ afterAll(async () => {
 
 const scalarTypes = new Set(['String', 'Boolean', 'Int', 'BigInt', 'Float', 'Decimal', 'DateTime', 'Json', 'Bytes']);
 
-function getExpectedColumns(schema) {
+function getExpectedColumns(schema: string) {
   const enumTypes = new Set(Array.from(schema.matchAll(/^enum\s+(\w+)\s+\{/gm), (match) => match[1]));
   const models = Array.from(schema.matchAll(/^model\s+(\w+)\s+\{([\s\S]*?)^\}/gm), (match) => ({
     name: match[1],
