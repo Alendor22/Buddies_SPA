@@ -1,7 +1,7 @@
-import { PrismaClient } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
 
-const prisma = new PrismaClient();
+import { createTestPrismaClient } from '../support/test-database';
+const prisma = createTestPrismaClient();
 const clerkApiBase = 'https://api.clerk.com/v1';
 let clerkUserId = '';
 let buddiesUserId = '';

@@ -1,9 +1,10 @@
 import { DogStatus, PrismaClient } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
+import { createTestPrismaClient } from '../support/test-database';
 import { readFileSync } from 'node:fs';
 import { discoverPageRouteTemplates, materializePageRoute } from '../support/app-routes';
 
-const prisma = new PrismaClient();
+const prisma = createTestPrismaClient();
 const manifest = JSON.parse(readFileSync('tests/test-suite.manifest.json', 'utf8')) as {
   routeState200: { dynamicParameters: Record<string, string> };
 };

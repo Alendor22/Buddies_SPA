@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@/generated/prisma/client';
 
-const prisma = new PrismaClient();
+import { createTestPrismaClient } from '../support/test-database';
+const prisma = createTestPrismaClient();
 
 afterAll(async () => {
   await prisma.$disconnect();
