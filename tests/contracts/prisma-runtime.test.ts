@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('Prisma deployment runtime contract', () => {
-  it('generates the query engine required by Vercel functions', () => {
+  it('uses the Prisma 7 client and PostgreSQL adapter required by Vercel functions', () => {
     const schema = readFileSync('prisma/schema.prisma', 'utf8');
+    const database = readFileSync('src/lib/db.ts', 'utf8');
 
-    expect(schema).toContain('binaryTargets = ["native", "rhel-openssl-3.0.x"]');
+    expect(schema).toContain('provider = "prisma-client"');
+    expect(schema).toContain('output   = "../src/generated/prisma"');
+    expect(database).toContain("import { PrismaPg } from '@prisma/adapter-pg';");
+    expect(database).toContain('adapter: new PrismaPg({ connectionString })');
   });
 
   it('creates dog profile fields before notification backfills use them', () => {
