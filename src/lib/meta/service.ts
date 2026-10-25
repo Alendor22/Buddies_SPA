@@ -26,6 +26,7 @@ export async function throttle(ownerId: string) {
   if (row.count > 30) throw new MetaError(429, 'Too many Meta requests. Try again in a minute.');
 }
 export async function beginConnection(ownerId: string, value: Purpose) {
+  assertEnabled('CONNECTIONS');
   assertEnabled(purposes[value].flag);
   const state = opaque();
   const browser = opaque();
@@ -44,6 +45,7 @@ export async function finishConnection(ownerId: string, state: string, browser: 
   const entry = await prisma.metaOAuthState.findUnique({ where: { hash: hash(state) } });
   if (!entry || entry.ownerId !== ownerId || entry.browserHash !== hash(browser) || entry.expiresAt.getTime() <= Date.now()) throw new MetaError(400, 'Invalid or expired Meta authorization.');
   const value = purpose(entry.purpose);
+  assertEnabled('CONNECTIONS');
   assertEnabled(purposes[value].flag);
   // Atomic single-use claim before exchanging the authorization code.
   const claim = await prisma.metaOAuthState.deleteMany({ where: { hash: entry.hash, ownerId, expiresAt: { gt: new Date() } } });

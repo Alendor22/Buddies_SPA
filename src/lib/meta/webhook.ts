@@ -53,7 +53,8 @@ export async function processWebhook(body: Buffer) {
       }
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+      && await prisma.metaWebhook.findUnique({ where: { hash: hash(body) } })) return;
     throw error;
   }
 }

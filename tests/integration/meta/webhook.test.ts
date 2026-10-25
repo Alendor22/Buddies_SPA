@@ -1,6 +1,7 @@
+import { Prisma } from '@prisma/client';
 import { createHmac } from 'node:crypto';
 import { beforeEach, expect, it, vi } from 'vitest';
-const db = vi.hoisted(() => ({ $transaction: vi.fn(), metaWebhook: { create: vi.fn() }, metaConnection: { findUnique: vi.fn() }, metaContact: { upsert: vi.fn(), updateMany: vi.fn() } }));
+const db = vi.hoisted(() => ({ $transaction: vi.fn(), metaWebhook: { create: vi.fn(), findUnique: vi.fn() }, metaConnection: { findUnique: vi.fn() }, metaContact: { upsert: vi.fn(), updateMany: vi.fn() } }));
 vi.mock('@/lib/db', () => ({ prisma: db }));
 import { GET, POST } from '@/app/api/meta/webhook/route';
 import { inboundEvents, processWebhook } from '@/lib/meta/webhook';
@@ -38,4 +39,12 @@ it('ignores echoes and wrong recipient assets', () => {
 it('rejects stale callback timestamps', async () => {
   const input = payload(); input.entry[0].messaging[0].timestamp = Date.now() - 8 * 86400000; expect(inboundEvents(input)).toEqual([]);
   await processWebhook(Buffer.from(JSON.stringify(input))); expect(db.metaContact.upsert).not.toHaveBeenCalled();
+});
+
+it('acknowledges a duplicate only if its receipt actually committed', async () => {
+  db.$transaction.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: '6' }));
+  db.metaWebhook.findUnique.mockResolvedValue({ hash: 'committed-receipt' });
+  await expect(processWebhook(Buffer.from(JSON.stringify(payload())))).resolves.toBeUndefined();
+  db.metaWebhook.findUnique.mockResolvedValue(null);
+  await expect(processWebhook(Buffer.from(JSON.stringify(payload())))).rejects.toMatchObject({ code: 'P2002' });
 });
