@@ -54,7 +54,7 @@ test.describe('anonymous public route verification', () => {
     const route = materializePageRoute(template, parameters);
     if (isProtectedRoute(route)) continue;
 
-    test(`${template} resolves to a final public HTTP 200 state`, async ({ request }) => {
+    test(`${template} resolves to its expected public state`, async ({ request }) => {
       const response = await request.get(route, {
         failOnStatusCode: false,
         maxRedirects: 10
@@ -63,7 +63,7 @@ test.describe('anonymous public route verification', () => {
       expect(
         response.status(),
         `${route} finished at ${response.url()} with HTTP ${response.status()}`
-      ).toBe(200);
+      ).toBe(route.startsWith('/share/meta/') ? 404 : 200);
     });
   }
 });

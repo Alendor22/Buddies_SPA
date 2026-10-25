@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { enabled } from '@/lib/meta/security';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -20,6 +21,7 @@ export default async function AccountPage() {
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <p className="text-sm font-medium text-slate-500">Buddies V2.2 Milestone 3.2 Account Menu</p>
       <h1 className="mt-2 text-3xl font-bold">Account</h1>
+      {enabled() && <Link href="/dashboard/account/meta">Meta connections and sharing</Link>}
       <p className="mt-2 text-slate-600">Manage the active Buddies session and account-bound navigation.</p>
 
       <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
