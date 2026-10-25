@@ -64,3 +64,7 @@ Known limits: Instagram share-sheet availability depends on the device; no perso
 - `tests/unit/meta/security.test.ts`
 
 Implementation commit: `44a064a750fa5c8c9d8f89a18178f59706e7ccc5`. A follow-up commit records validation and narrows connection feature gates / webhook duplicate acknowledgement.
+
+## First complete PR CI outcome
+
+Run `40185741669` on `4c3e9ae6b80c1a1a9a27986f0badc8bfb59accbe`: validation/build passed, **183 automated tests passed**, **13 PostgreSQL tests passed**, and the entire fresh migration history applied successfully. Chromium ran 28 journeys: 26 passed and 2 failed because the new shared-page tests assumed HTTP 404 for streamed `notFound()` documents (the disabled API correctly returned 404). The follow-up test correction checks the actual unavailable heading, absence of shared content, and noindex metadata instead. It preserves the strict API 404 assertion. Runtime authorization/feature flags are unchanged. Re-run all CI before release.

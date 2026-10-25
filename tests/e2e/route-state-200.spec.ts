@@ -54,7 +54,13 @@ test.describe('anonymous public route verification', () => {
     const route = materializePageRoute(template, parameters);
     if (isProtectedRoute(route)) continue;
 
-    test(`${template} resolves to its expected public state`, async ({ request }) => {
+    test(`${template} resolves to its expected public state`, async ({ request, page }) => {
+      if (route.startsWith('/share/meta/')) {
+        await page.goto(route);
+        await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+        await expect(page.getByText('Shared with permission.', { exact: false })).toHaveCount(0);
+        return;
+      }
       const response = await request.get(route, {
         failOnStatusCode: false,
         maxRedirects: 10
@@ -63,7 +69,7 @@ test.describe('anonymous public route verification', () => {
       expect(
         response.status(),
         `${route} finished at ${response.url()} with HTTP ${response.status()}`
-      ).toBe(route.startsWith('/share/meta/') ? 404 : 200);
+      ).toBe(200);
     });
   }
 });
