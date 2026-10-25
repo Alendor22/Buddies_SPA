@@ -79,7 +79,7 @@ describe('Phase 2 social repository', () => {
     await expect(isConversationMember('conversation-1', 'user-1')).resolves.toBe(true);
     await expect(listConversations('user-1')).resolves.toHaveLength(1);
     await expect(listMessages('conversation-1')).resolves.toHaveLength(1);
-    await expect(sendMessage('conversation-1', 'user-1', 'Hello')).resolves.toEqual(expect.any(String));
+    await expect(sendMessage('conversation-1', 'user-1', 'Hello', 'dog-1')).resolves.toEqual(expect.any(String));
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
   });
 
