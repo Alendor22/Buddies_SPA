@@ -98,11 +98,17 @@ export async function listConversations(userId: string) {
   `;
 }
 
+// The newest 200 messages, returned oldest-first for display. Ordering ASC before the
+// LIMIT returned the first 200 ever sent, so long threads stopped showing new messages.
 export async function listMessages(conversationId: string) {
   return prisma.$queryRaw<Array<{ id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; senderDogPhotoUrl: string | null; body: string; createdAt: Date }>>`
-    SELECT sm."id", sm."senderId", sm."senderDogId", d."name" AS "senderDogName", d."photoUrl" AS "senderDogPhotoUrl", sm."body", sm."createdAt"
-    FROM "SocialMessage" sm LEFT JOIN "Dog" d ON d."id" = sm."senderDogId"
-    WHERE sm."conversationId" = ${conversationId} AND sm."deletedAt" IS NULL ORDER BY sm."createdAt" ASC LIMIT 200
+    SELECT recent.* FROM (
+      SELECT sm."id", sm."senderId", sm."senderDogId", d."name" AS "senderDogName", d."photoUrl" AS "senderDogPhotoUrl", sm."body", sm."createdAt"
+      FROM "SocialMessage" sm LEFT JOIN "Dog" d ON d."id" = sm."senderDogId"
+      WHERE sm."conversationId" = ${conversationId} AND sm."deletedAt" IS NULL
+      ORDER BY sm."createdAt" DESC LIMIT 200
+    ) recent
+    ORDER BY recent."createdAt" ASC
   `;
 }
 

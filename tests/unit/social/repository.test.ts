@@ -14,6 +14,7 @@ import {
   createConversation,
   createEvent,
   createGroup,
+  getConversationPeers,
   getReputation,
   getSocialPrivacy,
   isConversationMember,
@@ -38,6 +39,10 @@ const privacy = {
   showCheckIns: true,
   showActivity: true
 };
+
+function sqlText(call: unknown[]) {
+  return (call[0] as readonly string[]).join('?');
+}
 
 describe('Phase 2 social repository', () => {
   beforeEach(() => {
@@ -71,6 +76,7 @@ describe('Phase 2 social repository', () => {
 
   it('creates and reads conversations and messages', async () => {
     prismaMock.$queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ ok: true }])
       .mockResolvedValueOnce([{ id: 'conversation-1', kind: 'DIRECT', title: null, updatedAt: new Date() }])
       .mockResolvedValueOnce([{ id: 'message-1', senderId: 'user-1', body: 'Hi', createdAt: new Date() }]);
@@ -81,6 +87,27 @@ describe('Phase 2 social repository', () => {
     await expect(listMessages('conversation-1')).resolves.toHaveLength(1);
     await expect(sendMessage('conversation-1', 'user-1', 'Hello', 'dog-1')).resolves.toEqual(expect.any(String));
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses an existing direct conversation instead of creating another', async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ id: 'conversation-1' }]);
+    await expect(createConversation('user-1', 'user-2')).resolves.toBe('conversation-1');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('lists conversation peers with their effective messaging preference', async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ userId: 'user-2', allowMessages: false }]);
+    await expect(getConversationPeers('conversation-1', 'user-1')).resolves.toEqual([{ userId: 'user-2', allowMessages: false }]);
+    const sql = sqlText(prismaMock.$queryRaw.mock.calls[0]);
+    expect(sql).toContain('COALESCE(p."allowMessages", true)');
+    expect(sql).toContain('m."userId" <> ?');
+  });
+
+  it('selects the newest 200 messages and returns them oldest-first', async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
+    await listMessages('conversation-1');
+    const sql = sqlText(prismaMock.$queryRaw.mock.calls[0]);
+    expect(sql).toMatch(/ORDER BY sm\."createdAt" DESC LIMIT 200\s*\) recent\s*ORDER BY recent\."createdAt" ASC/);
   });
 
   it('creates groups, feed items, and events', async () => {
