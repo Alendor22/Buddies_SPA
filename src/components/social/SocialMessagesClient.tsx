@@ -9,6 +9,16 @@ import { channels } from '@/lib/realtime';
 // thread reconciles from the database on this interval instead.
 const FALLBACK_POLL_MS = 30000;
 
+// The token capability lists conversation channels as of issue time. Fetch a fresh token
+// so channels for conversations created since then become subscribable.
+function reauthorizeRealtime() {
+  try {
+    return getRealtimeClient().auth.authorize().then(() => true, () => false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
 type Dog = { id: string; name: string; ownerId: string; photoUrl?: string | null; breed?: string | null };
 type Conversation = { id: string; peerId: string | null; peerName: string | null; lastBody: string | null; lastMessageAt: string | null };
 type Message = { id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; body: string; createdAt: string };
@@ -42,13 +52,18 @@ export default function SocialMessagesClient({ userId, dogs }: { userId: string;
 
     let client: Ably.Realtime | null = null;
     let channel: Ably.RealtimeChannel | null = null;
+    let disposed = false;
     try {
       const realtime = getRealtimeClient();
       const target = realtime.channels.get(channels.conversation(activeId));
       client = realtime;
       channel = target;
-      void target.subscribe('message.created', reconcile).catch(() => {
-        // Not attached; the polling fallback below keeps the thread current.
+      void target.subscribe('message.created', reconcile).catch(async () => {
+        // Most likely a conversation newer than the current token: refresh once and retry.
+        if (disposed || !(await reauthorizeRealtime()) || disposed) return;
+        await target.subscribe('message.created', reconcile).catch(() => {
+          // Still not attached; the polling fallback below keeps the thread current.
+        });
       });
       realtime.connection.on('connected', reconcile);
     } catch {
@@ -64,6 +79,7 @@ export default function SocialMessagesClient({ userId, dogs }: { userId: string;
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      disposed = true;
       window.clearInterval(poll);
       channel?.unsubscribe('message.created', reconcile);
       client?.connection.off('connected', reconcile);
@@ -85,6 +101,8 @@ export default function SocialMessagesClient({ userId, dogs }: { userId: string;
     const response = await fetch('/api/social/conversations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ memberId }) });
     const data = await response.json();
     if (!response.ok) return setError(data.error ?? 'Unable to start conversation.');
+    // A new conversation's channel is not in the current token's capability yet.
+    void reauthorizeRealtime();
     setActiveId(data.conversationId);
     setQuery(''); setResults([]);
     await refreshConversations();
