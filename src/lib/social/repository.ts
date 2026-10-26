@@ -71,6 +71,16 @@ export async function isConversationMember(conversationId: string, userId: strin
   return Boolean(rows[0]?.ok);
 }
 
+// The other members of a conversation with their effective messaging preference.
+// A missing SocialPrivacy row means the defaults apply, and allowMessages defaults to true.
+export async function getConversationPeers(conversationId: string, userId: string) {
+  return prisma.$queryRaw<Array<{ userId: string; allowMessages: boolean }>>`
+    SELECT m."userId", COALESCE(p."allowMessages", true) AS "allowMessages"
+    FROM "ConversationMember" m LEFT JOIN "SocialPrivacy" p ON p."userId" = m."userId"
+    WHERE m."conversationId" = ${conversationId} AND m."userId" <> ${userId}
+  `;
+}
+
 export async function listConversations(userId: string) {
   return prisma.$queryRaw<Array<{ id: string; kind: string; title: string | null; updatedAt: Date; peerId: string | null; peerName: string | null; peerAvatarUrl: string | null; lastBody: string | null; lastMessageAt: Date | null }>>`
     SELECT c."id", c."kind", c."title", c."updatedAt",
