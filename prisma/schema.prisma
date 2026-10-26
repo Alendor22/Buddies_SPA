@@ -276,6 +276,7 @@ model Dog {
   mapReports               MapReport[]
   notifications            Notification[]
   checkIns                 CheckIn[]
+  socialMessages           SocialMessage[]
   activityFeedItems        ActivityFeedItem[]
   moderationReports        ModerationReport[]
   createdAt                DateTime                @default(now())
@@ -861,6 +862,10 @@ model SocialMessage {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  // Visible dog authorship (20260904_01_sender_dog_social_messages). senderId stays the
+  // authenticated security principal; senderDogId is display identity only.
+  senderDogId    String?
+  senderDog      Dog?         @relation(fields: [senderDogId], references: [id], onDelete: SetNull)
   body           String
   editedAt       DateTime?
   deletedAt      DateTime?
@@ -868,6 +873,7 @@ model SocialMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@index([senderDogId, createdAt])
 }
 
 model SocialGroup {
