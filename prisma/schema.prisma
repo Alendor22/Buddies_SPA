@@ -276,8 +276,8 @@ model Dog {
   mapReports               MapReport[]
   notifications            Notification[]
   checkIns                 CheckIn[]
-  socialMessages           SocialMessage[]
   activityFeedItems        ActivityFeedItem[]
+  socialMessages           SocialMessage[]         @relation("SocialMessageSenderDog")
   moderationReports        ModerationReport[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
@@ -865,7 +865,7 @@ model SocialMessage {
   // Visible dog authorship (20260904_01_sender_dog_social_messages). senderId stays the
   // authenticated security principal; senderDogId is display identity only.
   senderDogId    String?
-  senderDog      Dog?         @relation(fields: [senderDogId], references: [id], onDelete: SetNull)
+  senderDog      Dog?         @relation("SocialMessageSenderDog", fields: [senderDogId], references: [id], onDelete: SetNull)
   body           String
   editedAt       DateTime?
   deletedAt      DateTime?

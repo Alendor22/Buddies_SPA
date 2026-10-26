@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 const migrationPath = `${root}/prisma/migrations/20260831_01_phase2_social_foundation/migration.sql`;
 const migration = readFileSync(migrationPath, 'utf8');
+const senderDogMigrationPath = `${root}/prisma/migrations/20260904_01_sender_dog_social_messages/migration.sql`;
+const senderDogMigration = readFileSync(senderDogMigrationPath, 'utf8');
+const prismaSchema = readFileSync(`${root}/prisma/schema.prisma`, 'utf8');
 
 const socialRoutes = [
   'src/app/api/social/discovery/route.ts',
@@ -69,5 +72,15 @@ describe('Phase 2 social deployment contracts', () => {
     expect(discovery).toContain('"discoverable" = true');
     expect(conversations).toContain('allowMessages');
     expect(conversations).toContain('blocked.includes(memberId)');
+  });
+
+  it('keeps dog-authored messages aligned across migration and Prisma schema', () => {
+    expect(senderDogMigration).toContain('ADD COLUMN "senderDogId" TEXT');
+    expect(senderDogMigration).toContain('ON DELETE SET NULL');
+    expect(senderDogMigration).toContain('"SocialMessage_senderDogId_createdAt_idx"');
+    expect(prismaSchema).toContain('socialMessages           SocialMessage[]         @relation("SocialMessageSenderDog")');
+    expect(prismaSchema).toContain('senderDogId    String?');
+    expect(prismaSchema).toContain('@relation("SocialMessageSenderDog", fields: [senderDogId], references: [id], onDelete: SetNull)');
+    expect(prismaSchema).toContain('@@index([senderDogId, createdAt])');
   });
 });
