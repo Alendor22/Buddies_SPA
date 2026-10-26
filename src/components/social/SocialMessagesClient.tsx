@@ -1,8 +1,13 @@
 'use client';
 
+import type * as Ably from 'ably';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { getRealtimeClient } from '@/lib/realtime';
 import { channels } from '@/lib/realtime';
+
+// Realtime is optional (Ably may be unconfigured). While it is not live, the active
+// thread reconciles from the database on this interval instead.
+const FALLBACK_POLL_MS = 30000;
 
 type Dog = { id: string; name: string; ownerId: string; photoUrl?: string | null; breed?: string | null };
 type Conversation = { id: string; peerId: string | null; peerName: string | null; lastBody: string | null; lastMessageAt: string | null };
@@ -33,17 +38,35 @@ export default function SocialMessagesClient({ userId, dogs }: { userId: string;
 
   useEffect(() => {
     if (!activeId) return;
-    const client = getRealtimeClient();
-    const channel = client.channels.get(channels.conversation(activeId));
     const reconcile = () => { void refreshMessages(activeId); void refreshConversations(); };
-    void channel.subscribe('message.created', reconcile);
-    const onConnection = () => reconcile();
-    client.connection.on('connected', onConnection);
+
+    let client: Ably.Realtime | null = null;
+    let channel: Ably.RealtimeChannel | null = null;
+    try {
+      const realtime = getRealtimeClient();
+      const target = realtime.channels.get(channels.conversation(activeId));
+      client = realtime;
+      channel = target;
+      void target.subscribe('message.created', reconcile).catch(() => {
+        // Not attached; the polling fallback below keeps the thread current.
+      });
+      realtime.connection.on('connected', reconcile);
+    } catch {
+      client = null;
+      channel = null;
+    }
+
+    const live = () => client?.connection.state === 'connected' && channel?.state === 'attached';
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && !live()) reconcile();
+    }, FALLBACK_POLL_MS);
     const onVisibility = () => { if (document.visibilityState === 'visible') reconcile(); };
     document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
-      channel.unsubscribe('message.created', reconcile);
-      client.connection.off('connected', onConnection);
+      window.clearInterval(poll);
+      channel?.unsubscribe('message.created', reconcile);
+      client?.connection.off('connected', reconcile);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [activeId, refreshConversations, refreshMessages]);
