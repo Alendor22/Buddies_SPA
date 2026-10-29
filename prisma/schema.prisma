@@ -278,6 +278,7 @@ model Dog {
   checkIns                 CheckIn[]
   activityFeedItems        ActivityFeedItem[]
   socialMessages           SocialMessage[]         @relation("SocialMessageSenderDog")
+  receivedSocialMessages   SocialMessage[]         @relation("SocialMessageRecipientDog")
   moderationReports        ModerationReport[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
@@ -866,6 +867,8 @@ model SocialMessage {
   // authenticated security principal; senderDogId is display identity only.
   senderDogId    String?
   senderDog      Dog?         @relation("SocialMessageSenderDog", fields: [senderDogId], references: [id], onDelete: SetNull)
+  recipientDogId String?
+  recipientDog   Dog?         @relation("SocialMessageRecipientDog", fields: [recipientDogId], references: [id], onDelete: SetNull)
   body           String
   editedAt       DateTime?
   deletedAt      DateTime?
@@ -874,6 +877,7 @@ model SocialMessage {
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
   @@index([senderDogId, createdAt])
+  @@index([recipientDogId, createdAt])
 }
 
 model SocialGroup {
