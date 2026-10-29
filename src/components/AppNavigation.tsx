@@ -39,7 +39,7 @@ function titleForPath(pathname: string) {
 function fallbackPath(pathname: string) {
   if (pathname.startsWith('/dogs/new') || pathname.startsWith('/dogs/edit') || pathname.startsWith('/dogs/')) return '/dogs';
   if (pathname.startsWith('/dashboard/check-ins')) return '/dashboard/buddies';
-  if (pathname.startsWith('/dashboard/messages')) return '/dashboard/walks';
+  if (pathname.startsWith('/dashboard/messages')) return '/dashboard';
   if (pathname.includes('/dashboard/walks/') && pathname.endsWith('/messages')) return '/dashboard/messages';
   if (pathname.startsWith('/dashboard/walks')) return '/dashboard/buddies';
   if (pathname.startsWith('/dashboard/lost')) return '/dashboard/notifications';
@@ -101,6 +101,7 @@ export default function AppNavigation({ signedIn, notificationCount }: AppNaviga
             </button>
             <div className="hidden truncate text-xs text-slate-500 sm:block">{pathname}{q ? `?q=${q}` : ''}</div>
           </div>
+          {resolvedSignedIn ? <Link href="/dashboard/messages" aria-label="Messages" className="shrink-0 rounded-full border px-3 py-2 text-sm font-medium">Messages</Link> : null}
           <AccountActions fallbackSignedIn={resolvedSignedIn} notificationCount={notificationCount} />
         </nav>
 
