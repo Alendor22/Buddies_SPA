@@ -23,11 +23,11 @@ type Dog = { id: string; name: string; ownerId: string; photoUrl?: string | null
 type Conversation = { id: string; peerId: string | null; peerName: string | null; lastBody: string | null; lastMessageAt: string | null };
 type Message = { id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; body: string; createdAt: string };
 
-export default function SocialMessagesClient({ userId, dogs }: { userId: string; dogs: Dog[] }) {
+export default function SocialMessagesClient({ userId, dogs, initialSearch = '' }: { userId: string; dogs: Dog[]; initialSearch?: string }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialSearch);
   const [results, setResults] = useState<Dog[]>([]);
   const [senderDogId, setSenderDogId] = useState(dogs[0]?.id ?? '');
   const [body, setBody] = useState('');
