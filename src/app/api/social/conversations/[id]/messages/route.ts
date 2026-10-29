@@ -13,6 +13,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const { id } = await context.params;
   if (!(await isConversationMember(id, user.id))) return NextResponse.json({ error: 'Thread not found.' }, { status: 404 });
   const peers = await getConversationPeers(id, user.id);
+  if (peers.length !== 1) return NextResponse.json({ error: "Direct conversation not found." }, { status: 404 });
   const peerDogs = peers.length ? await prisma.dog.findMany({ where: { ownerId: peers[0].userId }, select: { id: true, name: true, ownerId: true, breed: true, photoUrl: true }, orderBy: { name: "asc" } }) : [];
   return NextResponse.json({ messages: await listMessages(id), peerDogs });
 }
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   // Blocks and messaging preferences can change after a thread exists, so they are
   // enforced on every send rather than only when the conversation is created.
   const [blocked, peers] = await Promise.all([listBlockedUserIds(user.id), getConversationPeers(id, user.id)]);
+  if (peers.length !== 1) return NextResponse.json({ error: 'Direct conversation not found.' }, { status: 404 });
   if (peers.some((peer) => blocked.includes(peer.userId))) return NextResponse.json({ error: 'Conversation is not available.' }, { status: 403 });
   if (peers.some((peer) => !peer.allowMessages)) return NextResponse.json({ error: 'This member is not accepting messages.' }, { status: 403 });
 
