@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { assertEnabled, boundedBody, MetaError, origin } from '@/lib/meta/security';
+import { assertEnabled, boundedBody, enabled, MetaError, origin } from '@/lib/meta/security';
 import { beginConnection, finishConnection, ownedConnection, purpose, sendMessage, throttle } from '@/lib/meta/service';
 import { createShare } from '@/lib/meta/sharing';
 
@@ -35,9 +35,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return response;
     }
     if (action !== 'connections') return json({ error: 'Not found.' }, 404);
-    const connections = await prisma.metaConnection.findMany({ where: { ownerId: user.id }, select: { id: true, platform: true, label: true, enabled: true, expiresAt: true, contacts: { select: { id: true, externalId: true, lastInboundAt: true, optedInAt: true }, take: 100, orderBy: { lastInboundAt: 'desc' } } } });
-    const shares = await prisma.metaShare.findMany({ where: { ownerId: user.id, expiresAt: { gt: new Date() } }, select: { id: true, title: true, expiresAt: true }, take: 100 });
-    return json({ connections, shares });
+    const includeConnections = enabled('CONNECTIONS') || enabled('MESSAGING');
+    const includeContacts = enabled('MESSAGING');
+    const connections = includeConnections ? await prisma.metaConnection.findMany({
+      where: { ownerId: user.id },
+      select: {
+        id: true, platform: true, label: true, enabled: true, expiresAt: true,
+        ...(includeContacts ? { contacts: {
+          select: { id: true, externalId: true, lastInboundAt: true, optedInAt: true },
+          take: 100, orderBy: { lastInboundAt: 'desc' as const }
+        } } : {})
+      }
+    }) : [];
+    const shares = enabled('SHARING') ? await prisma.metaShare.findMany({
+      where: { ownerId: user.id, expiresAt: { gt: new Date() } },
+      select: { id: true, title: true, expiresAt: true }, take: 100
+    }) : [];
+    return json({
+      connections: connections.map(connection => ({
+        ...connection,
+        contacts: 'contacts' in connection ? connection.contacts : []
+      })),
+      shares
+    });
   } catch (error) { return failure(error); }
 }
 export async function POST(request: NextRequest, { params }: { params: Promise<{ action: string }> }) {
