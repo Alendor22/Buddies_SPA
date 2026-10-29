@@ -101,10 +101,10 @@ export async function listConversations(userId: string) {
 // The newest 200 messages, returned oldest-first for display. Ordering ASC before the
 // LIMIT returned the first 200 ever sent, so long threads stopped showing new messages.
 export async function listMessages(conversationId: string) {
-  return prisma.$queryRaw<Array<{ id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; senderDogPhotoUrl: string | null; body: string; createdAt: Date }>>`
+  return prisma.$queryRaw<Array<{ id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; senderDogPhotoUrl: string | null; recipientDogId: string | null; recipientDogName: string | null; body: string; createdAt: Date }>>`
     SELECT recent.* FROM (
-      SELECT sm."id", sm."senderId", sm."senderDogId", d."name" AS "senderDogName", d."photoUrl" AS "senderDogPhotoUrl", sm."body", sm."createdAt"
-      FROM "SocialMessage" sm LEFT JOIN "Dog" d ON d."id" = sm."senderDogId"
+      SELECT sm."id", sm."senderId", sm."senderDogId", d."name" AS "senderDogName", d."photoUrl" AS "senderDogPhotoUrl", sm."recipientDogId", rd."name" AS "recipientDogName", sm."body", sm."createdAt"
+      FROM "SocialMessage" sm LEFT JOIN "Dog" d ON d."id" = sm."senderDogId" LEFT JOIN "Dog" rd ON rd."id" = sm."recipientDogId"
       WHERE sm."conversationId" = ${conversationId} AND sm."deletedAt" IS NULL
       ORDER BY sm."createdAt" DESC LIMIT 200
     ) recent
@@ -112,10 +112,10 @@ export async function listMessages(conversationId: string) {
   `;
 }
 
-export async function sendMessage(conversationId: string, senderId: string, body: string, senderDogId: string) {
+export async function sendMessage(conversationId: string, senderId: string, body: string, senderDogId: string, recipientDogId: string) {
   const id = randomUUID();
   await prisma.$transaction([
-    prisma.$executeRaw`INSERT INTO "SocialMessage" ("id", "conversationId", "senderId", "senderDogId", "body") VALUES (${id}, ${conversationId}, ${senderId}, ${senderDogId}, ${body})`,
+    prisma.$executeRaw`INSERT INTO "SocialMessage" ("id", "conversationId", "senderId", "senderDogId", "recipientDogId", "body") VALUES (${id}, ${conversationId}, ${senderId}, ${senderDogId}, ${recipientDogId}, ${body})`,
     prisma.$executeRaw`UPDATE "Conversation" SET "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${conversationId}`
   ]);
   return id;
