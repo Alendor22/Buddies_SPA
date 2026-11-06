@@ -37,7 +37,7 @@ Known limits: Instagram share-sheet availability depends on the device; no perso
 - `docs/META_VALIDATION.md`
 - `prisma/migrations/20261025103000_meta_social_integration/migration.sql`
 - `prisma/schema.prisma`
-- `scripts/meta-cleanup.mjs`
+- `scripts/meta-cleanup.ts`
 - `src/app/api/meta/[action]/route.ts`
 - `src/app/api/meta/deauthorize/route.ts`
 - `src/app/api/meta/webhook/route.ts`
