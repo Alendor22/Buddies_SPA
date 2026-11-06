@@ -64,6 +64,13 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshConversations();
+    };
+    const timer = window.setInterval(refreshWhenVisible, FALLBACK_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshConversations]);
+  useEffect(() => {
     if (!activeId) return;
     let cancelled = false;
     async function loadMessages() {
@@ -165,7 +172,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dogs or breeds" className="mt-3 w-full rounded-lg border px-3 py-2" />
       {results.length > 0 && <div className="mt-2 grid gap-2">{results.map((dog) => <button key={dog.id} onClick={() => void startConversation(dog)} className="rounded-lg border p-3 text-left"><strong>{dog.name}</strong><span className="block text-sm text-slate-500">{dog.breed ?? 'Dog profile'}</span></button>)}</div>}
       <h2 className="mt-6 font-semibold">Conversations</h2>
-      <div className="mt-2 grid gap-2">{conversations.map((conversation) => <button key={conversation.id} onClick={() => { setRecipientDogId(""); setActiveId(conversation.id); }} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.peerName ?? 'Buddy'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}</div>
+      <div className="mt-2 grid gap-2">{conversations.map((conversation) => <button key={conversation.id} onClick={() => setActiveId(conversation.id)} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.peerName ?? 'Buddy'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}</div>
     </aside>
     <section className="flex min-h-[520px] flex-col rounded-2xl border bg-white shadow-sm">
       <header className="border-b p-4"><h2 className="font-semibold">{active?.peerName ?? 'Select a conversation'}</h2>{active && peerDogs.length > 0 && <p className="mt-1 text-sm text-slate-500">Messaging {peerDogs.find((dog) => dog.id === recipientDogId)?.name ?? 'a dog'}</p>}</header>
