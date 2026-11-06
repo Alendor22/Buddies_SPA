@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DogRecognitionCamera from '@/components/scanner/DogRecognitionCamera';
 
@@ -32,5 +32,24 @@ describe('DogRecognitionCamera', () => {
     fireEvent.click(screen.getByRole('button', { name: /start camera/i }));
     expect(screen.getByText(/live camera is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/upload dog photo/i)).toBeInTheDocument();
+  });
+
+  it('releases the camera stream when video playback fails', async () => {
+    const stop = vi.fn();
+    const stream = { getTracks: () => [{ stop }] } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+      configurable: true,
+      value: vi.fn().mockRejectedValue(new DOMException('Playback denied', 'NotAllowedError')),
+    });
+
+    render(<DogRecognitionCamera />);
+    fireEvent.click(screen.getByRole('button', { name: /start camera/i }));
+
+    await waitFor(() => expect(screen.getByText(/camera access is blocked/i)).toBeInTheDocument());
+    expect(stop).toHaveBeenCalledOnce();
   });
 });

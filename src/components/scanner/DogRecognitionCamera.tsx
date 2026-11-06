@@ -139,7 +139,12 @@ export default function DogRecognitionCamera() {
       setStatus('scanning');
       beginLoop(generation);
     } catch (cause) {
-      if (generationRef.current === generation) setStatus(cameraErrorStatus(cause));
+      if (generationRef.current === generation) {
+        // A failed video.play() can happen after getUserMedia already opened the
+        // camera. Release that stream before showing the fallback state.
+        stopCamera();
+        setStatus(cameraErrorStatus(cause));
+      }
     }
   }, [beginLoop, stopCamera]);
 
