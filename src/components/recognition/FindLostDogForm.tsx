@@ -16,10 +16,15 @@ type Match = {
 export default function FindLostDogForm() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [consented, setConsented] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
   async function search() {
+    if (!consented) {
+      setMessage('Consent is required before sending the photo for one-time matching.');
+      return;
+    }
     if (!photo) {
       setMessage('Choose a clear photo of the found dog first.');
       return;
@@ -71,13 +76,13 @@ export default function FindLostDogForm() {
         />
       </label>
       <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
-        <input type="checkbox" required aria-label="Consent to one-time found-dog matching" />
+        <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.target.checked)} aria-label="Consent to one-time found-dog matching" />
         <span>I consent to sending this photo for one-time matching. Buddies does not save the found-dog photo.</span>
       </label>
       <button
         type="button"
         onClick={search}
-        disabled={busy || !photo}
+        disabled={busy || !photo || !consented}
         className="mt-5 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50"
       >
         {busy ? 'Searching…' : 'Search lost dogs'}
