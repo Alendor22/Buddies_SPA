@@ -14,7 +14,9 @@ function config() {
 async function callEmbedding(bytes: Uint8Array, mimeType: string) {
   const { endpoint, token } = config();
   const form = new FormData();
-  form.set('image', new Blob([bytes], { type: mimeType }), 'dog-image');
+  const body = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(body).set(bytes);
+  form.set('image', new Blob([body], { type: mimeType }), 'dog-image');
   const response = await fetch(`${endpoint}/embed`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
