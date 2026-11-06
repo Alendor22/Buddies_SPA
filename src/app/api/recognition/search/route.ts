@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { RecognitionEventOutcome } from '@/generated/prisma/client';
@@ -120,8 +120,17 @@ export async function POST(request: NextRequest) {
     const requestId = randomUUID();
     const best = candidates[0];
 
-    // Create the event before touching R2, so the photo is never uploaded without a DB
-    // row already in place to track and eventually expire it.
+    // Only retain a photo when there's someone to show it to. The storage key is
+    // deterministic from requestId, so it can be written to the event at creation time
+    // — before the upload is even attempted — rather than attached afterward. That way
+    // the cleanup cron always has a pointer to find and expire, with no window where a
+    // successful upload could exist with nothing in the DB tracking it.
+    const bucket = process.env.R2_BUCKET_NAME;
+    const willStorePhoto = candidates.length > 0 && Boolean(bucket);
+    const extension = EXTENSION_BY_MIME[image.type] ?? 'jpg';
+    const photoStorageKey = willStorePhoto ? `recognition/lost-dog-search/${requestId}.${extension}` : null;
+    const photoExpiresAt = willStorePhoto ? new Date(Date.now() + PHOTO_RETENTION_MS) : null;
+
     const event = await prisma.recognitionEvent.create({
       data: {
         requestId,
@@ -133,20 +142,13 @@ export async function POST(request: NextRequest) {
         candidateCount: candidates.length,
         latencyMs: Date.now() - startedAt,
         reporterUserId: user.id,
+        photoStorageKey,
+        photoExpiresAt,
         metadata: { comparison: 'mean-top-3-of-8-view-embeddings' }
       }
     });
 
-    // Only retain the photo when there's someone to show it to. It's deleted
-    // automatically by the cleanup cron once photoExpiresAt passes. If the upload
-    // succeeds but the DB update to record it fails, delete the object rather than
-    // leave it in R2 with nothing tracking it — the search result itself still
-    // succeeds either way, just without a photo to review.
-    const bucket = process.env.R2_BUCKET_NAME;
-    if (candidates.length > 0 && bucket) {
-      const extension = EXTENSION_BY_MIME[image.type] ?? 'jpg';
-      const photoStorageKey = `recognition/lost-dog-search/${requestId}.${extension}`;
-      const photoExpiresAt = new Date(Date.now() + PHOTO_RETENTION_MS);
+    if (willStorePhoto && bucket && photoStorageKey) {
       try {
         await r2.send(new PutObjectCommand({
           Bucket: bucket,
@@ -155,12 +157,15 @@ export async function POST(request: NextRequest) {
           ContentType: image.type,
           Metadata: { purpose: 'lost-dog-search', requestId, reporterUserId: user.id }
         }));
+      } catch {
+        // The pointer already recorded above would otherwise claim a photo exists that
+        // was never written. Clear it — a best-effort downgrade, not a safety-critical
+        // one: if this update itself fails, the cron's delete attempt on a key that was
+        // never created is a harmless no-op, not a leak.
         await prisma.recognitionEvent.update({
           where: { id: event.id },
-          data: { photoStorageKey, photoExpiresAt }
-        });
-      } catch {
-        await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: photoStorageKey })).catch(() => undefined);
+          data: { photoStorageKey: null, photoExpiresAt: null }
+        }).catch(() => undefined);
       }
     }
 

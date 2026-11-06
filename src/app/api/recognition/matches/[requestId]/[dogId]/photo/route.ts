@@ -23,8 +23,17 @@ export async function GET(_request: Request, context: { params: Promise<{ reques
 
   try {
     const photo = await getMatchPhoto({ requestId, dogId, userId: user.id });
-    const object = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: photo.storageKey }));
-    if (!object.Body) return NextResponse.json({ error: 'Photo is unavailable.' }, { status: 404 });
+    // The DB pointer and the R2 object are written in separate steps when a search is
+    // submitted; in the rare case both the upload and its failure cleanup fail, the
+    // pointer can outlive an object that was never actually written. Report that the
+    // same way as an expired photo rather than a server error.
+    let object;
+    try {
+      object = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: photo.storageKey }));
+    } catch {
+      return NextResponse.json({ error: 'This photo is unavailable.' }, { status: 404 });
+    }
+    if (!object.Body) return NextResponse.json({ error: 'This photo is unavailable.' }, { status: 404 });
     const bytes = await object.Body.transformToByteArray();
     return new NextResponse(Buffer.from(bytes), {
       headers: {
