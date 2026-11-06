@@ -53,6 +53,7 @@
       "id": "dog-recognition",
       "sourcePrefixes": [
         "src/app/api/recognition/",
+        "src/app/find-dog/",
         "src/lib/recognition/",
         "src/lib/doggy-recognition/",
         "src/components/scanner/DogRecognitionCamera.tsx"
@@ -159,6 +160,7 @@
     { "route": "src/app/api/recognition/enrollment/upload/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/activate/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/verify/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/search/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
