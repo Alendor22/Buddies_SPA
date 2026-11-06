@@ -9,6 +9,7 @@ type Match = {
   name: string;
   profileUrl: string;
   qrUrl: string;
+  matchUrl: string;
   score: number;
   ownerNotified: boolean;
 };
@@ -77,7 +78,11 @@ export default function FindLostDogForm() {
       </label>
       <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.target.checked)} aria-label="Consent to one-time found-dog matching" />
-        <span>I consent to sending this photo for one-time matching. Buddies does not save the found-dog photo.</span>
+        <span>
+          I consent to sending this photo for one-time matching. If it matches a lost dog, Buddies keeps the photo
+          for up to 7 days so the owner can review it, then deletes it automatically. If there&apos;s no match,
+          it&apos;s never stored.
+        </span>
       </label>
       <button
         type="button"
@@ -94,9 +99,10 @@ export default function FindLostDogForm() {
             <article key={match.dogId} className="rounded-xl border bg-white p-4">
               <h2 className="font-semibold text-slate-900">Possible match: {match.name}</h2>
               <p className="mt-1 text-sm text-slate-600">
-                Similarity {Math.round(match.score * 100)}%. Owner notified; identity still requires confirmation.
+                Similarity {Math.round(match.score * 100)}%. The owner has been notified; identity still requires confirmation.
               </p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                <Link href={match.matchUrl} className="rounded-lg bg-sky-700 px-3 py-2 font-medium text-white">Message the owner</Link>
                 <Link href={match.profileUrl} className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">Open profile</Link>
                 <Link href={match.qrUrl} className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-800">Open QR</Link>
               </div>

@@ -5,6 +5,8 @@
       "slug": "route-state-dog",
       "publicId": "route-state-dog-public",
       "id": "route-state-walk",
+      "requestId": "route-state-request",
+      "dogId": "route-state-dog-id",
       "sign-in": "continue",
       "sign-up": "continue"
     }
@@ -54,9 +56,11 @@
       "sourcePrefixes": [
         "src/app/api/recognition/",
         "src/app/find-dog/",
+        "src/app/dashboard/lost-dog-matches/",
         "src/lib/recognition/",
         "src/lib/doggy-recognition/",
-        "src/components/scanner/DogRecognitionCamera.tsx"
+        "src/components/scanner/DogRecognitionCamera.tsx",
+        "src/components/recognition/"
       ],
       "testPrefixes": [
         "tests/unit/doggy-recognition-camera.test.ts",
@@ -161,6 +165,9 @@
     { "route": "src/app/api/recognition/enrollment/activate/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/verify/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/search/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/matches/[requestId]/[dogId]/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/matches/[requestId]/[dogId]/photo/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/matches/[requestId]/[dogId]/messages/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
