@@ -1,4 +1,5 @@
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { r2 } from '@/lib/r2';
 import { getRecognitionAssetProcessor } from './processor';
@@ -76,14 +77,24 @@ export async function addRecognitionEnrollmentAsset(input: {
   }
   if (enrollment.status === 'REVOKED') throw new RecognitionStateError('Recognition enrollment is revoked');
 
-  return recognitionRepository.addAsset({
-    enrollmentId: enrollment.id,
-    storageKey: input.storageKey,
-    contentHash: input.contentHash,
-    mimeType: input.mimeType,
-    captureView: input.captureView,
-    capturedAt: input.capturedAt
-  });
+  try {
+    return await recognitionRepository.addAsset({
+      enrollmentId: enrollment.id,
+      storageKey: input.storageKey,
+      contentHash: input.contentHash,
+      mimeType: input.mimeType,
+      captureView: input.captureView,
+      capturedAt: input.capturedAt
+    });
+  } catch (error) {
+    // A retried upload for a view that already succeeded re-sends the identical file
+    // (same content hash). Treat that as idempotent rather than surfacing a raw 500.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existing = await recognitionRepository.findAssetByContentHash(enrollment.id, input.contentHash);
+      if (existing) return existing;
+    }
+    throw error;
+  }
 }
 
 export async function processRecognitionEnrollmentAsset(input: {
@@ -144,10 +155,12 @@ export async function revokeRecognitionEnrollment(dogId: string, ownerId: string
   const enrollment = await recognitionRepository.findEnrollmentByDogId(dogId);
   if (!enrollment || enrollment.ownerId !== ownerId) throw new RecognitionStateError('Recognition enrollment does not exist');
 
-  await recognitionRepository.revokeEnrollment(enrollment.id);
   const bucket = process.env.R2_BUCKET_NAME;
   if (!bucket) throw new RecognitionStateError('Recognition storage is unavailable for deletion');
 
+  // Purge reference photos before flipping the enrollment to REVOKED, so a failed
+  // deletion leaves the enrollment ACTIVE (and retryable) rather than claiming data
+  // was purged when it wasn't.
   await Promise.all(enrollment.assets.map(async (asset) => {
     await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: asset.storageKey }));
     await prisma.recognitionAsset.update({
@@ -155,5 +168,6 @@ export async function revokeRecognitionEnrollment(dogId: string, ownerId: string
       data: { status: 'DELETED', embeddingRef: null, qualityScore: null, rejectionCode: null }
     });
   }));
+  await recognitionRepository.revokeEnrollment(enrollment.id);
   return recognitionRepository.findEnrollmentByDogId(dogId);
 }

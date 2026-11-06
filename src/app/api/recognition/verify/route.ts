@@ -5,12 +5,15 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { isDogRecognitionEnrollmentEnabled } from '@/lib/recognition/featureFlag';
 import { cosineSimilarity, DOG_REID_MODEL_VERSION, embedVerificationImage } from '@/lib/recognition/embeddings';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const VERIFY_LIMIT = 20;
+const VERIFY_WINDOW_SECONDS = 600;
 
 function parseEmbedding(value: string | null): number[] | null {
   if (!value) return null;
@@ -28,6 +31,14 @@ export async function POST(request: NextRequest) {
   if (!isDogRecognitionEnrollmentEnabled()) return NextResponse.json({ error: 'Dog recognition enrollment is disabled.' }, { status: 404 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Sign in to verify a dog identity.' }, { status: 401 });
+
+  const limit = await rateLimit('recognition:verify', user.id, VERIFY_LIMIT, VERIFY_WINDOW_SECONDS);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many verification attempts. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
 
   const form = await request.formData().catch(() => null);
   const dogId = form?.get('dogId');

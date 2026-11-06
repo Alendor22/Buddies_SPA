@@ -65,7 +65,7 @@ export default async function NotificationsPage() {
           <p className="mt-2 text-slate-600">Every badge maps to a persistent alert, exact dog relationship, and specific UI destination.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2 font-medium">Messages</Link>
+          <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2 font-medium">Walk messages</Link>
           <Link href={UI_ROUTES.dashboard} className="rounded-lg border px-4 py-2">Dashboard</Link>
           <Link href={UI_ROUTES.lostReport} className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white">Lost dog</Link>
         </div>
@@ -80,7 +80,7 @@ export default async function NotificationsPage() {
       </section>
 
       <section className="mt-6 flex flex-wrap gap-2">
-        <Link href={UI_ROUTES.messages} className="rounded-full border px-4 py-2 text-sm font-medium">Messages</Link>
+        <Link href={UI_ROUTES.walks} className="rounded-full border px-4 py-2 text-sm font-medium">Walk messages</Link>
         <Link href={UI_ROUTES.buddyRequests} className="rounded-full border px-4 py-2 text-sm font-medium">Dog requests</Link>
         <Link href={UI_ROUTES.walkInvites} className="rounded-full border px-4 py-2 text-sm font-medium">Walk invitations</Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-full border px-4 py-2 text-sm font-medium">Lost dog center</Link>

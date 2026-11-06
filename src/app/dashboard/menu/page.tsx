@@ -38,7 +38,7 @@ export default async function MenuPage() {
         </div>
         <div className="mt-4 grid gap-2 text-sm">
           <Link href={UI_ROUTES.buddyRequests} className="rounded-lg border px-4 py-3">Buddy requests: {buddyRequests}</Link>
-          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-3">Messages: {messages}</Link>
+          <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-3">Walk messages: {messages}</Link>
           <Link href={UI_ROUTES.alerts} className="rounded-lg border px-4 py-3">Dog alerts: {dogAlerts}</Link>
           <Link href={UI_ROUTES.walkInvites} className="rounded-lg border px-4 py-3">Walk invites: {walkInvites}</Link>
           <Link href={UI_ROUTES.alerts} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open notification center</Link>
@@ -52,7 +52,7 @@ export default async function MenuPage() {
         <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-4 font-medium">Buddies social graph</Link>
         <Link href={UI_ROUTES.checkIns} className="rounded-lg border px-4 py-4 font-medium">Nearby dog check-ins</Link>
         <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-4 font-medium">Walks</Link>
-        <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-4 font-medium">Messages</Link>
+        <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-4 font-medium">Direct messages</Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-lg border px-4 py-4 font-medium">Lost dog mode</Link>
         <Link href={UI_ROUTES.records} className="rounded-lg border px-4 py-4 font-medium">Vet records</Link>
         <Link href={UI_ROUTES.alerts} className="rounded-lg border px-4 py-4 font-medium">Notifications</Link>

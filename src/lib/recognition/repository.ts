@@ -61,6 +61,12 @@ export const recognitionRepository = {
     return prisma.recognitionAsset.create({ data: input });
   },
 
+  findAssetByContentHash(enrollmentId: string, contentHash: string) {
+    return prisma.recognitionAsset.findUnique({
+      where: { enrollmentId_contentHash: { enrollmentId, contentHash } }
+    });
+  },
+
   findAsset(assetId: string) {
     return prisma.recognitionAsset.findUnique({
       where: { id: assetId },
