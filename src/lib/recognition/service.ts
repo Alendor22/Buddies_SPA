@@ -52,6 +52,9 @@ export async function beginRecognitionEnrollment(input: {
 
   if (existing.ownerId !== input.ownerId) throw new RecognitionAuthorizationError();
   if (existing.status === 'ACTIVE' || existing.status === 'PENDING') return existing;
+  if (existing.status === 'PAUSED') {
+    throw new RecognitionStateError('Recognition enrollment revocation is still in progress; try again shortly');
+  }
 
   return recognitionRepository.reactivateEnrollment(
     existing.id,
@@ -75,7 +78,9 @@ export async function addRecognitionEnrollmentAsset(input: {
   if (!enrollment || enrollment.ownerId !== input.ownerId) {
     throw new RecognitionStateError('Begin recognition enrollment before adding assets');
   }
-  if (enrollment.status === 'REVOKED') throw new RecognitionStateError('Recognition enrollment is revoked');
+  if (enrollment.status === 'REVOKED' || enrollment.status === 'PAUSED') {
+    throw new RecognitionStateError('Recognition enrollment is revoked');
+  }
 
   try {
     return await recognitionRepository.addAsset({
@@ -91,7 +96,17 @@ export async function addRecognitionEnrollmentAsset(input: {
     // (same content hash). Treat that as idempotent rather than surfacing a raw 500.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const existing = await recognitionRepository.findAssetByContentHash(enrollment.id, input.contentHash);
-      if (existing) return existing;
+      if (existing) {
+        // The caller already uploaded input.storageKey to R2 before this call. Since
+        // we're keeping the earlier-tracked asset instead, delete the just-uploaded
+        // duplicate now rather than leaving an untracked copy that revocation's purge
+        // would never find.
+        const bucket = process.env.R2_BUCKET_NAME;
+        if (bucket && input.storageKey !== existing.storageKey) {
+          await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: input.storageKey })).catch(() => undefined);
+        }
+        return existing;
+      }
     }
     throw error;
   }
@@ -103,7 +118,9 @@ export async function processRecognitionEnrollmentAsset(input: {
 }) {
   const asset = await recognitionRepository.findAsset(input.assetId);
   if (!asset || asset.enrollment.ownerId !== input.ownerId) throw new RecognitionAuthorizationError();
-  if (asset.enrollment.status === 'REVOKED') throw new RecognitionStateError('Recognition enrollment is revoked');
+  if (asset.enrollment.status === 'REVOKED' || asset.enrollment.status === 'PAUSED') {
+    throw new RecognitionStateError('Recognition enrollment is revoked');
+  }
   if (asset.status === 'READY') return asset;
 
   await recognitionRepository.markAssetProcessing(asset.id);
@@ -135,7 +152,7 @@ export async function activateRecognitionEnrollment(input: {
   await requireOwnedDog(input.dogId, input.ownerId);
   const enrollment = await recognitionRepository.findEnrollmentByDogId(input.dogId);
   if (!enrollment || enrollment.ownerId !== input.ownerId) throw new RecognitionStateError('Recognition enrollment does not exist');
-  if (enrollment.status === 'REVOKED') {
+  if (enrollment.status === 'REVOKED' || enrollment.status === 'PAUSED') {
     throw new RecognitionStateError('Recognition enrollment is revoked; accept consent again before activation');
   }
 
@@ -154,14 +171,31 @@ export async function revokeRecognitionEnrollment(dogId: string, ownerId: string
   await requireOwnedDog(dogId, ownerId);
   const enrollment = await recognitionRepository.findEnrollmentByDogId(dogId);
   if (!enrollment || enrollment.ownerId !== ownerId) throw new RecognitionStateError('Recognition enrollment does not exist');
+  if (enrollment.status === 'REVOKED') return enrollment;
 
   const bucket = process.env.R2_BUCKET_NAME;
   if (!bucket) throw new RecognitionStateError('Recognition storage is unavailable for deletion');
 
+  // Gate new asset mutations before touching R2: without this, a request racing the
+  // purge below could add or process an asset that misses this snapshot entirely,
+  // leaving it un-purged under a REVOKED enrollment. PAUSED->PAUSED is a no-op match,
+  // so retrying after a partial purge failure resumes rather than re-locking.
+  const locked = await recognitionRepository.beginRevocation(enrollment.id);
+  if (locked.count === 0) {
+    const current = await recognitionRepository.findEnrollmentByDogId(dogId);
+    if (current?.status === 'REVOKED') return current;
+    throw new RecognitionStateError('Recognition enrollment could not be locked for revocation');
+  }
+
+  // Re-fetch assets now that mutations are gated, so the purge covers anything added
+  // in the window between the initial read above and the lock taking effect.
+  const gated = await recognitionRepository.findEnrollmentByDogId(dogId);
+  const assets = gated?.assets ?? [];
+
   // Purge reference photos before flipping the enrollment to REVOKED, so a failed
-  // deletion leaves the enrollment ACTIVE (and retryable) rather than claiming data
-  // was purged when it wasn't.
-  await Promise.all(enrollment.assets.map(async (asset) => {
+  // deletion leaves the enrollment locked (PAUSED) and retryable rather than claiming
+  // data was purged when it wasn't.
+  await Promise.all(assets.map(async (asset) => {
     await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: asset.storageKey }));
     await prisma.recognitionAsset.update({
       where: { id: asset.id },

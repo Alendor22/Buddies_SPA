@@ -102,6 +102,17 @@ export const recognitionRepository = {
     });
   },
 
+  // Atomically gate the enrollment against new asset mutations before a revocation
+  // purge starts. PAUSED here means "revocation in progress", not a user-facing pause
+  // feature. Re-running this against an enrollment already PAUSED is a no-op match,
+  // so a retried revoke after a partial purge failure can resume.
+  beginRevocation(id: string) {
+    return prisma.recognitionEnrollment.updateMany({
+      where: { id, status: { in: ['ACTIVE', 'PENDING', 'PAUSED'] } },
+      data: { status: 'PAUSED' }
+    });
+  },
+
   revokeEnrollment(id: string) {
     return prisma.recognitionEnrollment.update({
       where: { id },

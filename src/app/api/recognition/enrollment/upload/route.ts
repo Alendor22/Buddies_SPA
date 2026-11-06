@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'Valid dogId, mimeType, and contentLength are required.' }, { status: 400 });
 
   const enrollment = await recognitionRepository.findEnrollmentByDogId(parsed.data.dogId);
-  if (!enrollment || enrollment.ownerId !== user.id || enrollment.status === 'REVOKED') {
+  if (!enrollment || enrollment.ownerId !== user.id || enrollment.status === 'REVOKED' || enrollment.status === 'PAUSED') {
     return NextResponse.json({ error: 'Active recognition enrollment not found.' }, { status: 404 });
   }
 
