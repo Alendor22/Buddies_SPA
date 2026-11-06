@@ -24,11 +24,11 @@ export async function GET(
         { slug: decodedId.toLowerCase() }
       ]
     },
-    select: { slug: true }
+    select: { slug: true, publicId: true, id: true }
   });
 
   const origin = new URL(request.url).origin;
-  const targetUrl = dog ? `${origin}/dogs/${dog.slug}` : `${origin}/dogs/${encodeURIComponent(decodedId.toLowerCase())}`;
+  const targetUrl = dog ? `${origin}/qr-dog/${encodeURIComponent(dog.publicId ?? dog.id)}` : `${origin}/dogs/${encodeURIComponent(decodedId.toLowerCase())}`;
   const format = new URL(request.url).searchParams.get('format')?.toLowerCase();
 
   const options = {

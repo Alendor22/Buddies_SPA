@@ -70,9 +70,10 @@ RecognitionEnrollment (explicit consent)
 6. Bounded R2 enrollment upload signing + asset registration — **done**
 7. Asset processor/embedding adapter boundary — **done**
 8. Unit coverage for feature flag and upload validation — **done**
-9. Camera integration in `/scanner`, retaining QR fallback — **next**
-10. ARKit/ARCore SLAM/XR bridge consuming normalized recognition output — pending
-11. Test cohort, telemetry, and production promotion — pending
+9. Eight-view owner enrollment (front L/C/R, rear L/C/R, left/right head-on) — **planned**
+10. QR-targeted 1:1 verification against enrolled embeddings — **planned**
+11. ARKit/ARCore SLAM/XR bridge consuming normalized recognition output — pending
+12. Test cohort, telemetry, and production promotion — pending
 
 ## Current API surface
 
@@ -85,4 +86,4 @@ RecognitionEnrollment (explicit consent)
 
 ## Rollout constraint
 
-Do not connect scanner camera frames or XR tracking to a placeholder recognition provider. The feature flag defaults off. Camera/XR integration should begin only after CI for the persistence/API slice is green and a concrete recognition/embedding adapter is selected for the test cohort.
+Do not connect scanner camera frames or XR tracking to an unconfigured recognition service. The feature flag defaults off. The planned whole-body integration uses an eight-view enrollment, stores provider-generated embeddings in the existing recognition assets, and uses a QR public ID to select the dog for 1:1 verification. Match thresholds must be calibrated against labeled same-dog and different-dog samples before results are treated as reliable.

@@ -1,3 +1,5 @@
+import { embedEnrollmentImage } from './embeddings';
+
 export type RecognitionAssetProcessingInput = {
   assetId: string;
   enrollmentId: string;
@@ -16,14 +18,14 @@ export interface RecognitionAssetProcessor {
   process(input: RecognitionAssetProcessingInput): Promise<RecognitionAssetProcessingResult>;
 }
 
-class UnconfiguredRecognitionAssetProcessor implements RecognitionAssetProcessor {
+class RemoteDogRecognitionAssetProcessor implements RecognitionAssetProcessor {
   async process(input: RecognitionAssetProcessingInput): Promise<RecognitionAssetProcessingResult> {
-    void input;
-    throw new Error('Recognition asset processor is not configured');
+    const result = await embedEnrollmentImage(input.storageKey, input.mimeType);
+    return { modelVersion: result.modelVersion, embeddingRef: JSON.stringify(result.embedding), qualityScore: 1 };
   }
 }
 
-let processor: RecognitionAssetProcessor = new UnconfiguredRecognitionAssetProcessor();
+let processor: RecognitionAssetProcessor = new RemoteDogRecognitionAssetProcessor();
 
 export function configureRecognitionAssetProcessor(next: RecognitionAssetProcessor) {
   processor = next;

@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import DogBuddiesPanel from '@/components/DogBuddiesPanel';
 import DogWalkInvitations from '@/components/DogWalkInvitations';
 import LostDogMap from '@/components/LostDogMap';
+import DogRecognitionControls from '@/components/recognition/DogRecognitionControls';
+import { DOG_REID_MODEL_VERSION } from '@/lib/recognition/embeddings';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -46,6 +48,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
       lostNotes: true,
       latitude: true,
       longitude: true,
+      recognitionEnrollment: { select: { status: true, modelVersion: true } },
       spayedNeutered: true,
       friendlyDogs: true,
       friendlyCats: true,
@@ -88,6 +91,8 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
             </div>
             <Link href={`/dogs/${dog.slug}/qr`} className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Show QR Code</Link>
           </div>
+
+          <DogRecognitionControls dogId={dog.id} dogName={dog.name} isOwner={isOwner} enrolled={dog.recognitionEnrollment?.status === 'ACTIVE' && dog.recognitionEnrollment.modelVersion === DOG_REID_MODEL_VERSION} />
 
           {!isSafe ? (
             <section id="lost-dog" className="mt-6 scroll-mt-24 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">

@@ -17,7 +17,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
 
   if (!dog) notFound();
 
-  const publicPath = `/dogs/${dog.slug}`;
+  const publicPath = `/qr-dog/${encodeURIComponent(dog.publicId ?? dog.id)}`;
   const publicUrl = `https://buddies.vercel.app${publicPath}`;
   const isOwner = Boolean(user && dog.ownerId === user.id);
 

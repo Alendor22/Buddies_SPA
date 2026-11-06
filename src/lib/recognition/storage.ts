@@ -23,6 +23,7 @@ export async function createRecognitionEnrollmentUpload(input: {
   ownerId: string;
   mimeType: string;
   contentLength: number;
+  captureView: import('@/generated/prisma/client').RecognitionCaptureView;
 }) {
   validateRecognitionUpload(input);
   const bucket = process.env.R2_BUCKET_NAME;
@@ -37,6 +38,7 @@ export async function createRecognitionEnrollmentUpload(input: {
     ContentLength: input.contentLength,
     Metadata: {
       purpose: 'dog-recognition-enrollment',
+      captureView: input.captureView,
       dogId: input.dogId,
       ownerId: input.ownerId
     }
