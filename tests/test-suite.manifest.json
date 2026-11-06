@@ -157,6 +157,8 @@
     { "route": "src/app/api/recognition/enrollment/assets/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/upload/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/enrollment/activate/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/recognition/verify/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/presence/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/reports/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social-map/route.ts", "access": "review-required", "testState": "backlog" },
