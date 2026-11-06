@@ -1,4 +1,4 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { RecognitionEventOutcome } from '@/generated/prisma/client';
@@ -120,24 +120,8 @@ export async function POST(request: NextRequest) {
     const requestId = randomUUID();
     const best = candidates[0];
 
-    // Only retain the photo when there's someone to show it to. It's deleted
-    // automatically by the cleanup cron once photoExpiresAt passes.
-    let photoStorageKey: string | null = null;
-    let photoExpiresAt: Date | null = null;
-    const bucket = process.env.R2_BUCKET_NAME;
-    if (candidates.length > 0 && bucket) {
-      const extension = EXTENSION_BY_MIME[image.type] ?? 'jpg';
-      photoStorageKey = `recognition/lost-dog-search/${requestId}.${extension}`;
-      photoExpiresAt = new Date(Date.now() + PHOTO_RETENTION_MS);
-      await r2.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: photoStorageKey,
-        Body: bytes,
-        ContentType: image.type,
-        Metadata: { purpose: 'lost-dog-search', requestId, reporterUserId: user.id }
-      }));
-    }
-
+    // Create the event before touching R2, so the photo is never uploaded without a DB
+    // row already in place to track and eventually expire it.
     const event = await prisma.recognitionEvent.create({
       data: {
         requestId,
@@ -149,11 +133,36 @@ export async function POST(request: NextRequest) {
         candidateCount: candidates.length,
         latencyMs: Date.now() - startedAt,
         reporterUserId: user.id,
-        photoStorageKey,
-        photoExpiresAt,
         metadata: { comparison: 'mean-top-3-of-8-view-embeddings' }
       }
     });
+
+    // Only retain the photo when there's someone to show it to. It's deleted
+    // automatically by the cleanup cron once photoExpiresAt passes. If the upload
+    // succeeds but the DB update to record it fails, delete the object rather than
+    // leave it in R2 with nothing tracking it — the search result itself still
+    // succeeds either way, just without a photo to review.
+    const bucket = process.env.R2_BUCKET_NAME;
+    if (candidates.length > 0 && bucket) {
+      const extension = EXTENSION_BY_MIME[image.type] ?? 'jpg';
+      const photoStorageKey = `recognition/lost-dog-search/${requestId}.${extension}`;
+      const photoExpiresAt = new Date(Date.now() + PHOTO_RETENTION_MS);
+      try {
+        await r2.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: photoStorageKey,
+          Body: bytes,
+          ContentType: image.type,
+          Metadata: { purpose: 'lost-dog-search', requestId, reporterUserId: user.id }
+        }));
+        await prisma.recognitionEvent.update({
+          where: { id: event.id },
+          data: { photoStorageKey, photoExpiresAt }
+        });
+      } catch {
+        await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: photoStorageKey })).catch(() => undefined);
+      }
+    }
 
     if (candidates.length > 0) {
       await prisma.recognitionEventCandidate.createMany({

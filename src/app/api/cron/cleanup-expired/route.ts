@@ -29,13 +29,18 @@ export async function GET(request: NextRequest) {
   ]);
 
   // Lost-dog search photos are retained only long enough for a matched owner to review
-  // them. Delete the R2 object, then clear the DB pointer so the match page reports it
-  // as expired even if the R2 delete is retried on a later run.
+  // them. Only clear the DB pointer once R2 confirms the object is gone — if the delete
+  // fails, leave it in place so this same event is picked up and retried on the next run
+  // instead of becoming an orphan nothing will ever find again.
   let deletedPhotos = 0;
   const bucket = process.env.R2_BUCKET_NAME;
   if (bucket && expiredPhotos.length > 0) {
     await Promise.all(expiredPhotos.map(async (event) => {
-      await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: event.photoStorageKey! })).catch(() => undefined);
+      try {
+        await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: event.photoStorageKey! }));
+      } catch {
+        return;
+      }
       await prisma.recognitionEvent.update({
         where: { id: event.id },
         data: { photoStorageKey: null, photoExpiresAt: null }
