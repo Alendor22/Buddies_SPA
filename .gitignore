@@ -12,3 +12,4 @@ blob-report
 .DS_Store
 prisma/dev.db
 tsconfig.tsbuildinfo
+src/generated/prisma

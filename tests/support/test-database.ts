@@ -1,3 +1,6 @@
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../../src/generated/prisma/client';
+
 const TEST_DATABASE_NAME = /(^|[_-])test([_-]|$)/i;
 
 export function assertTestDatabaseUrl(value: string | undefined) {
@@ -18,4 +21,9 @@ export function assertTestDatabaseUrl(value: string | undefined) {
   }
 
   return value;
+}
+
+export function createTestPrismaClient() {
+  const connectionString = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL);
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 }

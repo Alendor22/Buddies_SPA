@@ -42,7 +42,6 @@ export default function ArOverlayControls() {
 
   useEffect(() => {
     if (cameraMode === 'ar') {
-      setVisible(true);
       scheduleAutoHide();
       return;
     }

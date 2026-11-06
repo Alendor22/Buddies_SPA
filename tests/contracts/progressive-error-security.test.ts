@@ -23,14 +23,18 @@ describe('progressive auth error-security harness', () => {
     expect(resetPassword).toContain("redirect('/sign-in')");
   });
 
-  it('requires the production Prisma runtime target and session-version migration', () => {
+  it('requires the Prisma 7 runtime adapter and session-version migration', () => {
     const schema = readFileSync('prisma/schema.prisma', 'utf8');
+    const database = readFileSync('src/lib/db.ts', 'utf8');
     const migration = readFileSync(
       'prisma/migrations/20260828040000_user_session_version/migration.sql',
       'utf8',
     );
 
-    expect(schema).toContain('binaryTargets = ["native", "rhel-openssl-3.0.x"]');
+    expect(schema).toContain('provider = "prisma-client"');
+    expect(schema).toContain('output   = "../src/generated/prisma"');
+    expect(database).toContain("import { PrismaPg } from '@prisma/adapter-pg';");
+    expect(database).toContain('adapter: new PrismaPg({ connectionString })');
     expect(migration).toContain('ADD COLUMN "sessionVersion" INTEGER NOT NULL DEFAULT 0');
   });
 });

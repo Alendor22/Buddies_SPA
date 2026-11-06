@@ -1,4 +1,4 @@
-import { DogStatus } from '@prisma/client';
+import { DogStatus } from '@/generated/prisma/client';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';

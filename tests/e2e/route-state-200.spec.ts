@@ -1,9 +1,10 @@
-import { DogStatus, PrismaClient } from '@prisma/client';
+import { DogStatus } from '@/generated/prisma/client';
 import { expect, test } from '@playwright/test';
+import { createTestPrismaClient } from '../support/test-database';
 import { readFileSync } from 'node:fs';
 import { discoverPageRouteTemplates, materializePageRoute } from '../support/app-routes';
 
-const prisma = new PrismaClient();
+const prisma = createTestPrismaClient();
 const manifest = JSON.parse(readFileSync('tests/test-suite.manifest.json', 'utf8')) as {
   routeState200: { dynamicParameters: Record<string, string> };
 };
@@ -54,7 +55,13 @@ test.describe('anonymous public route verification', () => {
     const route = materializePageRoute(template, parameters);
     if (isProtectedRoute(route)) continue;
 
-    test(`${template} resolves to a final public HTTP 200 state`, async ({ request }) => {
+    test(`${template} resolves to its expected public state`, async ({ request, page }) => {
+      if (route.startsWith('/share/meta/')) {
+        await page.goto(route);
+        await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+        await expect(page.getByText('Shared with permission.', { exact: false })).toHaveCount(0);
+        return;
+      }
       const response = await request.get(route, {
         failOnStatusCode: false,
         maxRedirects: 10

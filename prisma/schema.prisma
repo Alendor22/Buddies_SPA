@@ -1,12 +1,10 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
 }
 
 enum UserRole {
@@ -171,6 +169,9 @@ model User {
   reputationActions        ReputationEvent[]       @relation("ReputationActor")
   moderationReportsFiled   ModerationReport[]      @relation("ModerationReporter")
   moderationReportsAgainst ModerationReport[]      @relation("ModerationTargetUser")
+  metaConnections          MetaConnection[]
+  metaOAuthStates          MetaOAuthState[]
+  metaShares               MetaShare[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
 }
@@ -277,6 +278,9 @@ model Dog {
   notifications            Notification[]
   checkIns                 CheckIn[]
   activityFeedItems        ActivityFeedItem[]
+  socialMessages           SocialMessage[]         @relation("SocialMessageSenderDog")
+  receivedSocialMessages   SocialMessage[]         @relation("SocialMessageRecipientDog")
+  metaDeliveries           MetaDelivery[]
   moderationReports        ModerationReport[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
@@ -861,6 +865,12 @@ model SocialMessage {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  // Visible dog authorship (20260904_01_sender_dog_social_messages). senderId stays the
+  // authenticated security principal; senderDogId is display identity only.
+  senderDogId    String?
+  senderDog      Dog?         @relation("SocialMessageSenderDog", fields: [senderDogId], references: [id], onDelete: SetNull)
+  recipientDogId String?
+  recipientDog   Dog?         @relation("SocialMessageRecipientDog", fields: [recipientDogId], references: [id], onDelete: SetNull)
   body           String
   editedAt       DateTime?
   deletedAt      DateTime?
@@ -868,6 +878,8 @@ model SocialMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@index([senderDogId, createdAt])
+  @@index([recipientDogId, createdAt])
 }
 
 model SocialGroup {
@@ -989,4 +1001,77 @@ model ModerationReport {
   @@index([reporterId, createdAt])
   @@index([status, createdAt])
   @@index([targetUserId, createdAt])
+}
+
+// Additive Meta integration storage. No existing tables are rewritten.
+model MetaConnection {
+  providerUserId String
+  id             String         @id @default(cuid())
+  ownerId        String
+  owner          User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  platform       String
+  externalId     String
+  label          String
+  token          String
+  expiresAt      DateTime
+  scopes         String[]
+  enabled        Boolean        @default(false)
+  contacts       MetaContact[]
+  deliveries     MetaDelivery[]
+  createdAt      DateTime       @default(now())
+
+  @@unique([platform, externalId])
+  @@index([providerUserId])
+  @@index([ownerId])
+}
+
+model MetaOAuthState {
+  hash        String   @id
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  browserHash String
+  purpose     String
+  expiresAt   DateTime
+}
+
+model MetaContact {
+  id              String         @id @default(cuid())
+  connectionId    String
+  connection      MetaConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId      String
+  lastInboundAt   DateTime
+  optedInAt       DateTime?
+  consentEvidence String?
+
+  @@unique([connectionId, externalId])
+}
+
+model MetaDelivery {
+  senderDogId  String
+  senderDog    Dog            @relation(fields: [senderDogId], references: [id], onDelete: Cascade)
+  id           String         @id
+  connectionId String
+  connection   MetaConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  status       String         @default("PENDING")
+  providerId   String?
+  createdAt    DateTime       @default(now())
+}
+
+model MetaWebhook {
+  hash       String   @id
+  receivedAt DateTime @default(now())
+}
+
+model MetaRateBucket {
+  id        String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+}
+
+model MetaShare {
+  id        String   @id
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title     String
+  expiresAt DateTime
 }
