@@ -5,12 +5,15 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { isDogRecognitionEnrollmentEnabled } from '@/lib/recognition/featureFlag';
 import { cosineSimilarity, DOG_REID_MODEL_VERSION, embedVerificationImage } from '@/lib/recognition/embeddings';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SEARCH_LIMIT = 20;
+const SEARCH_WINDOW_SECONDS = 600;
 
 function parseEmbedding(value: string | null): number[] | null {
   if (!value) return null;
@@ -46,6 +49,14 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Sign in to report a found dog.' }, { status: 401 });
 
+  const limit = await rateLimit('recognition:search', user.id, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many searches. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
+
   const form = await request.formData().catch(() => null);
   const image = form?.get('image');
   if (!(image instanceof File)) {
@@ -76,6 +87,7 @@ export async function POST(request: NextRequest) {
         },
         assets: {
           where: { status: 'READY', modelVersion: DOG_REID_MODEL_VERSION },
+          orderBy: { updatedAt: 'desc' },
           select: { captureView: true, embeddingRef: true }
         }
       }
@@ -134,7 +146,7 @@ export async function POST(request: NextRequest) {
         publicId: candidate.dog.publicId,
         name: candidate.dog.name,
         profileUrl: `/dogs/${encodeURIComponent(candidate.dog.slug)}`,
-        qrUrl: `/qr-dog/${encodeURIComponent(candidate.dog.publicId ?? candidate.dog.id)}`,
+        qrUrl: `/dogs/${encodeURIComponent(candidate.dog.slug)}/qr`,
         score: candidate.score,
         ownerNotified: true
       }))
