@@ -54,6 +54,7 @@ export default async function MenuPage() {
         <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-4 font-medium">Walks</Link>
         <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-4 font-medium">Direct messages</Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-lg border px-4 py-4 font-medium">Lost dog mode</Link>
+        <Link href="/find-dog" className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-4 font-medium text-sky-900">Find a lost dog by photo</Link>
         <Link href={UI_ROUTES.records} className="rounded-lg border px-4 py-4 font-medium">Vet records</Link>
         <Link href={UI_ROUTES.alerts} className="rounded-lg border px-4 py-4 font-medium">Notifications</Link>
         <Link href="/logout" className="rounded-lg bg-red-600 px-4 py-4 text-center font-medium text-white">Sign out</Link>
