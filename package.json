@@ -38,7 +38,8 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "meta:cleanup": "tsx scripts/meta-cleanup.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
