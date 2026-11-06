@@ -47,7 +47,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap gap-2">
           <Link href={UI_ROUTES.addProfile} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link>
           <Link href={UI_ROUTES.socialMap} className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-cyan-900">Social Map</Link>
-          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2">Messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
+          <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2">Walk messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
           <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-2">Buddies</Link>
         </div>
       </div>
@@ -66,7 +66,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <section className="mt-8 grid gap-4 md:grid-cols-4">
         <Link href={UI_ROUTES.socialMap} className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm"><h2 className="text-xl font-semibold text-cyan-950">Social Map</h2><p className="mt-2 text-sm text-cyan-900">View active dogs, buddy halos, live reports, heat activity, and route memory.</p></Link>
         <Link href={UI_ROUTES.checkIns} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Nearby activity</h2><p className="mt-2 text-sm text-slate-600">Check dogs into parks and discover active dogs on the Mapbox map.</p></Link>
-        <Link href={UI_ROUTES.messages} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Walk messages</h2><p className="mt-2 text-sm text-slate-600">Open persisted realtime walk conversations and presence.</p></Link>
+        <Link href={UI_ROUTES.walks} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Walk messages</h2><p className="mt-2 text-sm text-slate-600">Open persisted realtime walk conversations and presence.</p></Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Safety network</h2><p className="mt-2 text-sm text-slate-600">Report a lost dog, map the last-seen point, and alert trusted buddies.</p></Link>
       </section>
 

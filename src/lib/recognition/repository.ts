@@ -61,6 +61,12 @@ export const recognitionRepository = {
     return prisma.recognitionAsset.create({ data: input });
   },
 
+  findAssetByContentHash(enrollmentId: string, contentHash: string) {
+    return prisma.recognitionAsset.findUnique({
+      where: { enrollmentId_contentHash: { enrollmentId, contentHash } }
+    });
+  },
+
   findAsset(assetId: string) {
     return prisma.recognitionAsset.findUnique({
       where: { id: assetId },
@@ -93,6 +99,17 @@ export const recognitionRepository = {
     return prisma.recognitionEnrollment.update({
       where: { id },
       data: { status: 'ACTIVE', modelVersion, activatedAt: new Date(), revokedAt: null }
+    });
+  },
+
+  // Atomically gate the enrollment against new asset mutations before a revocation
+  // purge starts. PAUSED here means "revocation in progress", not a user-facing pause
+  // feature. Re-running this against an enrollment already PAUSED is a no-op match,
+  // so a retried revoke after a partial purge failure can resume.
+  beginRevocation(id: string) {
+    return prisma.recognitionEnrollment.updateMany({
+      where: { id, status: { in: ['ACTIVE', 'PENDING', 'PAUSED'] } },
+      data: { status: 'PAUSED' }
     });
   },
 

@@ -114,7 +114,6 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
           <p className="mt-2 text-slate-600">Manage invitations, street routes, lifecycle states, and accepted-participant conversations.</p>
         </div>
         <div className="flex gap-2">
-          <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-2 font-medium">Messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
           <Link href={UI_ROUTES.createWalk} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Create walk</Link>
         </div>
       </div>
