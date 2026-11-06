@@ -64,6 +64,7 @@ export async function addRecognitionEnrollmentAsset(input: {
   storageKey: string;
   contentHash: string;
   mimeType: string;
+  captureView: import('@/generated/prisma/client').RecognitionCaptureView;
   capturedAt?: Date;
 }) {
   await requireOwnedDog(input.dogId, input.ownerId);
@@ -78,6 +79,7 @@ export async function addRecognitionEnrollmentAsset(input: {
     storageKey: input.storageKey,
     contentHash: input.contentHash,
     mimeType: input.mimeType,
+    captureView: input.captureView,
     capturedAt: input.capturedAt
   });
 }
@@ -127,8 +129,9 @@ export async function activateRecognitionEnrollment(input: {
   const readyForModel = enrollment.assets.filter(
     (asset) => asset.status === 'READY' && asset.modelVersion === input.modelVersion
   );
-  if (readyForModel.length < 1) {
-    throw new RecognitionStateError('At least one processed enrollment asset for this model version is required');
+  const readyViews = new Set(readyForModel.map((asset) => asset.captureView).filter(Boolean));
+  if (readyViews.size !== 8) {
+    throw new RecognitionStateError('All eight photo angles must be processed before activation');
   }
 
   return recognitionRepository.activateEnrollment(enrollment.id, input.modelVersion);

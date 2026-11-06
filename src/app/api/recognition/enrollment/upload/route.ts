@@ -12,7 +12,8 @@ import {
 const uploadSchema = z.object({
   dogId: z.string().trim().min(1),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  contentLength: z.number().int().positive()
+  contentLength: z.number().int().positive(),
+  captureView: z.enum(['FRONT_LEFT','FRONT_CENTER','FRONT_RIGHT','REAR_LEFT','REAR_CENTER','REAR_RIGHT','LEFT_HEAD_ON','RIGHT_HEAD_ON'])
 });
 
 export async function POST(request: NextRequest) {

@@ -14,6 +14,7 @@ const assetSchema = z.object({
   storageKey: z.string().trim().min(1),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/i),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  captureView: z.enum(['FRONT_LEFT','FRONT_CENTER','FRONT_RIGHT','REAR_LEFT','REAR_CENTER','REAR_RIGHT','LEFT_HEAD_ON','RIGHT_HEAD_ON']),
   capturedAt: z.string().datetime().optional()
 });
 

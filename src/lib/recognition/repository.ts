@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import type { RecognitionEventOutcome } from '@/generated/prisma/client';
+import type { RecognitionCaptureView, RecognitionEventOutcome } from '@/generated/prisma/client';
 
 export type CreateEnrollmentRecord = {
   dogId: string;
@@ -13,6 +13,7 @@ export type AddEnrollmentAssetRecord = {
   storageKey: string;
   contentHash: string;
   mimeType: string;
+  captureView: RecognitionCaptureView;
   capturedAt?: Date;
 };
 

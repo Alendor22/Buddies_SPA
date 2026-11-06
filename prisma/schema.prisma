@@ -97,6 +97,17 @@ enum MapReportType {
   LOST_SIGHTING
 }
 
+enum RecognitionCaptureView {
+  FRONT_LEFT
+  FRONT_CENTER
+  FRONT_RIGHT
+  REAR_LEFT
+  REAR_CENTER
+  REAR_RIGHT
+  LEFT_HEAD_ON
+  RIGHT_HEAD_ON
+}
+
 enum RecognitionEnrollmentStatus {
   PENDING
   ACTIVE
@@ -438,6 +449,7 @@ model RecognitionAsset {
   storageKey    String
   contentHash   String
   mimeType      String
+  captureView   RecognitionCaptureView?
   status        RecognitionAssetStatus @default(PENDING)
   modelVersion  String?
   embeddingRef  String?
