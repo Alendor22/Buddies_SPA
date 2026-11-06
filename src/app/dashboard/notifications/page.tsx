@@ -16,6 +16,16 @@ const routeLabels: Record<string, string> = {
   system: 'System'
 };
 
+// Lost-dog match routeKeys are templated with a requestId/dogId, so they won't match the
+// flat routeLabels map above. Label them by their stable prefix instead.
+function routeLabel(routeKey: string) {
+  if (routeKey in routeLabels) return routeLabels[routeKey];
+  if (routeKey.startsWith('lost-dog-recognition-report:')) return 'Your found-dog report';
+  if (routeKey.startsWith('lost-dog-recognition-message:')) return 'Lost dog match message';
+  if (routeKey.startsWith('lost-dog-recognition:')) return 'Lost dog match';
+  return routeKey;
+}
+
 export default async function NotificationsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
@@ -96,7 +106,7 @@ export default async function NotificationsPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{routeLabels[notification.routeKey] ?? notification.routeKey}</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{routeLabel(notification.routeKey)}</span>
                   {!notification.readAt ? <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white">Unread</span> : <span className="text-xs text-slate-500">Read</span>}
                 </div>
                 <h2 className="mt-3 text-lg font-semibold">{notification.title}</h2>

@@ -1,8 +1,10 @@
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { RecognitionEventOutcome } from '@/generated/prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { r2 } from '@/lib/r2';
 import { isDogRecognitionEnrollmentEnabled } from '@/lib/recognition/featureFlag';
 import { cosineSimilarity, DOG_REID_MODEL_VERSION, embedVerificationImage } from '@/lib/recognition/embeddings';
 import { rateLimit } from '@/lib/rateLimit';
@@ -14,6 +16,16 @@ const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const SEARCH_LIMIT = 20;
 const SEARCH_WINDOW_SECONDS = 600;
+const PHOTO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp'
+};
+
+function matchPageUrl(requestId: string, dogId: string) {
+  return `/dashboard/lost-dog-matches/${encodeURIComponent(requestId)}/${encodeURIComponent(dogId)}`;
+}
 
 function parseEmbedding(value: string | null): number[] | null {
   if (!value) return null;
@@ -73,7 +85,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const startedAt = Date.now();
-    const vector = await embedVerificationImage(new Uint8Array(await image.arrayBuffer()), image.type);
+    const bytes = new Uint8Array(await image.arrayBuffer());
+    const vector = await embedVerificationImage(bytes, image.type);
     const enrollments = await prisma.recognitionEnrollment.findMany({
       where: {
         status: 'ACTIVE',
@@ -106,7 +119,26 @@ export async function POST(request: NextRequest) {
 
     const requestId = randomUUID();
     const best = candidates[0];
-    await prisma.recognitionEvent.create({
+
+    // Only retain the photo when there's someone to show it to. It's deleted
+    // automatically by the cleanup cron once photoExpiresAt passes.
+    let photoStorageKey: string | null = null;
+    let photoExpiresAt: Date | null = null;
+    const bucket = process.env.R2_BUCKET_NAME;
+    if (candidates.length > 0 && bucket) {
+      const extension = EXTENSION_BY_MIME[image.type] ?? 'jpg';
+      photoStorageKey = `recognition/lost-dog-search/${requestId}.${extension}`;
+      photoExpiresAt = new Date(Date.now() + PHOTO_RETENTION_MS);
+      await r2.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: photoStorageKey,
+        Body: bytes,
+        ContentType: image.type,
+        Metadata: { purpose: 'lost-dog-search', requestId, reporterUserId: user.id }
+      }));
+    }
+
+    const event = await prisma.recognitionEvent.create({
       data: {
         requestId,
         source: 'lost-dog-search',
@@ -116,25 +148,43 @@ export async function POST(request: NextRequest) {
         modelVersion: DOG_REID_MODEL_VERSION,
         candidateCount: candidates.length,
         latencyMs: Date.now() - startedAt,
-        metadata: {
-          comparison: 'mean-top-3-of-8-view-embeddings',
-          requiresOwnerConfirmation: true,
-          reporterUserId: user.id
-        }
+        reporterUserId: user.id,
+        photoStorageKey,
+        photoExpiresAt,
+        metadata: { comparison: 'mean-top-3-of-8-view-embeddings' }
       }
     });
 
     if (candidates.length > 0) {
-      await prisma.notification.createMany({
+      await prisma.recognitionEventCandidate.createMany({
         data: candidates.map((candidate) => ({
-          userId: candidate.ownerId,
-          type: 'SYSTEM' as const,
-          routeKey: `lost-dog-recognition:${requestId}:${candidate.dog.id}`,
-          href: `/dogs/${encodeURIComponent(candidate.dog.slug)}`,
-          title: 'Possible lost-dog match',
-          body: `A found-dog photo may match ${candidate.dog.name}. Review the photo and confirm the identity.`,
-          dogId: candidate.dog.id
+          recognitionEventId: event.id,
+          dogId: candidate.dog.id,
+          score: candidate.score
         }))
+      });
+
+      await prisma.notification.createMany({
+        data: [
+          ...candidates.map((candidate) => ({
+            userId: candidate.ownerId,
+            type: 'SYSTEM' as const,
+            routeKey: `lost-dog-recognition:${requestId}:${candidate.dog.id}`,
+            href: matchPageUrl(requestId, candidate.dog.id),
+            title: 'Possible lost-dog match',
+            body: `A found-dog photo may match ${candidate.dog.name}. View the photo and message the finder.`,
+            dogId: candidate.dog.id
+          })),
+          ...candidates.map((candidate) => ({
+            userId: user.id,
+            type: 'SYSTEM' as const,
+            routeKey: `lost-dog-recognition-report:${requestId}:${candidate.dog.id}`,
+            href: matchPageUrl(requestId, candidate.dog.id),
+            title: 'Your found-dog report was sent',
+            body: `${candidate.dog.name}'s owner was notified. Open this to message them.`,
+            dogId: candidate.dog.id
+          }))
+        ]
       });
     }
 
@@ -147,6 +197,7 @@ export async function POST(request: NextRequest) {
         name: candidate.dog.name,
         profileUrl: `/dogs/${encodeURIComponent(candidate.dog.slug)}`,
         qrUrl: `/dogs/${encodeURIComponent(candidate.dog.slug)}/qr`,
+        matchUrl: matchPageUrl(requestId, candidate.dog.id),
         score: candidate.score,
         ownerNotified: true
       }))
