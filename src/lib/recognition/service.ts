@@ -1,4 +1,6 @@
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { prisma } from '@/lib/db';
+import { r2 } from '@/lib/r2';
 import { getRecognitionAssetProcessor } from './processor';
 import { recognitionRepository } from './repository';
 
@@ -141,5 +143,17 @@ export async function revokeRecognitionEnrollment(dogId: string, ownerId: string
   await requireOwnedDog(dogId, ownerId);
   const enrollment = await recognitionRepository.findEnrollmentByDogId(dogId);
   if (!enrollment || enrollment.ownerId !== ownerId) throw new RecognitionStateError('Recognition enrollment does not exist');
-  return recognitionRepository.revokeEnrollment(enrollment.id);
+
+  await recognitionRepository.revokeEnrollment(enrollment.id);
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!bucket) throw new RecognitionStateError('Recognition storage is unavailable for deletion');
+
+  await Promise.all(enrollment.assets.map(async (asset) => {
+    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: asset.storageKey }));
+    await prisma.recognitionAsset.update({
+      where: { id: asset.id },
+      data: { status: 'DELETED', embeddingRef: null, qualityScore: null, rejectionCode: null }
+    });
+  }));
+  return recognitionRepository.findEnrollmentByDogId(dogId);
 }

@@ -90,7 +90,30 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
     }
   }
 
+  async function revoke() {
+    if (!window.confirm('Revoke this dog’s visual identity enrollment and delete its stored reference photos?')) return;
+    setBusy(true);
+    try {
+      const response = await fetch('/api/recognition/enrollment', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dogId }),
+        cache: 'no-store'
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Enrollment could not be revoked.');
+      setEnrolled(false);
+      setConsented(false);
+      setMessage('Enrollment revoked; stored reference photos and embeddings were deleted.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Enrollment could not be revoked.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function verify() {
+    if (!consented) return setMessage('Consent is required before sending a verification photo to the recognition service.');
     if (!verificationPhoto) return setMessage('Choose a clear photo of the dog to verify.');
     setBusy(true);
     setMessage('Comparing this photo with the enrolled views…');
@@ -138,11 +161,16 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
       ) : enrolled ? (
         <>
           <p className="mt-1 text-sm text-slate-700">This QR opens this dog’s profile. Capture a fresh photo here to compare it with the eight enrolled reference views.</p>
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.target.checked)} />
+            <span>I consent to sending this verification photo to the configured recognition service for one-time matching. Buddies does not save the verification photo.</span>
+          </label>
           <label className="mt-3 grid gap-2 text-sm font-medium">
             Current dog photo
             <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => setVerificationPhoto(event.target.files?.[0] ?? null)} className="rounded-lg border bg-white p-2" />
           </label>
-          <button type="button" onClick={verify} disabled={busy || !verificationPhoto} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50">
+          {isOwner ? <button type="button" onClick={revoke} disabled={busy} className="mt-3 rounded-lg border border-red-300 px-4 py-2 text-red-800 disabled:opacity-50">Revoke enrollment and delete reference data</button> : null}
+          <button type="button" onClick={verify} disabled={busy || !consented || !verificationPhoto} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50">
             {busy ? 'Checking…' : 'Verify this dog'}
           </button>
         </>

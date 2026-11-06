@@ -25,10 +25,10 @@ class RemoteDogRecognitionAssetProcessor implements RecognitionAssetProcessor {
   }
 }
 
-const processor: RecognitionAssetProcessor = new RemoteDogRecognitionAssetProcessor();
+let processor: RecognitionAssetProcessor = new RemoteDogRecognitionAssetProcessor();
 
 export function configureRecognitionAssetProcessor(next: RecognitionAssetProcessor) {
-  void next;
+  processor = next;
 }
 
 export function getRecognitionAssetProcessor() {
