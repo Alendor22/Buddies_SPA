@@ -89,6 +89,7 @@ export default function MetaControls({ resources, sharing, connectionsEnabled, m
         const fingerprint = JSON.stringify([selectedContact!.connectionId, recipient, senderDogId, reply]);
         if (sendAttempt.current?.fingerprint !== fingerprint) sendAttempt.current = { fingerprint, key: crypto.randomUUID() };
         const result = await api('send', { connectionId: selectedContact!.connectionId, contactId: recipient, senderDogId, text: reply, key: sendAttempt.current.key });
+        if (result.status === 'SENT') sendAttempt.current = null;
         setReply(''); setMessage(`Delivery status: ${result.status}. If uncertain, check the business inbox before sending again.`);
       })}>Send reply</button>
     </section>}
