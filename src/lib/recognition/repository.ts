@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import type { RecognitionEventOutcome } from '@prisma/client';
+import type { RecognitionEventOutcome } from '@/generated/prisma/client';
 
 export type CreateEnrollmentRecord = {
   dogId: string;

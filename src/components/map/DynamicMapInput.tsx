@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 
 export type MapMenu = 'route' | 'radar' | 'reports' | 'route-memory' | 'walk-details';
 
@@ -49,24 +49,53 @@ function readHistory(): HistoryState {
   }
 }
 
-export default function DynamicMapInput({ activeMenu, onSubmit }: Props) {
+let historySnapshot: HistoryState | null = null;
+const historyListeners = new Set<() => void>();
+
+function getHistorySnapshot() {
+  if (historySnapshot === null) historySnapshot = readHistory();
+  return historySnapshot;
+}
+
+function getServerHistorySnapshot() {
+  return EMPTY_HISTORY;
+}
+
+function subscribeToHistory(listener: () => void) {
+  historyListeners.add(listener);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== HISTORY_KEY && event.key !== null) return;
+    historySnapshot = readHistory();
+    historyListeners.forEach((subscriber) => subscriber());
+  };
+  if (typeof window !== 'undefined') window.addEventListener('storage', handleStorage);
+  return () => {
+    historyListeners.delete(listener);
+    if (typeof window !== 'undefined') window.removeEventListener('storage', handleStorage);
+  };
+}
+
+function persistHistory(next: HistoryState) {
+  try {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // Keep this tab's history usable when browser storage is unavailable.
+  }
+  historySnapshot = next;
+  historyListeners.forEach((listener) => listener());
+}
+
+export default function DynamicMapInput(props: Props) {
+  return <DynamicMapInputForMenu key={props.activeMenu} {...props} />;
+}
+
+function DynamicMapInputForMenu({ activeMenu, onSubmit }: Props) {
   const [value, setValue] = useState('');
-  const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const history = useSyncExternalStore(subscribeToHistory, getHistorySnapshot, getServerHistorySnapshot);
   const config = CONFIG[activeMenu];
-  const currentHistory = useMemo(() => history[activeMenu], [activeMenu, history]);
-
-  useEffect(() => setHistory(readHistory()), []);
-  useEffect(() => {
-    setValue('');
-    setHistoryOpen(false);
-  }, [activeMenu]);
-
-  function persist(next: HistoryState) {
-    setHistory(next);
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-  }
+  const currentHistory = history[activeMenu];
 
   async function submit() {
     const trimmed = value.trim();
@@ -75,7 +104,7 @@ export default function DynamicMapInput({ activeMenu, onSubmit }: Props) {
     try {
       await onSubmit({ menu: activeMenu, value: trimmed });
       const nextEntries = [trimmed, ...history[activeMenu].filter((entry) => entry.toLowerCase() !== trimmed.toLowerCase())].slice(0, 15);
-      persist({ ...history, [activeMenu]: nextEntries });
+      persistHistory({ ...history, [activeMenu]: nextEntries });
       setHistoryOpen(false);
     } finally {
       setLoading(false);
@@ -88,7 +117,7 @@ export default function DynamicMapInput({ activeMenu, onSubmit }: Props) {
         <div className="mb-2 max-h-52 overflow-auto rounded-2xl border border-white/40 bg-slate-950/50 p-2 text-white shadow-2xl backdrop-blur-xl">
           <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
             <span>{activeMenu.replace('-', ' ')} history</span>
-            <button type="button" onClick={() => persist({ ...history, [activeMenu]: [] })} className="rounded px-2 py-1 hover:bg-white/10">Clear</button>
+            <button type="button" onClick={() => persistHistory({ ...history, [activeMenu]: [] })} className="rounded px-2 py-1 hover:bg-white/10">Clear</button>
           </div>
           {currentHistory.length ? currentHistory.map((entry) => (
             <button key={entry} type="button" onClick={() => { setValue(entry); setHistoryOpen(false); }} className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-white/10">{entry}</button>

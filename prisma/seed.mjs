@@ -1,6 +1,9 @@
-import { PrismaClient, DogStatus, WalkStatus } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient, DogStatus, WalkStatus } from '../src/generated/prisma/client';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL must be set before seeding.');
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const users = [
   {

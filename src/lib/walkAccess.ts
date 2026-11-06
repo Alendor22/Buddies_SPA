@@ -1,4 +1,4 @@
-import { WalkInvitationStatus } from '@prisma/client';
+import { WalkInvitationStatus } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 
 export async function getWalkAccess(walkId: string, userId: string) {

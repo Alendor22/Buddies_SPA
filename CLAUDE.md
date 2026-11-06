@@ -52,18 +52,18 @@ Do not resurrect old implementations merely because they appear in historical no
 
 Current repository stack:
 
-- Next.js 15 App Router
+- Next.js 16 App Router
 - React 19
 - TypeScript
-- Tailwind CSS
+- Tailwind CSS 4
 - Zustand 5 session/client state
 - PostgreSQL
-- Prisma 6
+- Prisma 7 with the `@prisma/adapter-pg` driver adapter
 - Upstash Redis
 - Cloudflare R2
 - Mapbox GL / `react-map-gl`
 - Ably realtime/WebSockets
-- Zod validation
+- Zod 4 validation
 - QR code generation
 - AWS S3-compatible SDK for R2
 - Node.js >= 24

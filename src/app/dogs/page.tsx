@@ -42,7 +42,7 @@ export default async function DogsPage() {
                 </Link>
                 <div className={`mt-5 grid gap-2 text-center text-sm ${isOwner ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   <Link href={`/dogs/${dog.slug}`} className="rounded-lg border px-3 py-2">Profile</Link>
-                  {isOwner ? <Link href={`/dogs/edit?slug=${encodeURIComponent(dog.slug)}`} className="rounded-lg border px-3 py-2">Edit</Link> : null}
+                  {isOwner ? <Link href={`/dogs/edit?slug=${encodeURIComponent(dog.slug)}`} className="rounded-lg border px-3 py-2">Edit</Link> : <Link href={user ? `/dashboard/messages?search=${encodeURIComponent(dog.name)}` : `/sign-in?redirect_url=${encodeURIComponent(`/dashboard/messages?search=${dog.name}`)}`} className="rounded-lg bg-slate-900 px-3 py-2 text-white">Message {dog.name}</Link>}
                 </div>
               </article>
             );

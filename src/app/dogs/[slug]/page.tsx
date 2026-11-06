@@ -69,7 +69,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Link href="/dogs" className="text-sm font-medium underline">All profiles</Link>
         <div className="flex gap-2">
-          {isOwner ? <Link href={`/dogs/edit?slug=${dog.slug}`} className="rounded-lg border px-4 py-2">Edit</Link> : null}
+          {isOwner ? <Link href={`/dogs/edit?slug=${dog.slug}`} className="rounded-lg border px-4 py-2">Edit</Link> : user ? <Link href={`/dashboard/messages?search=${encodeURIComponent(dog.name)}`} className="rounded-lg bg-slate-900 px-4 py-2 text-white">Message {dog.name}</Link> : <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/dashboard/messages?search=${dog.name}`)}`} className="rounded-lg bg-slate-900 px-4 py-2 text-white">Sign in to message</Link>}
           <Link href={`/dogs/${dog.slug}/qr`} className="rounded-lg border px-4 py-2">QR page</Link>
           <Link href="/dashboard" className="rounded-lg border px-4 py-2">Dashboard</Link>
         </div>

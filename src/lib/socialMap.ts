@@ -1,4 +1,4 @@
-import { DogPresenceStatus } from '@prisma/client';
+import { DogPresenceStatus } from '@/generated/prisma/client';
 
 export type WalkingConfidenceInput = {
   explicitStart?: boolean;

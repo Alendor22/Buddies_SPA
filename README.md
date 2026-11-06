@@ -4,16 +4,16 @@ Production-oriented dog identity, safety, walking, and social network.
 
 ## Stack
 
-- Next.js 15 App Router
+- Next.js 16 App Router
 - React 19 + TypeScript
 - Zustand session state tree
-- Tailwind CSS
-- PostgreSQL + Prisma
+- Tailwind CSS 4
+- PostgreSQL + Prisma 7 (`@prisma/adapter-pg`)
 - Upstash Redis
 - Cloudflare R2
 - Mapbox
 - Ably WebSockets/realtime
-- Zod validation
+- Zod 4 validation
 
 ## Application modules
 

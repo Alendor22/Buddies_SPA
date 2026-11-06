@@ -1,4 +1,4 @@
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 
 export type CreateNotificationInput = {

@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { DogStatus, NotificationType } from '@prisma/client';
+import { DogStatus, NotificationType } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { dogLostRoute, dogProfileRoute, dogSightingRoute, UI_ROUTES } from '@/lib/uiRoutes';
 

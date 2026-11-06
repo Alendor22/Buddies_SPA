@@ -13,14 +13,15 @@ type RegisterParams = {
 export default async function RegisterConfirmPage({ searchParams }: { searchParams: Promise<RegisterParams> }) {
   const values = await searchParams;
   const displayName = String(values.displayName ?? '').trim() || 'Buddies User';
-  const email = normalizeEmail(String(values.email ?? '').trim()) || `demo-${Date.now()}@buddies.local`;
-  const password = String(values.password ?? '') || 'buddies-demo-password';
+  const email = normalizeEmail(String(values.email ?? '').trim());
+  const password = String(values.password ?? '');
 
   let created = false;
-  let message = '';
+  let message = 'Enter an email and password to create an account.';
 
-  try {
-    await prisma.user.upsert({
+  if (email && password) {
+    try {
+      await prisma.user.upsert({
       where: { email },
       update: { displayName },
       create: {
@@ -31,10 +32,11 @@ export default async function RegisterConfirmPage({ searchParams }: { searchPara
       },
       select: { id: true }
     });
-    created = true;
-    message = `Account ready for ${displayName}. Mobile cookie login is still bypassed; continue to the dashboard.`;
-  } catch {
-    message = 'The account could not be created. Go back and try another email.';
+      created = true;
+      message = `Account ready for ${displayName}. Mobile cookie login is still bypassed; continue to the dashboard.`;
+    } catch {
+      message = 'The account could not be created. Go back and try another email.';
+    }
   }
 
   return (

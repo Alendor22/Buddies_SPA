@@ -1,4 +1,4 @@
-import { BuddyRequestStatus, NotificationType } from '@prisma/client';
+import { BuddyRequestStatus, NotificationType } from '@/generated/prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, normalizeEmail } from '@/lib/auth';
 import { prisma } from '@/lib/db';
