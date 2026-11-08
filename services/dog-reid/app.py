@@ -38,6 +38,11 @@ def authorize(value):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+@app.get("/")
+def root():
+    return {"service": "buddies-dog-reid", "status": "ok", "health": "/health"}
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "modelVersion": MODEL_VERSION}
@@ -50,7 +55,6 @@ async def embed(
 ):
     import torch
     from PIL import Image
-    from torchvision.models.detection import FasterRCNN_ResNet50_FPN_V2_Weights
 
     authorize(authorization)
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
