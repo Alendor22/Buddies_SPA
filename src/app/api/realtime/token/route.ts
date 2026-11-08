@@ -26,9 +26,14 @@ export async function GET() {
   }
   for (const dog of dogs) capability[realtimeChannels.lostDog(dog.id)] = ['subscribe'];
   for (const membership of memberships) capability[realtimeChannels.conversation(membership.conversationId)] = ['subscribe'];
+  capability[realtimeChannels.userNotifications(user.id)] = ['subscribe'];
   capability['nearby:*'] = ['subscribe'];
 
   const client = new Ably.Rest(apiKey);
-  const tokenRequest = await client.auth.createTokenRequest({ clientId: `user:${user.id}`, capability: JSON.stringify(capability), ttl: 60 * 60 * 1000 });
+  const tokenRequest = await client.auth.createTokenRequest({
+    clientId: `user:${user.id}`,
+    capability: JSON.stringify(capability),
+    ttl: 60 * 60 * 1000
+  });
   return NextResponse.json(tokenRequest);
 }
