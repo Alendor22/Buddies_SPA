@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { NotificationType } from '@/generated/prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { createNotification } from '@/lib/notifications';
 import { getConversationPeers, isConversationMember, listBlockedUserIds, listMessages, sendMessage } from '@/lib/social/repository';
 import { publishRealtime } from '@/lib/realtimeServer';
 import { realtimeChannels } from '@/lib/realtimeChannels';
@@ -13,8 +15,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const { id } = await context.params;
   if (!(await isConversationMember(id, user.id))) return NextResponse.json({ error: 'Thread not found.' }, { status: 404 });
   const peers = await getConversationPeers(id, user.id);
-  if (peers.length !== 1) return NextResponse.json({ error: "Direct conversation not found." }, { status: 404 });
-  const peerDogs = peers.length ? await prisma.dog.findMany({ where: { ownerId: peers[0].userId }, select: { id: true, name: true, ownerId: true, breed: true, photoUrl: true }, orderBy: { name: "asc" } }) : [];
+  if (peers.length !== 1) return NextResponse.json({ error: 'Direct conversation not found.' }, { status: 404 });
+  const peerDogs = await prisma.dog.findMany({ where: { ownerId: peers[0].userId }, select: { id: true, name: true, ownerId: true, breed: true, photoUrl: true }, orderBy: { name: 'asc' } });
   return NextResponse.json({ messages: await listMessages(id), peerDogs });
 }
 
@@ -32,8 +34,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!senderDogId) return NextResponse.json({ error: 'Select a dog profile before sending.' }, { status: 400 });
   if (!recipientDogId) return NextResponse.json({ error: 'Select the dog to receive this message.' }, { status: 400 });
 
-  // Blocks and messaging preferences can change after a thread exists, so they are
-  // enforced on every send rather than only when the conversation is created.
   const [blocked, peers] = await Promise.all([listBlockedUserIds(user.id), getConversationPeers(id, user.id)]);
   if (peers.length !== 1) return NextResponse.json({ error: 'Direct conversation not found.' }, { status: 404 });
   if (peers.some((peer) => blocked.includes(peer.userId))) return NextResponse.json({ error: 'Conversation is not available.' }, { status: 403 });
@@ -43,9 +43,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!senderDog) return NextResponse.json({ error: 'Sender dog is not owned by this account.' }, { status: 403 });
 
   const recipientDog = await prisma.dog.findFirst({ where: { id: recipientDogId, ownerId: peers[0]?.userId }, select: { id: true, name: true } });
-  if (!recipientDog) return NextResponse.json({ error: "Recipient dog does not belong to the other conversation member." }, { status: 403 });
+  if (!recipientDog) return NextResponse.json({ error: 'Recipient dog does not belong to the other conversation member.' }, { status: 403 });
 
   const messageId = await sendMessage(id, user.id, body, senderDog.id, recipientDog.id);
-  await publishRealtime(realtimeChannels.conversation(id), 'message.created', { messageId, conversationId: id });
+  const notification = await createNotification({
+    userId: peers[0].userId,
+    type: NotificationType.MESSAGE,
+    routeKey: 'messages',
+    href: `/dashboard/messages?conversation=${encodeURIComponent(id)}`,
+    title: `New message from ${senderDog.name}`,
+    body: body.slice(0, 240)
+  });
+  await Promise.all([
+    publishRealtime(realtimeChannels.conversation(id), 'message.created', { messageId, conversationId: id }),
+    publishRealtime(realtimeChannels.userNotifications(peers[0].userId), 'notification.created', {
+      notificationId: notification.id,
+      conversationId: id,
+      href: notification.href,
+      title: notification.title,
+      body: notification.body
+    })
+  ]);
   return NextResponse.json({ messageId, senderDog, recipientDog }, { status: 201 });
 }
