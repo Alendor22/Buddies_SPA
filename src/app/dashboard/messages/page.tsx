@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { NotificationType } from '@/generated/prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';
@@ -10,6 +11,10 @@ export const dynamic = 'force-dynamic';
 export default async function MessagesPage({ searchParams }: { searchParams: Promise<{ search?: string }> }) {
   const [{ search = '' }, user] = await Promise.all([searchParams, getCurrentUser()]);
   if (!user) redirect('/auth/login');
+  await prisma.notification.updateMany({
+    where: { userId: user.id, type: NotificationType.MESSAGE, readAt: null },
+    data: { readAt: new Date() }
+  });
   const dogs = await prisma.dog.findMany({ where: { ownerId: user.id }, select: { id: true, name: true, ownerId: true, photoUrl: true, breed: true }, orderBy: { name: 'asc' } });
 
   return <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
