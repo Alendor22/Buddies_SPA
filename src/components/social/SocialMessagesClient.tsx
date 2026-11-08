@@ -34,6 +34,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   const [recipientDogId, setRecipientDogId] = useState('');
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
+  const [peerTyping, setPeerTyping] = useState(false);
 
   const refreshConversations = useCallback(async () => {
     const response = await fetch('/api/social/conversations', { cache: 'no-store' });
@@ -86,6 +87,52 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     void loadMessages();
     return () => { cancelled = true; };
   }, [activeId]);
+
+  useEffect(() => {
+    if (!activeId) {
+      setPeerTyping(false);
+      return;
+    }
+    let channel: Ably.RealtimeChannel | null = null;
+    let disposed = false;
+    const onTyping = (message: Ably.Message) => {
+      const data = (message.data ?? {}) as { userId?: string; active?: boolean };
+      if (data.userId === userId) return;
+      setPeerTyping(Boolean(data.active));
+      if (data.active) window.setTimeout(() => {
+        if (!disposed) setPeerTyping(false);
+      }, 2200);
+    };
+    try {
+      channel = getRealtimeClient().channels.get(channels.conversation(activeId));
+      void channel.subscribe('typing', onTyping);
+    } catch {
+      channel = null;
+    }
+    return () => {
+      disposed = true;
+      channel?.unsubscribe('typing', onTyping);
+      setPeerTyping(false);
+    };
+  }, [activeId, userId]);
+
+  useEffect(() => {
+    if (!activeId || !body.trim()) return;
+    let channel: Ably.RealtimeChannel | null = null;
+    try {
+      channel = getRealtimeClient().channels.get(channels.conversation(activeId));
+      void channel.publish('typing', { userId, active: true });
+      const timer = window.setTimeout(() => {
+        void channel?.publish('typing', { userId, active: false });
+      }, 1600);
+      return () => {
+        window.clearTimeout(timer);
+        void channel?.publish('typing', { userId, active: false });
+      };
+    } catch {
+      return;
+    }
+  }, [activeId, body, userId]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -175,7 +222,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
       <div className="mt-2 grid gap-2">{conversations.map((conversation) => <button key={conversation.id} onClick={() => setActiveId(conversation.id)} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.peerName ?? 'Buddy'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}</div>
     </aside>
     <section className="flex min-h-[520px] flex-col rounded-2xl border bg-white shadow-sm">
-      <header className="border-b p-4"><h2 className="font-semibold">{active?.peerName ?? 'Select a conversation'}</h2>{active && peerDogs.length > 0 && <p className="mt-1 text-sm text-slate-500">Messaging {peerDogs.find((dog) => dog.id === recipientDogId)?.name ?? 'a dog'}</p>}</header>
+      <header className="border-b p-4"><h2 className="font-semibold">{active?.peerName ?? 'Select a conversation'}</h2>{active && peerTyping ? <p className="mt-1 text-sm text-emerald-600" aria-live="polite">{active.peerName ?? 'Your buddy'} is typing…</p> : null}{active && peerDogs.length > 0 && <p className="mt-1 text-sm text-slate-500">Messaging {peerDogs.find((dog) => dog.id === recipientDogId)?.name ?? 'a dog'}</p>}</header>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message) => <div key={message.id} className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.senderId === userId ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100'}`}><div className="mb-1 text-xs opacity-70">{message.senderDogName ?? 'Dog'} → {message.recipientDogName ?? 'Dog'}</div><p>{message.body}</p></div>)}</div>
       {activeId && <form onSubmit={send} className="border-t p-4"><div className="mb-3 flex flex-wrap gap-3"><label className="text-sm">From<select value={senderDogId} onChange={(e) => setSenderDogId(e.target.value)} className="rounded border px-2 py-1">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label><label className="text-sm">To<select value={recipientDogId} onChange={(e) => setRecipientDogId(e.target.value)} className="ml-2 rounded border px-2 py-1">{peerDogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label></div><div className="flex gap-2"><input value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} placeholder="Message" className="flex-1 rounded-lg border px-3 py-2"/><button disabled={!body.trim() || !senderDogId || !recipientDogId} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-40">Send</button></div>{error && <p className="mt-2 text-sm text-red-600">{error}</p>}</form>}
     </section>
