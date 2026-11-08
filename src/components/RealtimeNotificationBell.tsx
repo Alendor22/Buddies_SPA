@@ -1,0 +1,63 @@
+'use client';
+
+import type * as Ably from 'ably';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { getRealtimeClient } from '@/lib/realtime';
+import { channels } from '@/lib/realtime';
+
+type IncomingNotification = { notificationId?: string; href?: string; title?: string; body?: string };
+
+export default function RealtimeNotificationBell() {
+  const { isSignedIn, userId } = useAuth();
+  const [count, setCount] = useState(0);
+  const [toast, setToast] = useState<IncomingNotification | null>(null);
+
+  useEffect(() => {
+    if (!isSignedIn || !userId) {
+      setCount(0);
+      return;
+    }
+    let channel: Ably.RealtimeChannel | null = null;
+    let disposed = false;
+    const loadCount = async () => {
+      const response = await fetch('/api/notifications/unread', { cache: 'no-store' });
+      if (response.ok && !disposed) setCount((await response.json()).count ?? 0);
+    };
+    const onNotification = (message: Ably.Message) => {
+      const data = (message.data ?? {}) as IncomingNotification;
+      setCount((value) => value + 1);
+      setToast(data);
+      window.setTimeout(() => { if (!disposed) setToast(null); }, 5000);
+    };
+    void loadCount();
+    try {
+      channel = getRealtimeClient().channels.get(channels.userNotifications(userId));
+      void channel.subscribe('notification.created', onNotification);
+    } catch {
+      channel = null;
+    }
+    return () => {
+      disposed = true;
+      channel?.unsubscribe('notification.created', onNotification);
+    };
+  }, [isSignedIn, userId]);
+
+  if (!isSignedIn || !userId) return null;
+  return (
+    <>
+      <Link href="/dashboard/notifications" aria-label={count ? `${count} unread notifications` : 'Notifications'} className="relative shrink-0 rounded-full border px-3 py-2 text-sm font-medium">
+        Alerts
+        {count > 0 ? <span className="absolute -right-1 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-5 text-white">{count > 99 ? '99+' : count}</span> : null}
+      </Link>
+      {toast ? (
+        <div role="status" className="fixed right-4 top-20 z-[60] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <p className="text-sm font-semibold">{toast.title ?? 'New message'}</p>
+          {toast.body ? <p className="mt-1 truncate text-sm text-slate-600">{toast.body}</p> : null}
+          <Link href={toast.href ?? '/dashboard/messages'} className="mt-3 inline-block text-sm font-semibold text-blue-700">Open messages</Link>
+        </div>
+      ) : null}
+    </>
+  );
+}
