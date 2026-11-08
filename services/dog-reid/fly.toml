@@ -1,3 +1,6 @@
+# Fly.io configuration for the Buddies Python dog re-identification service.
+# Fly working directory: services/dog-reid
+
 app = "buddies-spa"
 primary_region = "ewr"
 
