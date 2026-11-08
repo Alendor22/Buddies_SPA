@@ -104,7 +104,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
       }, 2200);
     };
     try {
-      channel = getRealtimeClient().channels.get(channels.conversation(activeId));
+      channel = getRealtimeClient().channels.get(channels.conversationTyping(activeId));
       void channel.subscribe('typing', onTyping);
     } catch {
       channel = null;
@@ -120,7 +120,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     if (!activeId || !body.trim()) return;
     let channel: Ably.RealtimeChannel | null = null;
     try {
-      channel = getRealtimeClient().channels.get(channels.conversation(activeId));
+      channel = getRealtimeClient().channels.get(channels.conversationTyping(activeId));
       void channel.publish('typing', { userId, active: true });
       const timer = window.setTimeout(() => {
         void channel?.publish('typing', { userId, active: false });
