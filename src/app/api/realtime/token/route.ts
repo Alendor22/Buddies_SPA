@@ -25,8 +25,10 @@ export async function GET() {
     capability[realtimeChannels.walk(walk.id)] = ['subscribe'];
   }
   for (const dog of dogs) capability[realtimeChannels.lostDog(dog.id)] = ['subscribe'];
-  for (const membership of memberships) capability[realtimeChannels.conversation(membership.conversationId)] = ['subscribe'];
+  for (const membership of memberships) {
+    capability[realtimeChannels.conversation(membership.conversationId)] = ['subscribe'];
     capability[realtimeChannels.conversationTyping(membership.conversationId)] = ['subscribe', 'publish'];
+  }
   capability[realtimeChannels.userNotifications(user.id)] = ['subscribe'];
   capability['nearby:*'] = ['subscribe'];
 
