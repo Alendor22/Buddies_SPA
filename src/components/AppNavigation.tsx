@@ -102,8 +102,7 @@ export default function AppNavigation({ signedIn, notificationCount }: AppNaviga
             </button>
             <div className="hidden truncate text-xs text-slate-500 sm:block">{pathname}{q ? `?q=${q}` : ''}</div>
           </div>
-          {resolvedSignedIn ? <Link href="/dashboard/messages" aria-label="Messages" className="shrink-0 rounded-full border px-3 py-2 text-sm font-medium">Messages</Link> : null}
-          <RealtimeNotificationBell />
+          {resolvedSignedIn ? <RealtimeNotificationBell /> : null}
           <AccountActions fallbackSignedIn={resolvedSignedIn} notificationCount={notificationCount} />
         </nav>
 
