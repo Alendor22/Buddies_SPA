@@ -3,5 +3,6 @@ export const realtimeChannels = {
   walk: (walkId: string) => `walk:${walkId}`,
   messages: (walkId: string) => `walk:${walkId}:messages`,
   conversation: (conversationId: string) => `conversation:${conversationId}:messages`,
+  userNotifications: (userId: string) => `user:${userId}:notifications`,
   nearby: (cell: string) => `nearby:${cell}`
 } as const;
