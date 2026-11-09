@@ -25,9 +25,26 @@ const METERS_PER_MILE = 1609.344;
 const MAX_SAMPLE_AGE_MS = 60_000;
 const GEOLOCATION_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 2_000,
+  maximumAge: 1_000,
   timeout: 15_000
 };
+
+function normalizeHeading(value: number) {
+  return ((value % 360) + 360) % 360;
+}
+
+function bearingBetween(
+  from: Pick<StabilizedPedestrianPosition, 'latitude' | 'longitude'>,
+  to: Pick<StabilizedPedestrianPosition, 'latitude' | 'longitude'>
+) {
+  const lat1 = from.latitude * Math.PI / 180;
+  const lat2 = to.latitude * Math.PI / 180;
+  const deltaLongitude = (to.longitude - from.longitude) * Math.PI / 180;
+  const y = Math.sin(deltaLongitude) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2)
+    - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLongitude);
+  return normalizeHeading(Math.atan2(y, x) * 180 / Math.PI);
+}
 
 export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean }) {
   const samplesRef = useRef<Sample[]>([]);
@@ -112,6 +129,15 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
       const displacement = distanceMeters(first, sample);
       const windowSeconds = Math.max(1, (sample.timestamp - first.timestamp) / 1000);
       const state = useMapRuntimeStore.getState();
+      const gpsHeading = coords.heading != null
+        && Number.isFinite(coords.heading)
+        && (gpsSpeedMph ?? speedMph) >= 0.5
+        ? normalizeHeading(coords.heading)
+        : null;
+      const inferredHeading = last && deltaMeters >= 1.5 && speedMph >= 0.5
+        ? bearingBetween(last, stabilized)
+        : null;
+      const heading = gpsHeading ?? inferredHeading ?? state.telemetry.heading;
       const classification = classifyMotion({
         speedMph,
         accuracyMeters,
@@ -132,7 +158,7 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
         latitude: sample.latitude,
         longitude: sample.longitude,
         accuracyMeters,
-        heading: coords.heading,
+        heading,
         currentSpeedMph: speedMph,
         averageSpeedMph,
         distanceMiles,
