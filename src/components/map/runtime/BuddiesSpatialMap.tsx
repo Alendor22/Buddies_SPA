@@ -345,8 +345,19 @@ export default function BuddiesSpatialMap() {
             />
 
             {telemetry.latitude != null && telemetry.longitude != null ? (
-              <Marker latitude={telemetry.latitude} longitude={telemetry.longitude} anchor="center" rotation={telemetry.heading ?? 0} rotationAlignment="map">
-                <div className="grid h-12 w-12 place-items-center rounded-full border-4 border-white bg-slate-950 text-xl shadow-2xl ring-4 ring-sky-300/40" aria-label="Your current location">🐾</div>
+              <Marker
+                latitude={telemetry.latitude}
+                longitude={telemetry.longitude}
+                anchor="center"
+                rotation={telemetry.heading ?? 0}
+                rotationAlignment="map"
+              >
+                <div className="relative h-14 w-14" aria-label="Your current location and heading">
+                  <div className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 border-x-[9px] border-b-[21px] border-x-transparent border-b-sky-300 drop-shadow-[0_2px_3px_rgba(15,23,42,0.9)]" />
+                  <div className="absolute inset-[11px] grid place-items-center rounded-full border-2 border-white bg-slate-950 text-base shadow-2xl ring-4 ring-sky-300/40">
+                    🐾
+                  </div>
+                </div>
               </Marker>
             ) : null}
           </Map>
