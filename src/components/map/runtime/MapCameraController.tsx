@@ -117,7 +117,7 @@ export default function MapCameraController() {
       const oriented = event as OrientationEventWithWebkitHeading;
       const screenRotation = getScreenRotation();
       const rawHeading = typeof oriented.webkitCompassHeading === 'number'
-        ? normalizeDegrees(oriented.webkitCompassHeading + screenRotation)
+        ? normalizeDegrees(oriented.webkitCompassHeading)
         : typeof event.alpha === 'number'
           ? normalizeDegrees(360 - event.alpha + screenRotation)
           : null;
@@ -350,8 +350,8 @@ export default function MapCameraController() {
           zoom: state.followZoom,
           pitch: state.followPitch,
           bearing: state.telemetry.heading ?? state.bearing,
-          offset: [0, 130],
-          duration: 500,
+          offset: [0, 72],
+          duration: 220,
           essential: true
         });
       } else if (cameraMode === 'overview') {
