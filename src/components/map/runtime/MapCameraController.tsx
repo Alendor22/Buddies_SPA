@@ -132,6 +132,9 @@ export default function MapCameraController() {
         pitch: typeof event.beta === 'number' ? event.beta : null,
         roll: typeof event.gamma === 'number' ? event.gamma : null
       });
+      // Keep follow mode from holding on to an older GPS course after the user
+      // turns. Compass updates are the freshest heading source when available.
+      useMapRuntimeStore.getState().patchTelemetry({ heading });
     }
 
     function startListening() {
