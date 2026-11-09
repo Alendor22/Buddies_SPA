@@ -2,6 +2,7 @@
 
 import type * as Ably from 'ably';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { getRealtimeClient } from '@/lib/realtime';
@@ -11,6 +12,7 @@ type IncomingNotification = { notificationId?: string; href?: string; title?: st
 
 export default function RealtimeNotificationBell() {
   const { isSignedIn, userId } = useAuth();
+  const pathname = usePathname();
   const [count, setCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
   const [toast, setToast] = useState<IncomingNotification | null>(null);
@@ -41,7 +43,7 @@ export default function RealtimeNotificationBell() {
     void loadCount();
     const poll = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadCount();
-    }, 15000);
+    }, 3000);
     try {
       channel = getRealtimeClient().channels.get(channels.userNotifications(userId));
       void channel.subscribe('notification.created', onNotification);
@@ -54,6 +56,10 @@ export default function RealtimeNotificationBell() {
       channel?.unsubscribe('notification.created', onNotification);
     };
   }, [isSignedIn, userId]);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/messages')) setMessageCount(0);
+  }, [pathname]);
 
   if (!isSignedIn || !userId) return null;
   return (
