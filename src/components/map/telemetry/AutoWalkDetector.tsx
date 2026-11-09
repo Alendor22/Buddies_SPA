@@ -49,6 +49,7 @@ function bearingBetween(
 export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean }) {
   const samplesRef = useRef<Sample[]>([]);
   const lastAcceptedRef = useRef<StabilizedPedestrianPosition | null>(null);
+  const lastRawCoordinateRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const totalDistanceMetersRef = useRef(0);
   const movingSecondsRef = useRef(0);
 
@@ -75,8 +76,14 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
       const now = position.timestamp || Date.now();
       const coords = position.coords;
       const last = lastAcceptedRef.current;
+      const lastRaw = lastRawCoordinateRef.current;
+      const rawCoordinate = { latitude: coords.latitude, longitude: coords.longitude };
       const accuracyMeters = Number.isFinite(coords.accuracy) && coords.accuracy >= 0 ? coords.accuracy : 999;
       const gpsSpeedMph = coords.speed != null && coords.speed >= 0 ? coords.speed * 2.236936 : null;
+      const rawHeading = lastRaw && distanceMeters(lastRaw, rawCoordinate) >= 0.8
+        ? bearingBetween(lastRaw, rawCoordinate)
+        : null;
+      lastRawCoordinateRef.current = rawCoordinate;
       const stabilized = stabilizePedestrianPosition(last, {
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -134,10 +141,10 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
         && (gpsSpeedMph ?? speedMph) >= 0.5
         ? normalizeHeading(coords.heading)
         : null;
-      const inferredHeading = last && deltaMeters >= 1.5 && speedMph >= 0.5
+      const inferredHeading = last && deltaMeters >= 0.8 && speedMph >= 0.4
         ? bearingBetween(last, stabilized)
         : null;
-      const heading = gpsHeading ?? inferredHeading ?? state.telemetry.heading;
+      const heading = gpsHeading ?? rawHeading ?? inferredHeading ?? state.telemetry.heading;
       const classification = classifyMotion({
         speedMph,
         accuracyMeters,
