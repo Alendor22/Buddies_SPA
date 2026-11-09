@@ -104,10 +104,14 @@ export default function MapCameraController() {
   }, [setCameraMode]);
 
   useEffect(() => {
-    if (cameraMode !== 'ar') {
+    const compassEnabled = cameraMode === 'ar' || cameraMode === 'follow';
+    if (!compassEnabled) {
       smoothedHeadingRef.current = null;
       return;
     }
+
+    let orientationListening = false;
+    let permissionRequested = false;
 
     function handleOrientation(event: DeviceOrientationEvent) {
       const oriented = event as OrientationEventWithWebkitHeading;
@@ -130,8 +134,43 @@ export default function MapCameraController() {
       });
     }
 
-    window.addEventListener('deviceorientation', handleOrientation, true);
-    return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+    function startListening() {
+      if (orientationListening) return;
+      orientationListening = true;
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+
+    async function requestOrientationPermission() {
+      if (permissionRequested) return;
+      permissionRequested = true;
+      const orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+        requestPermission?: () => Promise<'granted' | 'denied'>;
+      };
+
+      if (typeof orientation.requestPermission === 'function') {
+        try {
+          const permission = await orientation.requestPermission();
+          if (permission !== 'granted') return;
+        } catch {
+          return;
+        }
+      }
+
+      startListening();
+    }
+
+    // iOS requires the compass permission request to originate from a user
+    // gesture. The first map interaction supplies that gesture in follow mode.
+    window.addEventListener('pointerdown', requestOrientationPermission, { once: true, passive: true });
+    window.addEventListener('touchstart', requestOrientationPermission, { once: true, passive: true });
+    startListening();
+
+    return () => {
+      window.removeEventListener('pointerdown', requestOrientationPermission);
+      window.removeEventListener('touchstart', requestOrientationPermission);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+      smoothedHeadingRef.current = null;
+    };
   }, [cameraMode, setArOrientation]);
 
   useEffect(() => {
