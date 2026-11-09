@@ -153,6 +153,8 @@ model User {
   grantedShares            DogShareGrant[]         @relation("DogShareGrantor")
   auditEvents              AuditEvent[]
   recognitionEnrollments   RecognitionEnrollment[] @relation("RecognitionEnrollmentOwner")
+  reportedRecognitionEvents RecognitionEvent[]     @relation("RecognitionEventReporter")
+  recognitionMatchMessages  RecognitionMatchMessage[] @relation("RecognitionMatchMessageSender")
   sentWalks                Walk[]                  @relation("RequesterWalks")
   assignedWalks            Walk[]                  @relation("WalkerWalks")
   messages                 Message[]
@@ -272,6 +274,8 @@ model Dog {
   shareGrants              DogShareGrant[]
   recognitionEnrollment    RecognitionEnrollment?  @relation("RecognitionEnrollmentDog")
   recognitionEvents        RecognitionEvent[]      @relation("RecognitionMatchedDog")
+  recognitionCandidacies   RecognitionEventCandidate[] @relation("RecognitionEventCandidateDog")
+  recognitionMatchMessages RecognitionMatchMessage[]   @relation("RecognitionMatchMessageDog")
   qrScans                  QrScan[]
   sightings                Sighting[]
   walks                    Walk[]
@@ -466,23 +470,69 @@ model RecognitionAsset {
 }
 
 model RecognitionEvent {
-  id             String                  @id @default(cuid())
-  requestId      String                  @unique
-  source         String
-  imageRef       String?
-  matchedDogId   String?
-  matchedDog     Dog?                    @relation("RecognitionMatchedDog", fields: [matchedDogId], references: [id], onDelete: SetNull)
-  confidence     Float?
-  outcome        RecognitionEventOutcome
-  modelVersion   String
-  candidateCount Int                     @default(0)
-  latencyMs      Int?
-  metadata       Json?
-  createdAt      DateTime                @default(now())
+  id              String                      @id @default(cuid())
+  requestId       String                      @unique
+  source          String
+  imageRef        String?
+  matchedDogId    String?
+  matchedDog      Dog?                        @relation("RecognitionMatchedDog", fields: [matchedDogId], references: [id], onDelete: SetNull)
+  confidence      Float?
+  outcome         RecognitionEventOutcome
+  modelVersion    String
+  candidateCount  Int                         @default(0)
+  latencyMs       Int?
+  metadata        Json?
+  // The signed-in user who submitted the one-time search photo (the "finder"), so a
+  // matched owner has someone to contact. Null for non-search recognition events.
+  reporterUserId  String?
+  reporter        User?                       @relation("RecognitionEventReporter", fields: [reporterUserId], references: [id], onDelete: SetNull)
+  // The uploaded photo, retained only long enough for a matched owner to review it.
+  // Never set when a search finds no candidates.
+  photoStorageKey String?
+  photoExpiresAt  DateTime?
+  candidates      RecognitionEventCandidate[]
+  matchMessages   RecognitionMatchMessage[]
+  createdAt       DateTime                    @default(now())
 
   @@index([matchedDogId, createdAt])
   @@index([outcome, createdAt])
   @@index([modelVersion, createdAt])
+  @@index([photoExpiresAt])
+}
+
+// One row per dog a lost-dog search matched above threshold. Durable, explicit record of
+// "this dog's owner and this event's reporter are allowed to see this match and message
+// each other" — independent of the Notification rows, which are for UI alerting only and
+// are not meant to be relied on for authorization.
+model RecognitionEventCandidate {
+  id                 String           @id @default(cuid())
+  recognitionEventId String
+  recognitionEvent   RecognitionEvent @relation(fields: [recognitionEventId], references: [id], onDelete: Cascade)
+  dogId              String
+  dog                Dog              @relation("RecognitionEventCandidateDog", fields: [dogId], references: [id], onDelete: Cascade)
+  score              Float
+  createdAt          DateTime         @default(now())
+
+  @@unique([recognitionEventId, dogId])
+  @@index([dogId, createdAt])
+}
+
+// A small, dedicated contact thread between a matched dog's owner and the search's
+// reporter, scoped to one (event, dog) pair. Deliberately not reusing SocialMessage: that
+// system requires both participants to own a dog, which a finder frequently will not.
+model RecognitionMatchMessage {
+  id                 String           @id @default(cuid())
+  recognitionEventId String
+  recognitionEvent   RecognitionEvent @relation(fields: [recognitionEventId], references: [id], onDelete: Cascade)
+  dogId              String
+  dog                Dog              @relation("RecognitionMatchMessageDog", fields: [dogId], references: [id], onDelete: Cascade)
+  senderId           String
+  sender             User             @relation("RecognitionMatchMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body               String
+  createdAt          DateTime         @default(now())
+
+  @@index([recognitionEventId, dogId, createdAt])
+  @@index([senderId, createdAt])
 }
 
 model BuddyRequest {
