@@ -350,7 +350,7 @@ export default function BuddiesSpatialMap() {
                 longitude={telemetry.longitude}
                 anchor="center"
                 rotation={telemetry.heading ?? 0}
-                rotationAlignment="map"
+                rotationAlignment="viewport"
               >
                 <div className="relative h-14 w-14" aria-label="Your current location and heading">
                   <div className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 border-x-[9px] border-b-[21px] border-x-transparent border-b-sky-300 drop-shadow-[0_2px_3px_rgba(15,23,42,0.9)]" />
