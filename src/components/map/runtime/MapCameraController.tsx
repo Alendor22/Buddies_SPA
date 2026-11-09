@@ -350,8 +350,8 @@ export default function MapCameraController() {
           zoom: state.followZoom,
           pitch: state.followPitch,
           bearing: state.telemetry.heading ?? state.bearing,
-          offset: [0, 72],
-          duration: 220,
+          offset: [0, 0],
+          duration: 140,
           essential: true
         });
       } else if (cameraMode === 'overview') {
