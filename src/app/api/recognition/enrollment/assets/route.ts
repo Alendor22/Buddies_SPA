@@ -20,6 +20,9 @@ const assetSchema = z.object({
 
 const processSchema = z.object({ assetId: z.string().trim().min(1) });
 
+// The first request can include model loading on the Fly service.
+export const maxDuration = 180;
+
 function disabled() {
   return NextResponse.json({ error: 'Dog recognition enrollment is not enabled.' }, { status: 404 });
 }
