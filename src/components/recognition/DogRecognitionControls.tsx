@@ -15,6 +15,7 @@ const VIEWS = [
 
 type CaptureView = typeof VIEWS[number][0];
 type Props = { dogId: string; dogName: string; isOwner: boolean; enrolled: boolean };
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
 
 function hex(bytes: ArrayBuffer) {
   return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -158,12 +159,12 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
       <h2 id="dog-identity-heading" className="font-semibold">Visual dog identity</h2>
       {isOwner && !enrolled ? (
         <>
-          <p className="mt-1 text-sm text-slate-700">Enroll eight clear views. Keep the whole dog centered, use good light, and capture one dog at a time.</p>
+          <p className="mt-1 text-sm text-slate-700">Enroll eight clear views. Keep the whole dog centered, use good light, and capture one dog at a time. You can take a new photo or choose one from your Camera Roll.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {VIEWS.map(([view, label]) => (
               <label key={view} className="grid gap-1 text-sm font-medium">
                 {label}
-                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => setView(view, event)} className="rounded-lg border bg-white p-2" />
+                <input type="file" accept={IMAGE_ACCEPT} onChange={(event) => setView(view, event)} className="rounded-lg border bg-white p-2" />
               </label>
             ))}
           </div>
@@ -184,7 +185,7 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
           </label>
           <label className="mt-3 grid gap-2 text-sm font-medium">
             Current dog photo
-            <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => setVerificationPhoto(event.target.files?.[0] ?? null)} className="rounded-lg border bg-white p-2" />
+            <input type="file" accept={IMAGE_ACCEPT} onChange={(event) => setVerificationPhoto(event.target.files?.[0] ?? null)} className="rounded-lg border bg-white p-2" />
           </label>
           {isOwner ? <button type="button" onClick={revoke} disabled={busy} className="mt-3 rounded-lg border border-red-300 px-4 py-2 text-red-800 disabled:opacity-50">Revoke enrollment and delete reference data</button> : null}
           <button type="button" onClick={verify} disabled={busy || !consented || !verificationPhoto} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50">
