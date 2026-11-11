@@ -11,7 +11,8 @@ import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// Match the recognition provider's cold-start allowance and the enrollment processor.
+export const maxDuration = 180;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -217,7 +218,8 @@ export async function POST(request: NextRequest) {
         ownerNotified: true
       }))
     });
-  } catch {
+  } catch (error) {
+    console.error('[recognition/search] failed', error);
     return NextResponse.json({ error: 'Lost-dog search is temporarily unavailable.' }, { status: 503 });
   }
 }
