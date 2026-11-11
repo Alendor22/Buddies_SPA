@@ -2,6 +2,9 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { r2 } from '@/lib/r2';
 
 export const DOG_REID_MODEL_VERSION = 'open-noodle/pet-recognition-base@main';
+// The provider lazily loads the detector and embedding model on its first image
+// request. Keep a bounded timeout, but allow that cold start to complete.
+const PROVIDER_TIMEOUT_MS = 55_000;
 
 function config() {
   const endpoint = process.env.DOG_REID_ENDPOINT_URL?.trim();
@@ -22,7 +25,7 @@ async function callEmbedding(bytes: Uint8Array, mimeType: string) {
     headers: { Authorization: `Bearer ${token}` },
     body: form,
     cache: 'no-store',
-    signal: AbortSignal.timeout(30_000)
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
   });
   if (!response.ok) throw new Error('Dog re-identification provider failed');
   const payload = await response.json() as { embedding?: unknown; modelVersion?: unknown };
