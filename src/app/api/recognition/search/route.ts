@@ -216,7 +216,8 @@ export async function POST(request: NextRequest) {
         ownerNotified: true
       }))
     });
-  } catch {
+  } catch (error) {
+    console.error('[recognition/search] failed', error instanceof Error ? error.stack ?? error.message : error);
     return NextResponse.json({ error: 'Lost-dog search is temporarily unavailable.' }, { status: 503 });
   }
 }
