@@ -34,7 +34,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   const [recipientDogId, setRecipientDogId] = useState('');
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
-  const [peerTyping, setPeerTyping] = useState(false);
+  const [peerTypingConversationId, setPeerTypingConversationId] = useState<string | null>(null);
 
   const refreshConversations = useCallback(async () => {
     const response = await fetch('/api/social/conversations', { cache: 'no-store' });
@@ -89,18 +89,20 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   }, [activeId]);
 
   useEffect(() => {
-    if (!activeId) {
-      setPeerTyping(false);
-      return;
-    }
+    if (!activeId) return;
     let channel: Ably.RealtimeChannel | null = null;
     let disposed = false;
     const onTyping = (message: Ably.Message) => {
       const data = (message.data ?? {}) as { userId?: string; active?: boolean };
-      if (data.userId === userId) return;
-      setPeerTyping(Boolean(data.active));
+      if (disposed || data.userId === userId) return;
+      setPeerTypingConversationId((current) => {
+        if (data.active) return activeId;
+        return current === activeId ? null : current;
+      });
       if (data.active) window.setTimeout(() => {
-        if (!disposed) setPeerTyping(false);
+        if (!disposed) {
+          setPeerTypingConversationId((current) => current === activeId ? null : current);
+        }
       }, 2200);
     };
     try {
@@ -112,7 +114,6 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     return () => {
       disposed = true;
       channel?.unsubscribe('typing', onTyping);
-      setPeerTyping(false);
     };
   }, [activeId, userId]);
 
@@ -212,6 +213,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   }
 
   const active = useMemo(() => conversations.find((item) => item.id === activeId), [conversations, activeId]);
+  const peerTyping = Boolean(activeId && peerTypingConversationId === activeId);
 
   return <div className="mt-8 grid gap-6 lg:grid-cols-[320px_1fr]">
     <aside className="rounded-2xl border bg-white p-4 shadow-sm">

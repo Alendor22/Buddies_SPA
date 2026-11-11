@@ -157,6 +157,7 @@
     { "route": "src/app/api/maps/directions/route.ts", "access": "review-required", "testState": "backlog" },
     { "route": "src/app/api/maps/static/route.ts", "access": "public", "testState": "backlog" },
     { "route": "src/app/api/notifications/read/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/notifications/unread/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/qr/[id]/route.ts", "access": "public", "testState": "backlog" },
     { "route": "src/app/api/realtime/token/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/recognition/enrollment/assets/route.ts", "access": "authenticated", "testState": "backlog" },

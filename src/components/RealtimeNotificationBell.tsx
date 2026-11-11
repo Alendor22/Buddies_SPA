@@ -3,7 +3,7 @@
 import type * as Ably from 'ably';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { getRealtimeClient } from '@/lib/realtime';
 import { channels } from '@/lib/realtime';
@@ -12,17 +12,19 @@ type IncomingNotification = { notificationId?: string; href?: string; title?: st
 
 export default function RealtimeNotificationBell() {
   const { isSignedIn, userId } = useAuth();
+
+  if (!isSignedIn || !userId) return null;
+  return <AuthenticatedNotificationBell key={userId} userId={userId} />;
+}
+
+function AuthenticatedNotificationBell({ userId }: { userId: string }) {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
   const [toast, setToast] = useState<IncomingNotification | null>(null);
+  const wasOnMessagesPage = useRef(pathname.startsWith('/dashboard/messages'));
 
   useEffect(() => {
-    if (!isSignedIn || !userId) {
-      setCount(0);
-      setMessageCount(0);
-      return;
-    }
     let channel: Ably.RealtimeChannel | null = null;
     let disposed = false;
     const loadCount = async () => {
@@ -55,18 +57,37 @@ export default function RealtimeNotificationBell() {
       window.clearInterval(poll);
       channel?.unsubscribe('notification.created', onNotification);
     };
-  }, [isSignedIn, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    if (pathname.startsWith('/dashboard/messages')) setMessageCount(0);
+    const wasOnMessagesPageBeforeNavigation = wasOnMessagesPage.current;
+    const isOnMessagesPage = pathname.startsWith('/dashboard/messages');
+    wasOnMessagesPage.current = isOnMessagesPage;
+    if (!wasOnMessagesPageBeforeNavigation || isOnMessagesPage) return;
+
+    let cancelled = false;
+    async function refreshMessageCount() {
+      try {
+        const response = await fetch('/api/notifications/unread', { cache: 'no-store' });
+        if (response.ok && !cancelled) {
+          const data = await response.json();
+          setMessageCount(data.messageCount ?? 0);
+        }
+      } catch {
+        // The regular unread-count poll will reconcile if this refresh fails.
+      }
+    }
+    void refreshMessageCount();
+    return () => { cancelled = true; };
   }, [pathname]);
 
-  if (!isSignedIn || !userId) return null;
+  const visibleMessageCount = pathname.startsWith('/dashboard/messages') ? 0 : messageCount;
+
   return (
     <>
-      <Link href="/dashboard/messages" aria-label={messageCount ? `${messageCount} unread messages` : 'Messages'} className="relative shrink-0 rounded-full border px-3 py-2 text-sm font-medium">
+      <Link href="/dashboard/messages" aria-label={visibleMessageCount ? `${visibleMessageCount} unread messages` : 'Messages'} className="relative shrink-0 rounded-full border px-3 py-2 text-sm font-medium">
         Messages
-        {messageCount > 0 ? <span className="absolute -right-1 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-5 text-white">{messageCount > 99 ? '99+' : messageCount}</span> : null}
+        {visibleMessageCount > 0 ? <span className="absolute -right-1 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-5 text-white">{visibleMessageCount > 99 ? '99+' : visibleMessageCount}</span> : null}
       </Link>
       <Link href="/dashboard/notifications" aria-label={count ? `${count} unread notifications` : 'Notifications'} className="relative shrink-0 rounded-full border px-3 py-2 text-sm font-medium">
         Alerts
