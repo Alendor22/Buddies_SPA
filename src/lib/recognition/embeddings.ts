@@ -4,7 +4,7 @@ import { r2 } from '@/lib/r2';
 export const DOG_REID_MODEL_VERSION = 'open-noodle/pet-recognition-base@main';
 // The provider lazily loads the detector and embedding model on its first image
 // request. Keep a bounded timeout, but allow that cold start to complete.
-const PROVIDER_TIMEOUT_MS = 55_000;
+const PROVIDER_TIMEOUT_MS = 180_000;
 
 function config() {
   const endpoint = process.env.DOG_REID_ENDPOINT_URL?.trim();
