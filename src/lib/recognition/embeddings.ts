@@ -20,14 +20,53 @@ async function callEmbedding(bytes: Uint8Array, mimeType: string) {
   const body = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(body).set(bytes);
   form.set('image', new Blob([body], { type: mimeType }), 'dog-image');
-  const response = await fetch(`${endpoint}/embed`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
-    cache: 'no-store',
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
-  });
-  if (!response.ok) throw new Error('Dog re-identification provider failed');
+  let response: Response;
+  try {
+    response = await fetch(`${endpoint}/embed`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+    });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : 'UnknownError';
+    const message = error instanceof Error ? error.message : String(error);
+    const endpointHost = (() => {
+      try {
+        return new URL(endpoint).host;
+      } catch {
+        return 'invalid-endpoint';
+      }
+    })();
+    console.error('Dog re-identification provider request failed', {
+      endpointHost,
+      errorName: name,
+      errorMessage: message
+    });
+    if (name === 'AbortError' || name === 'TimeoutError') {
+      throw new Error(`Dog re-identification provider timed out after ${PROVIDER_TIMEOUT_MS}ms`);
+    }
+    throw new Error('Dog re-identification provider is unavailable');
+  }
+
+  if (!response.ok) {
+    const endpointHost = (() => {
+      try {
+        return new URL(endpoint).host;
+      } catch {
+        return 'invalid-endpoint';
+      }
+    })();
+    console.error('Dog re-identification provider returned a non-OK response', {
+      endpointHost,
+      status: response.status,
+      statusText: response.statusText,
+      contentType: response.headers.get('content-type')
+    });
+    throw new Error(`Dog re-identification provider failed with HTTP ${response.status}`);
+  }
+
   const payload = await response.json() as { embedding?: unknown; modelVersion?: unknown };
   if (!Array.isArray(payload.embedding) || payload.embedding.length !== 512 ||
       payload.embedding.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
