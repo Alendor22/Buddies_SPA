@@ -71,7 +71,6 @@ export default function FindLostDogForm() {
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          capture="environment"
           onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
           className="rounded-lg border bg-white p-3"
         />
