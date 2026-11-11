@@ -7,6 +7,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 
 MODEL_VERSION = "open-noodle/pet-recognition-base@main"
 MAX_BYTES = 8 * 1024 * 1024
+DOG_SCORE_THRESHOLD = float(os.environ.get("DOG_REID_DOG_SCORE_THRESHOLD", "0.15"))
 MEAN = np.asarray([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.asarray([0.229, 0.224, 0.225], dtype=np.float32)
 app = FastAPI(title="Buddies Dog Re-identification", docs_url=None, redoc_url=None)
@@ -84,7 +85,7 @@ async def embed(
         for label, score, box in zip(
             found["labels"], found["scores"], found["boxes"]
         )
-        if int(label) == dog_label and float(score) >= 0.35
+        if int(label) == dog_label and float(score) >= DOG_SCORE_THRESHOLD
     ]
     if not matches:
         raise HTTPException(status_code=422, detail="No clear dog detected")
