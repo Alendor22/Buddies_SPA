@@ -34,14 +34,10 @@ export async function createRecognitionEnrollmentUpload(input: {
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: storageKey,
-    ContentType: input.mimeType,
-    ContentLength: input.contentLength,
-    Metadata: {
-      purpose: 'dog-recognition-enrollment',
-      captureView: input.captureView,
-      dogId: input.dogId,
-      ownerId: input.ownerId
-    }
+    // Only sign headers that the browser can reliably send with a cross-origin
+    // PUT. Content-Length and x-amz-meta-* headers are forbidden/omitted by
+    // Safari fetch and otherwise cause a presigned signature mismatch.
+    ContentType: input.mimeType
   });
 
   return {
