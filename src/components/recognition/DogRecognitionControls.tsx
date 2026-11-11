@@ -59,10 +59,17 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
           dogId, mimeType: file.type, contentLength: file.size, captureView: view
         }) as { upload?: { storageKey: string; uploadUrl: string } };
         if (!signed.upload) throw new Error('Could not prepare an image upload.');
-        const uploaded = await fetch(signed.upload.uploadUrl, {
-          method: 'PUT', headers: { 'Content-Type': file.type }, body: file
-        });
-        if (!uploaded.ok) {
+        let directUploadSucceeded = false;
+        try {
+          const uploaded = await fetch(signed.upload.uploadUrl, {
+            method: 'PUT', headers: { 'Content-Type': file.type }, body: file
+          });
+          directUploadSucceeded = uploaded.ok;
+        } catch {
+          // Safari reports blocked cross-origin R2 uploads as a generic
+          // TypeError/"Load failed". Continue through the same-origin route.
+        }
+        if (!directUploadSucceeded) {
           const fallback = new FormData();
           fallback.set('dogId', dogId);
           fallback.set('storageKey', signed.upload.storageKey);
