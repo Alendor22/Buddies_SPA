@@ -62,7 +62,17 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
         const uploaded = await fetch(signed.upload.uploadUrl, {
           method: 'PUT', headers: { 'Content-Type': file.type }, body: file
         });
-        if (!uploaded.ok) throw new Error('A reference photo could not be uploaded. Check R2 upload permissions.');
+        if (!uploaded.ok) {
+          const fallback = new FormData();
+          fallback.set('dogId', dogId);
+          fallback.set('storageKey', signed.upload.storageKey);
+          fallback.set('image', file);
+          const fallbackResponse = await fetch('/api/recognition/enrollment/upload', {
+            method: 'PUT', body: fallback, cache: 'no-store'
+          });
+          const fallbackPayload = await fallbackResponse.json().catch(() => ({})) as { error?: string };
+          if (!fallbackResponse.ok) throw new Error(fallbackPayload.error || 'A reference photo could not be uploaded.');
+        }
         const saved = await fetch('/api/recognition/enrollment/assets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
