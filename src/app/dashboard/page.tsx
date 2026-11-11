@@ -49,6 +49,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <Link href={UI_ROUTES.socialMap} className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-cyan-900">Social Map</Link>
           <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2">Walk messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
           <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-2">Buddies</Link>
+          <Link href="/find-dog" className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sky-900">Find lost dog</Link>
         </div>
       </div>
 
@@ -68,6 +69,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Link href={UI_ROUTES.checkIns} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Nearby activity</h2><p className="mt-2 text-sm text-slate-600">Check dogs into parks and discover active dogs on the Mapbox map.</p></Link>
         <Link href={UI_ROUTES.walks} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Walk messages</h2><p className="mt-2 text-sm text-slate-600">Open persisted realtime walk conversations and presence.</p></Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Safety network</h2><p className="mt-2 text-sm text-slate-600">Report a lost dog, map the last-seen point, and alert trusted buddies.</p></Link>
+        <Link href="/find-dog" className="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm"><h2 className="text-xl font-semibold text-sky-950">Find a lost dog</h2><p className="mt-2 text-sm text-sky-900">Upload a found-dog photo for visual matching against enrolled lost-dog profiles.</p></Link>
       </section>
 
       <section className="mt-8">
