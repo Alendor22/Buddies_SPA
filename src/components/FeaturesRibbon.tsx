@@ -32,6 +32,7 @@ const memberFeatures: FeatureItem[] = [
   { href: '/dashboard/messages', label: 'Messages', icon: '✉', match: (pathname) => pathname.startsWith('/dashboard/messages') },
   { href: '/dashboard/buddies/invite', label: 'Invite', icon: '+', match: (pathname) => pathname.startsWith('/dashboard/buddies/invite') },
   { href: '/dashboard/lost/report', label: 'Lost Dog', icon: '!', match: (pathname) => pathname.startsWith('/dashboard/lost') },
+  { href: '/find-dog', label: 'Find Lost Dog', icon: '🔎', match: (pathname) => pathname.startsWith('/find-dog') },
   { href: '/dashboard/notifications', label: 'Alerts', icon: '🔔', match: (pathname) => pathname.startsWith('/dashboard/notifications') },
 ];
 
