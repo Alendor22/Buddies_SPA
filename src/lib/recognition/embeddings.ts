@@ -6,6 +6,14 @@ export const DOG_REID_MODEL_VERSION = 'open-noodle/pet-recognition-base@main';
 // request. Keep a bounded timeout, but allow that cold start to complete.
 const PROVIDER_TIMEOUT_MS = 180_000;
 
+function endpointHostFor(endpoint: string) {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return 'invalid-endpoint';
+  }
+}
+
 function config() {
   const endpoint = process.env.DOG_REID_ENDPOINT_URL?.trim();
   const token = process.env.DOG_REID_ENDPOINT_TOKEN?.trim();
@@ -32,15 +40,8 @@ async function callEmbedding(bytes: Uint8Array, mimeType: string) {
   } catch (error) {
     const name = error instanceof Error ? error.name : 'UnknownError';
     const message = error instanceof Error ? error.message : String(error);
-    const endpointHost = (() => {
-      try {
-        return new URL(endpoint).host;
-      } catch {
-        return 'invalid-endpoint';
-      }
-    })();
     console.error('Dog re-identification provider request failed', {
-      endpointHost,
+      endpointHost: endpointHostFor(endpoint),
       errorName: name,
       errorMessage: message
     });
@@ -51,15 +52,8 @@ async function callEmbedding(bytes: Uint8Array, mimeType: string) {
   }
 
   if (!response.ok) {
-    const endpointHost = (() => {
-      try {
-        return new URL(endpoint).host;
-      } catch {
-        return 'invalid-endpoint';
-      }
-    })();
     console.error('Dog re-identification provider returned a non-OK response', {
-      endpointHost,
+      endpointHost: endpointHostFor(endpoint),
       status: response.status,
       statusText: response.statusText,
       contentType: response.headers.get('content-type')

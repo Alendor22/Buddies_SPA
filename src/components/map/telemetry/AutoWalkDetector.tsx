@@ -80,9 +80,6 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
       const rawCoordinate = { latitude: coords.latitude, longitude: coords.longitude };
       const accuracyMeters = Number.isFinite(coords.accuracy) && coords.accuracy >= 0 ? coords.accuracy : 999;
       const gpsSpeedMph = coords.speed != null && coords.speed >= 0 ? coords.speed * 2.236936 : null;
-      const rawHeading = lastRaw && distanceMeters(lastRaw, rawCoordinate) >= 0.8
-        ? bearingBetween(lastRaw, rawCoordinate)
-        : null;
       lastRawCoordinateRef.current = rawCoordinate;
       const stabilized = stabilizePedestrianPosition(last, {
         latitude: coords.latitude,
@@ -143,6 +140,15 @@ export default function AutoWalkDetector({ enabled = true }: { enabled?: boolean
         : null;
       const inferredHeading = last && deltaMeters >= 0.8 && speedMph >= 0.4
         ? bearingBetween(last, stabilized)
+        : null;
+      // Raw (unstabilized) consecutive fixes turn faster than the filtered position can
+      // register, which keeps turns responsive during an actual walk — but below the
+      // deadbandMeters() noise floor in pedestrianPositionFilter.ts (2.5-7m while
+      // near-stationary), consecutive raw fixes are GPS jitter, not movement. Gate on the
+      // same minimum speed inferredHeading uses so a stationary user doesn't see the
+      // heading spin from normal GPS noise.
+      const rawHeading = lastRaw && speedMph >= 0.4 && distanceMeters(lastRaw, rawCoordinate) >= 0.8
+        ? bearingBetween(lastRaw, rawCoordinate)
         : null;
       const heading = gpsHeading ?? rawHeading ?? inferredHeading ?? state.telemetry.heading;
       const classification = classifyMotion({
