@@ -13,6 +13,7 @@
   },
   "capabilities": [
     { "id": "meta-social", "sourcePrefixes": ["src/app/api/meta/", "src/app/share/meta/", "src/app/meta/", "src/lib/meta/", "src/components/MetaControls.tsx", "src/app/dashboard/account/meta/"], "testPrefixes": ["tests/unit/meta/", "tests/integration/meta/", "tests/database/meta-", "tests/e2e/meta-"] },
+    { "id": "mcp-connectors", "sourcePrefixes": ["src/app/api/mcp/", "src/app/api/account/tokens/", "src/app/dashboard/account/tokens/", "src/lib/mcp/", "src/lib/apiTokens.ts", "src/components/account/"], "testPrefixes": ["tests/unit/mcp/"] },
     {
       "id": "application-shell",
       "sourcePrefixes": [
@@ -186,6 +187,9 @@
     { "route": "src/app/api/walk-routes/favorites/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/walks/[id]/messages/read/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/walks/[id]/messages/route.ts", "access": "authenticated", "testState": "backlog" },
-    { "route": "src/app/api/walks/status/route.ts", "access": "authenticated", "testState": "covered" }
+    { "route": "src/app/api/walks/status/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/mcp/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/account/tokens/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/account/tokens/[id]/route.ts", "access": "authenticated", "testState": "covered" }
   ]
 }
