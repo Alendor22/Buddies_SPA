@@ -118,6 +118,24 @@ The script waits for the intended Vercel commit, performs deep readiness checks,
 
 Database migrations must be backward-compatible with the preceding application release. Destructive migrations require a separate expand/migrate/contract release sequence.
 
+## MCP connector (ChatGPT, etc.)
+
+`/api/mcp` exposes a read-only Model Context Protocol server (Streamable HTTP transport)
+scoped to a single signed-in user's own data: their dog profiles, walks, and unread
+notifications. No new environment variables are required — it reuses the existing
+database connection.
+
+Each user authenticates it with a personal access token, generated at
+`/dashboard/account/tokens` (shown once at creation; only its SHA-256 hash is stored).
+To connect it as a ChatGPT connector: add a custom connector pointing at
+`https://buddies.vercel.app/api/mcp` and supply the token as a bearer credential.
+Anyone holding the token can read that one user's data through the connector, so treat
+it like a password — tokens can be revoked at any time from the same page.
+
+This is deliberately read-only for now. Adding tools that mutate data (sending
+messages, reporting a dog lost, etc.) is a larger decision — held off so a leaked
+token's blast radius stays limited to reading one account's data, not acting on it.
+
 ## Security baseline
 
 The Next.js deployment applies:

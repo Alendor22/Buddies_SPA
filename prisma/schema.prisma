@@ -155,6 +155,7 @@ model User {
   recognitionEnrollments   RecognitionEnrollment[] @relation("RecognitionEnrollmentOwner")
   reportedRecognitionEvents RecognitionEvent[]     @relation("RecognitionEventReporter")
   recognitionMatchMessages  RecognitionMatchMessage[] @relation("RecognitionMatchMessageSender")
+  personalAccessTokens      PersonalAccessToken[]
   sentWalks                Walk[]                  @relation("RequesterWalks")
   assignedWalks            Walk[]                  @relation("WalkerWalks")
   messages                 Message[]
@@ -187,6 +188,23 @@ model User {
   metaShares               MetaShare[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
+}
+
+// A long-lived bearer credential a user generates in their account settings to let an
+// external MCP client (e.g. a ChatGPT connector) act as them against /api/mcp. Only the
+// SHA-256 hash is stored; the plaintext token is shown once, at creation time, and never
+// persisted or logged.
+model PersonalAccessToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId, revokedAt])
 }
 
 model UserPreference {

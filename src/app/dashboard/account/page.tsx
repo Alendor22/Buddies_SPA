@@ -47,6 +47,7 @@ export default async function AccountPage() {
         <Link href="/dashboard" className="rounded-lg border px-4 py-3 font-medium">Dashboard</Link>
         <Link href="/dogs" className="rounded-lg border px-4 py-3 font-medium">My dogs</Link>
         <Link href="/dashboard/notifications" className="rounded-lg border px-4 py-3 font-medium">Notifications</Link>
+        <Link href="/dashboard/account/tokens" className="rounded-lg border px-4 py-3 font-medium">MCP connectors &amp; API tokens</Link>
         <Link href="/logout" className="rounded-lg bg-red-600 px-4 py-3 text-center font-medium text-white">Sign out</Link>
       </section>
     </main>
