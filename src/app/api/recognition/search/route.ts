@@ -109,15 +109,17 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const candidates = enrollments
+    const scoredEnrollments = enrollments
       .map((enrollment) => {
         const score = scoreAgainstEnrollment(vector, enrollment.assets);
         if (score === null) return null;
         return { ...enrollment, score };
       })
       .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+      .sort((left, right) => right.score - left.score);
+    const bestSimilarity = scoredEnrollments[0]?.score ?? null;
+    const candidates = scoredEnrollments
       .filter((candidate) => candidate.score >= threshold)
-      .sort((left, right) => right.score - left.score)
       .slice(0, 5);
 
     const requestId = randomUUID();
@@ -208,6 +210,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       requestId,
       requiresOwnerConfirmation: true,
+      bestSimilarity,
+      matchThreshold: threshold,
+      comparedProfiles: scoredEnrollments.length,
       matches: candidates.map((candidate) => ({
         dogId: candidate.dog.id,
         publicId: candidate.dog.publicId,
