@@ -9,8 +9,11 @@ import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Match the recognition provider's cold-start allowance and the other recognition routes.
+export const maxDuration = 180;
 
-const MAX_BYTES = 8 * 1024 * 1024;
+// Keep below Vercel's 4.5 MB function payload ceiling, including multipart overhead.
+const MAX_BYTES = 4 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VERIFY_LIMIT = 20;
 const VERIFY_WINDOW_SECONDS = 600;
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
   const image = form?.get('image');
   if (typeof dogId !== 'string' || !(image instanceof File)) return NextResponse.json({ error: 'dogId and image are required.' }, { status: 400 });
   if (!ALLOWED.has(image.type) || image.size < 1 || image.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'Use a JPEG, PNG, or WebP image up to 8 MB.' }, { status: 400 });
+    return NextResponse.json({ error: 'Use a JPEG, PNG, or WebP image up to 4 MB.' }, { status: 400 });
   }
 
   const dog = await prisma.dog.findUnique({
