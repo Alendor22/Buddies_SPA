@@ -7,6 +7,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 
 MODEL_VERSION = "open-noodle/pet-recognition-base@main"
 MAX_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_DIMENSION = 2048
 DOG_SCORE_THRESHOLD = float(os.environ.get("DOG_REID_DOG_SCORE_THRESHOLD", "0.15"))
 MEAN = np.asarray([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.asarray([0.229, 0.224, 0.225], dtype=np.float32)
@@ -55,7 +56,7 @@ async def embed(
     authorization: str | None = Header(default=None),
 ):
     import torch
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     authorize(authorization)
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
@@ -64,7 +65,11 @@ async def embed(
     if not raw or len(raw) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Image exceeds 8 MB")
     try:
-        pil = Image.open(io.BytesIO(raw)).convert("RGB")
+        # Canonicalize enrollment and search photos identically: honor EXIF rotation,
+        # convert color to RGB, and cap the longest side without upscaling.
+        with Image.open(io.BytesIO(raw)) as source:
+            pil = ImageOps.exif_transpose(source).convert("RGB")
+        pil.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid image") from exc
 
