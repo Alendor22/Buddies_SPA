@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { normalizeRecognitionPhoto } from '@/lib/recognition/normalizePhoto';
 
 type Match = {
   dogId: string;
@@ -32,12 +33,14 @@ export default function FindLostDogForm() {
     }
 
     setBusy(true);
-    setMessage('Comparing the photo with enrolled lost-dog profiles…');
+    setMessage('Preparing the photo for matching…');
     setMatches([]);
 
     try {
+      const normalizedPhoto = await normalizeRecognitionPhoto(photo);
+      setMessage('Comparing the photo with enrolled lost-dog profiles…');
       const form = new FormData();
-      form.set('image', photo);
+      form.set('image', normalizedPhoto);
       const response = await fetch('/api/recognition/search', {
         method: 'POST',
         body: form,
