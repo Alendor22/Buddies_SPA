@@ -49,12 +49,17 @@ export default function FindLostDogForm() {
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
         matches?: Match[];
+        bestSimilarity?: number | null;
+        matchThreshold?: number;
+        comparedProfiles?: number;
       };
       if (!response.ok) throw new Error(payload.error || 'Lost-dog search failed.');
       setMatches(payload.matches ?? []);
       setMessage(payload.matches?.length
         ? 'Possible matches found. The owner has been notified and must confirm the identity.'
-        : 'No confident lost-dog match was found. Try a clearer angle or report the dog to local shelters.');
+        : payload.comparedProfiles
+          ? `No confident match. Closest profile similarity: ${Math.round((payload.bestSimilarity ?? 0) * 100)}% (match threshold: ${Math.round((payload.matchThreshold ?? 0) * 100)}%). Similarity is not a probability of identity.`
+          : 'Search completed, but no complete enrolled lost-dog profiles were available to compare.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Lost-dog search failed.');
     } finally {
