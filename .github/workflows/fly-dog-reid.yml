@@ -1,0 +1,36 @@
+name: Deploy dog recognition service to Fly.io
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/dog-reid/**"
+  workflow_dispatch:
+
+concurrency:
+  group: fly-dog-reid-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy dog-reid
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --config fly.toml --app buddies-spa
+        working-directory: services/dog-reid
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployed health endpoint
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors https://buddies-spa.fly.dev/health
