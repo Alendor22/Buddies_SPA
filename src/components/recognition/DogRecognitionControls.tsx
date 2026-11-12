@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
+import { normalizeRecognitionPhoto } from '@/lib/recognition/normalizePhoto';
 
 const VIEWS = [
   ['FRONT_LEFT', 'Front · left'],
@@ -54,7 +55,7 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
     try {
       await requestJson('/api/recognition/enrollment', { dogId, consentAccepted: true });
       for (const [view] of VIEWS) {
-        const file = files[view]!;
+        const file = await normalizeRecognitionPhoto(files[view]!);
         const hash = hex(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
         const signed = await requestJson('/api/recognition/enrollment/upload', {
           dogId, mimeType: file.type, contentLength: file.size, captureView: view
@@ -138,7 +139,7 @@ export default function DogRecognitionControls({ dogId, dogName, isOwner, enroll
     try {
       const form = new FormData();
       form.set('dogId', dogId);
-      form.set('image', verificationPhoto);
+      form.set('image', await normalizeRecognitionPhoto(verificationPhoto));
       const response = await fetch('/api/recognition/verify', { method: 'POST', body: form, cache: 'no-store' });
       const payload = await response.json().catch(() => ({})) as { matched?: boolean; score?: number; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Verification failed.');
