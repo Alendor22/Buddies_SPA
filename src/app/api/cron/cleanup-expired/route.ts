@@ -11,11 +11,11 @@ export const revalidate = 0;
 // rows once they've aged out of the live map.
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-    }
+  if (!secret) {
+    return NextResponse.json({ error: 'Cron secret is not configured.' }, { status: 503 });
+  }
+  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
   const now = new Date();
