@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMapboxToken } from '@/lib/mapboxToken';
+import { clientIdentifier, rateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,6 +31,14 @@ function fallbackSvg(latitude: number, longitude: number, width: number, height:
 }
 
 export async function GET(request: NextRequest) {
+  const limit = await rateLimit('maps:static', clientIdentifier(request.headers.get('x-forwarded-for')), 60, 60);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: 'Too many requests.' }, {
+      status: 429,
+      headers: { 'Retry-After': String(limit.retryAfterSeconds) }
+    });
+  }
+
   const latitude = numberParam(request.nextUrl.searchParams.get('lat'), 40.685743, -90, 90);
   const longitude = numberParam(request.nextUrl.searchParams.get('lng'), -73.941329, -180, 180);
   const zoom = numberParam(request.nextUrl.searchParams.get('zoom'), 14, 0, 22);
