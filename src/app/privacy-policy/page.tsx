@@ -85,7 +85,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Changes and contact</h2>
           <p>We may update this policy as Buddies changes. We will post the current version here and update its effective date.</p>
-          <p>For privacy questions, access or deletion requests, or concerns about this policy, contact LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</Link>.</p>
+          <p>For privacy questions, access or deletion requests, or concerns about this policy, contact LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</a>.</p>
         </section>
       </article>
     </main>
