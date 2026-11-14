@@ -64,7 +64,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Changes and contact</h2>
           <p>We may update these Terms as Buddies changes. We will post the current version here and update its effective date. Continued use after a change takes effect means you accept the updated Terms.</p>
-          <p>Questions about these Terms can be sent to LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</Link>.</p>
+          <p>Questions about these Terms can be sent to LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</a>.</p>
         </section>
       </article>
     </main>
