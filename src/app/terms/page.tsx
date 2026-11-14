@@ -52,7 +52,7 @@ export default function TermsPage() {
 
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Account restrictions and termination</h2>
-          <p>We may investigate suspected violations, remove content, limit features, or suspend or terminate access when reasonably necessary to protect users, the service, or comply with law. You may stop using Buddies at any time and request account deletion by contacting us. Some information may remain where necessary for legal, security, backup, or dispute-resolution purposes as described in the <a className="font-semibold underline" href="/privacy-policy">Privacy Policy</Link>.</p>
+          <p>We may investigate suspected violations, remove content, limit features, or suspend or terminate access when reasonably necessary to protect users, the service, or comply with law. You may stop using Buddies at any time and request account deletion by contacting us. Some information may remain where necessary for legal, security, backup, or dispute-resolution purposes as described in the <Link className="font-semibold underline" href="/privacy-policy">Privacy Policy</Link>.</p>
         </section>
 
         <section className="space-y-3">
