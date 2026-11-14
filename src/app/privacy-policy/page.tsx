@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | Buddies',
@@ -9,8 +10,8 @@ export default function PrivacyPolicyPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 text-slate-900">
       <nav className="mb-8 flex gap-5 text-sm underline">
-        <a href="/">Buddies home</a>
-        <a href="/terms">Terms of Service</a>
+        <Link href="/">Buddies home</Link>
+        <Link href="/terms">Terms of Service</Link>
       </nav>
       <article className="space-y-6 leading-7">
         <header className="space-y-2">
@@ -84,7 +85,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Changes and contact</h2>
           <p>We may update this policy as Buddies changes. We will post the current version here and update its effective date.</p>
-          <p>For privacy questions, access or deletion requests, or concerns about this policy, contact LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</a>.</p>
+          <p>For privacy questions, access or deletion requests, or concerns about this policy, contact LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</Link>.</p>
         </section>
       </article>
     </main>
