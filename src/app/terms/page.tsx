@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Terms of Service | Buddies',
@@ -9,8 +10,8 @@ export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 text-slate-900">
       <nav className="mb-8 flex gap-5 text-sm underline">
-        <a href="/">Buddies home</a>
-        <a href="/privacy-policy">Privacy Policy</a>
+        <Link href="/">Buddies home</Link>
+        <Link href="/privacy-policy">Privacy Policy</Link>
       </nav>
       <article className="space-y-6 leading-7">
         <header className="space-y-2">
@@ -51,7 +52,7 @@ export default function TermsPage() {
 
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Account restrictions and termination</h2>
-          <p>We may investigate suspected violations, remove content, limit features, or suspend or terminate access when reasonably necessary to protect users, the service, or comply with law. You may stop using Buddies at any time and request account deletion by contacting us. Some information may remain where necessary for legal, security, backup, or dispute-resolution purposes as described in the <a className="font-semibold underline" href="/privacy-policy">Privacy Policy</a>.</p>
+          <p>We may investigate suspected violations, remove content, limit features, or suspend or terminate access when reasonably necessary to protect users, the service, or comply with law. You may stop using Buddies at any time and request account deletion by contacting us. Some information may remain where necessary for legal, security, backup, or dispute-resolution purposes as described in the <a className="font-semibold underline" href="/privacy-policy">Privacy Policy</Link>.</p>
         </section>
 
         <section className="space-y-3">
@@ -63,7 +64,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Changes and contact</h2>
           <p>We may update these Terms as Buddies changes. We will post the current version here and update its effective date. Continued use after a change takes effect means you accept the updated Terms.</p>
-          <p>Questions about these Terms can be sent to LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</a>.</p>
+          <p>Questions about these Terms can be sent to LendCo at <a className="font-semibold underline" href="mailto:alendor6@gmail.com">alendor6@gmail.com</Link>.</p>
         </section>
       </article>
     </main>
