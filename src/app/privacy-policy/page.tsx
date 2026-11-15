@@ -12,6 +12,7 @@ export default function PrivacyPolicyPage() {
       <nav className="mb-8 flex gap-5 text-sm underline">
         <Link href="/">Buddies home</Link>
         <Link href="/terms">Terms of Service</Link>
+        <Link href="/data-deletion">Delete my data</Link>
       </nav>
       <article className="space-y-6 leading-7">
         <header className="space-y-2">
@@ -74,7 +75,7 @@ export default function PrivacyPolicyPage() {
 
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Your choices and privacy requests</h2>
-          <p>You can update profile information and visibility choices in Buddies, revoke location permission in your device or browser, disconnect Meta assets, and request access to or deletion of your account information by contacting us. We may need to verify your identity before acting and may retain information where the law permits or requires it.</p>
+          <p>You can update profile information and visibility choices in Buddies, revoke location permission in your device or browser, and disconnect Meta assets in your account settings. To request deletion of Meta connection data or your Buddies account, follow the <Link className="font-semibold underline" href="/data-deletion">data deletion instructions</Link> or email us. We may verify your identity before acting and retain information where law or security obligations require it.</p>
         </section>
 
         <section className="space-y-3">
