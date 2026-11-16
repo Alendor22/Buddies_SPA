@@ -68,10 +68,7 @@ export async function GET() {
           { ownerId: user.id },
           { members: { some: {
             status: 'ACCEPTED',
-            OR: [
-              { userId: user.id },
-              { dog: { custodians: { some: { userId: user.id, role: { in: ['OWNER', 'CAREGIVER'] } } } } }
-            ]
+            dog: dogManagerScope(user.id)
           } } }
         ]
       },
@@ -85,10 +82,7 @@ export async function GET() {
     prisma.dogPackMember.findMany({
       where: {
         status: 'INVITED',
-        OR: [
-          { userId: user.id },
-          { dog: { custodians: { some: { userId: user.id, role: { in: ['OWNER', 'CAREGIVER'] } } } } }
-        ]
+        dog: dogManagerScope(user.id)
       },
       include: {
         dog: { select: { id: true, name: true, breed: true, photoUrl: true } },
@@ -213,10 +207,7 @@ export async function POST(request: NextRequest) {
         packId,
         dogId,
         status: 'INVITED',
-        OR: [
-          { userId: user.id },
-          { dog: { custodians: { some: { userId: user.id, role: { in: ['OWNER', 'CAREGIVER'] } } } } }
-        ]
+        dog: dogManagerScope(user.id)
       },
       select: { id: true }
     });

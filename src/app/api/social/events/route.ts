@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
 import { addFeedItem, createEvent, listEvents } from '@/lib/social/repository';
+import { dogManagerScope } from '@/lib/social/dogManagerScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,10 +55,7 @@ export async function POST(request: NextRequest) {
           { ownerId: user.id },
           { members: { some: {
             status: 'ACCEPTED',
-            OR: [
-              { userId: user.id },
-              { dog: { custodians: { some: { userId: user.id, role: { in: ['OWNER', 'CAREGIVER'] } } } } }
-            ]
+            dog: dogManagerScope(user.id)
           } } }
         ]
       },

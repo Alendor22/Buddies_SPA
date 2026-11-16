@@ -32,12 +32,7 @@ export async function GET() {
     where: {
       visibility: 'PUBLIC',
       ownerId: { notIn: [user.id, ...blocked] },
-      members: { none: {
-        OR: [
-          { userId: user.id },
-          { dog: { custodians: { some: { userId: user.id, role: { in: ['OWNER', 'CAREGIVER'] } } } } }
-        ]
-      } },
+      members: { none: { dog: dogManagerScope(user.id) } },
       owner: { socialPrivacy: { is: { discoverable: true } } }
     },
     include: {
