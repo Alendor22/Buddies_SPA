@@ -225,6 +225,10 @@ export async function POST(request: NextRequest) {
       prisma.dogPackMember.findUnique({ where: { packId_dogId: { packId, dogId } }, select: { status: true } })
     ]);
     if (!pack || !dog) return NextResponse.json({ error: 'That pack or dog is unavailable.' }, { status: 404 });
+    const blockedUserIds = await listBlockedUserIds(user.id);
+    if (blockedUserIds.includes(pack.ownerId)) {
+      return NextResponse.json({ error: 'You cannot request to join this pack.' }, { status: 403 });
+    }
     if (existing) return NextResponse.json({ error: 'This dog already has a membership or request for that pack.' }, { status: 409 });
     await prisma.dogPackMember.create({ data: { packId, dogId, userId: user.id, status: 'REQUESTED' } });
     await createNotification({

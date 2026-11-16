@@ -10,7 +10,7 @@ const listBlockedUserIdsMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   dog: { findFirst: vi.fn(), findMany: vi.fn() },
   dogPack: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
-  dogPackMember: { findFirst: vi.fn(), update: vi.fn(), count: vi.fn(), create: vi.fn() },
+  dogPackMember: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), count: vi.fn(), create: vi.fn() },
   routeMemory: { findMany: vi.fn() },
   dogPresence: { findMany: vi.fn() }
 }));
@@ -43,6 +43,7 @@ describe('dog packs and pack meetups', () => {
     prismaMock.dogPack.create.mockResolvedValue({ id: 'pack-1' });
     prismaMock.dogPack.findFirst.mockResolvedValue({ id: 'pack-1' });
     prismaMock.dogPackMember.findFirst.mockResolvedValue({ id: 'membership-1' });
+    prismaMock.dogPackMember.findUnique.mockResolvedValue(null);
     prismaMock.dogPackMember.update.mockResolvedValue({});
     prismaMock.dogPackMember.count.mockResolvedValue(3);
     prismaMock.dogPackMember.create.mockResolvedValue({});
@@ -177,5 +178,18 @@ describe('dog packs and pack meetups', () => {
 
     const response = await getPackSuggestions();
     expect((await response.json()).suggestions).toEqual([]);
+  });
+
+  it('blocks join requests when either user has blocked the other', async () => {
+    prismaMock.dogPack.findFirst.mockResolvedValueOnce({ id: 'pack-1', name: 'Pack', ownerId: 'blocked-owner' });
+    listBlockedUserIdsMock.mockResolvedValueOnce(['blocked-owner']);
+
+    const response = await postPack(jsonRequest('/api/social/packs', {
+      action: 'request', packId: 'pack-1', dogId: 'dog-1'
+    }));
+
+    expect(response.status).toBe(403);
+    expect(prismaMock.dogPackMember.create).not.toHaveBeenCalled();
+    expect(createNotificationMock).not.toHaveBeenCalled();
   });
 });
