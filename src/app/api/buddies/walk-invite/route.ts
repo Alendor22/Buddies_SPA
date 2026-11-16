@@ -89,5 +89,5 @@ export async function POST(request: NextRequest) {
     return invitation;
   });
 
-  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?walk=sent&dog=${encodeURIComponent(senderDog.name)}&invited=${encodeURIComponent(invitedDog.name)}&inviteId=${result.id}`, request.url), 303);
+  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?walk=sent&dog=${encodeURIComponent(senderDog.name)}&invited=${encodeURIComponent(invitedDog.name)}&inviteId=${result.id}#walk-invitations`, request.url), 303);
 }
