@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { getReputation, getSocialPrivacy, listConversations, listEvents, listFeed, listGroups } from '@/lib/social/repository';
+import { getReputation, getSocialPrivacy, listConversations, listEvents, listFeed } from '@/lib/social/repository';
+import SocialCommunityActions from './SocialCommunityActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +20,9 @@ export default async function SocialDashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const [privacy, conversations, groups, feed, events, reputation] = await Promise.all([
+  const [privacy, conversations, feed, events, reputation] = await Promise.all([
     getSocialPrivacy(user.id),
     listConversations(user.id),
-    listGroups(user.id),
     listFeed(user.id),
     listEvents(user.id),
     getReputation(user.id)
@@ -44,12 +44,14 @@ export default async function SocialDashboardPage() {
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card title="Conversations" value={conversations.length} href="/dashboard/messages" description="Direct and walk conversations." />
-        <Card title="Groups" value={groups.length} href="/dashboard/buddies" description="Community and dog-interest groups." />
+        <Card title="Packs" value="Explore" href="/dashboard/social#packs" description="Dog-centered packs, invitations, and recommendations." />
         <Card title="Upcoming events" value={events.length} href="/dashboard/social#events" description="Walks, meetups, and community events." />
         <Card title="Feed items" value={feed.length} href="/dashboard/social#activity" description="Recent activity from you and your buddies." />
         <Card title="Reputation" value={reputation} href="/dashboard/social#trust" description="Trust score from verified social activity." />
         <Card title="Discoverability" value={privacy?.discoverable ? 'On' : 'Off'} href="/dashboard/social#privacy" description="Control how other Buddies members find you." />
       </section>
+
+      <div id="packs"><SocialCommunityActions /></div>
 
       <section id="activity" className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Recent activity</h2>
@@ -71,6 +73,7 @@ export default async function SocialDashboardPage() {
               <h3 className="font-semibold">{event.title}</h3>
               <p className="mt-1 text-sm text-slate-600">{event.locationName ?? 'Location to be announced'}</p>
               <p className="mt-1 text-sm text-slate-500">{event.startsAt.toLocaleString()}</p>
+              {event.packName && <p className="mt-2 inline-flex rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">{event.packName} meetup</p>}
             </article>
           )) : <p className="text-sm text-slate-600">No upcoming events yet.</p>}
         </div>

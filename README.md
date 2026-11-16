@@ -21,12 +21,14 @@ The current application includes these product areas:
 - **Dog identity:** owner-managed dog profiles, QR identity, and a public-safe dog safety profile.
 - **Lost and found:** lost-dog events and last-seen information, plus photo-based recognition enrollment, search, and verification. Recognition photos are normalized and compressed before upload; an uncertain search can return the closest similarity score instead of implying a confident match.
 - **Social connections:** dog buddy relationships and walking invitations or requests.
+- **Packs and meetups:** dog-centered packs with invitations, join requests, and a three-accepted-dog threshold; create public or pack-linked meetups from the social hub.
+- **Pack discovery:** suggestions rank formed public packs using recent shared route hashes, coarse active walking neighborhoods, breed overlap, and dog-friendly preferences. Exact dog coordinates are not returned.
 - **Walks and maps:** Mapbox map and route planning with waypoint support, plus nearby activity and realtime presence.
 - **Messaging:** realtime messaging backed by persisted application data.
 - **Media and temporary activity:** Cloudflare R2 media integration and Redis-backed short-lived activity and rate limits.
 - **Read-only MCP:** `/api/mcp` exposes owner-scoped tools for listing the owner's dogs, retrieving a dog profile, listing walks, and listing unread notifications. Personal access tokens are shown once when created and can be revoked. MCP v1 is read-only.
 
-These are application capabilities represented on `main`; check the current UI, tests, and production health before treating any individual workflow as verified in a live deployment.
+These are checked-in application capabilities in the current working branch; check the current UI, tests, and production health before treating any individual workflow as verified in a live deployment. Pack and meetup changes are still under review and are not claimed as deployed.
 
 ## Technology
 

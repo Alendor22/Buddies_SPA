@@ -149,19 +149,28 @@ export async function listFeed(userId: string) {
   `;
 }
 
-export async function createEvent(hostId: string, title: string, startsAt: Date, description: string | null, locationName: string | null) {
+export async function createEvent(
+  hostId: string,
+  title: string,
+  startsAt: Date,
+  description: string | null,
+  locationName: string | null,
+  options: { packId?: string | null; endsAt?: Date | null; latitude?: number | null; longitude?: number | null } = {}
+) {
   const id = randomUUID();
   await prisma.$transaction([
-    prisma.$executeRaw`INSERT INTO "SocialEvent" ("id", "hostId", "title", "description", "locationName", "startsAt") VALUES (${id}, ${hostId}, ${title}, ${description}, ${locationName}, ${startsAt})`,
+    prisma.$executeRaw`INSERT INTO "SocialEvent" ("id", "hostId", "packId", "title", "description", "locationName", "latitude", "longitude", "startsAt", "endsAt") VALUES (${id}, ${hostId}, ${options.packId ?? null}, ${title}, ${description}, ${locationName}, ${options.latitude ?? null}, ${options.longitude ?? null}, ${startsAt}, ${options.endsAt ?? null})`,
     prisma.$executeRaw`INSERT INTO "SocialEventAttendee" ("id", "eventId", "userId", "status") VALUES (${randomUUID()}, ${id}, ${hostId}, 'GOING')`
   ]);
   return id;
 }
 
 export async function listEvents(userId: string) {
-  return prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; attending: boolean }>>`
-    SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", EXISTS(SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING') AS attending
-    FROM "SocialEvent" e WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId} ORDER BY e."startsAt" ASC LIMIT 100
+  return prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; packId: string | null; packName: string | null; attending: boolean }>>`
+    SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", e."packId", p."name" AS "packName",
+      EXISTS(SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING') AS attending
+    FROM "SocialEvent" e LEFT JOIN "DogPack" p ON p."id" = e."packId"
+    WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId} ORDER BY e."startsAt" ASC LIMIT 100
   `;
 }
 
