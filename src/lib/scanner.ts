@@ -5,12 +5,8 @@ export type BuddiesScanTarget = {
   kind: 'dog-profile' | 'public-dog-id';
 };
 
-// buddies.vercel.app stays trusted alongside the canonical dogbuddies.net domain so QR
-// codes already printed on physical dog tags under the old domain keep resolving.
-const LEGACY_TRUSTED_HOSTS = ['dogbuddies.net', 'buddies.vercel.app'];
-
 function allowedHost(url: URL, currentOrigin: URL) {
-  return url.host === currentOrigin.host || LEGACY_TRUSTED_HOSTS.includes(url.host);
+  return url.host === currentOrigin.host || url.host === 'dogbuddies.net';
 }
 
 function cleanSegment(value: string) {
