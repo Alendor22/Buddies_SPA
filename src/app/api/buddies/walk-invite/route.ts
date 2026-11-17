@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (!senderDog || senderDog.status !== 'SAFE') return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
 
   const invitedDog = invitedDogId
-    ? await prisma.dog.findUnique({ where: { id: invitedDogId }, select: { id: true, name: true, breed: true, slug: true, ownerId: true } })
+    ? await prisma.dog.findUnique({ where: { id: invitedDogId }, select: { id: true, name: true, breed: true, slug: true, ownerId: true, status: true } })
     : await prisma.dog.findFirst({ where: { owner: { email: legacyEmail } }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, breed: true, slug: true, ownerId: true } });
 
   if (!invitedDog || invitedDog.ownerId === user.id || invitedDog.status !== 'SAFE') {
