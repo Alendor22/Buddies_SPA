@@ -259,7 +259,7 @@ export default function DogQrScanner() {
             id="manual-dog-code"
             value={manualValue}
             onChange={(event) => setManualValue(event.target.value)}
-            placeholder="https://buddies.vercel.app/dogs/..."
+            placeholder="https://dogbuddies.net/dogs/..."
             autoCapitalize="none"
             autoCorrect="off"
             className="min-w-0 flex-1 rounded-xl border px-4 py-3"

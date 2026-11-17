@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getAppUrl } from '@/lib/appUrl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -58,7 +59,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ slug: 
 
       <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Public identity</h2>
-        <p className="mt-2 break-all text-slate-600">https://buddies.vercel.app{publicUrl}</p>
+        <p className="mt-2 break-all text-slate-600">{getAppUrl()}{publicUrl}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href={publicUrl} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Open public page</Link>
           <Link href={qrPageUrl} className="rounded-lg border px-4 py-2">Show QR Code</Link>

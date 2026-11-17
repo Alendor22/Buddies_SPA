@@ -1,4 +1,4 @@
-const baseUrl = (process.env.DEPLOYMENT_URL || 'https://buddies.vercel.app').replace(/\/$/, '');
+const baseUrl = (process.env.DEPLOYMENT_URL || 'https://dogbuddies.net').replace(/\/$/, '');
 const expectedCommit = process.env.EXPECTED_COMMIT_SHA || '';
 const attempts = Number(process.env.SMOKE_ATTEMPTS || 30);
 const intervalMs = Number(process.env.SMOKE_INTERVAL_MS || 10000);
