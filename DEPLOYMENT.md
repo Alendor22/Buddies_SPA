@@ -22,7 +22,7 @@ Buddies deploys from the private GitHub repository's `main` branch to Vercel pro
 ### Liveness
 
 ```text
-GET https://buddies.vercel.app/api/health
+GET https://dogbuddies.net/api/health
 ```
 
 This confirms that the application process can answer requests. It does not query PostgreSQL.
@@ -30,7 +30,7 @@ This confirms that the application process can answer requests. It does not quer
 ### Readiness
 
 ```text
-GET https://buddies.vercel.app/api/health?deep=1
+GET https://dogbuddies.net/api/health?deep=1
 ```
 
 This performs bounded PostgreSQL and Redis checks and reports safe configuration status for authentication, Mapbox, Ably, and Cloudflare R2. Secrets and full connection strings are never returned.
@@ -101,7 +101,7 @@ The CI build deliberately uses `npm run build:ci`, which does not modify a datab
 ## Manual smoke test
 
 ```bash
-DEPLOYMENT_URL=https://buddies.vercel.app \
+DEPLOYMENT_URL=https://dogbuddies.net \
 EXPECTED_COMMIT_SHA=<full-git-sha> \
 npm run smoke:production
 ```
@@ -128,7 +128,7 @@ database connection.
 Each user authenticates it with a personal access token, generated at
 `/dashboard/account/tokens` (shown once at creation; only its SHA-256 hash is stored).
 To connect it as a ChatGPT connector: add a custom connector pointing at
-`https://buddies.vercel.app/api/mcp` and supply the token as a bearer credential.
+`https://dogbuddies.net/api/mcp` and supply the token as a bearer credential.
 Anyone holding the token can read that one user's data through the connector, so treat
 it like a password — tokens can be revoked at any time from the same page.
 

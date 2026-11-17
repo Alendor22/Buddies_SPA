@@ -60,14 +60,14 @@ Production deploys from `main` to Vercel. GitHub Actions validates the applicati
 Health:
 
 ```text
-https://buddies.vercel.app/api/health
-https://buddies.vercel.app/api/health?deep=1
+https://dogbuddies.net/api/health
+https://dogbuddies.net/api/health?deep=1
 ```
 
 Manual production verification:
 
 ```bash
-DEPLOYMENT_URL=https://buddies.vercel.app \
+DEPLOYMENT_URL=https://dogbuddies.net \
 EXPECTED_COMMIT_SHA=<full-git-sha> \
 npm run smoke:production
 ```
