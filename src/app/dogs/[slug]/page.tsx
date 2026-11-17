@@ -6,6 +6,7 @@ import DogWalkInvitations from '@/components/DogWalkInvitations';
 import LostDogMap from '@/components/LostDogMap';
 import DogRecognitionControls from '@/components/recognition/DogRecognitionControls';
 import { DOG_REID_MODEL_VERSION } from '@/lib/recognition/embeddings';
+import { getAppUrl } from '@/lib/appUrl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -65,7 +66,7 @@ export default async function DogProfilePage({ params }: { params: Promise<{ slu
 
   const isSafe = dog.status === 'SAFE';
   const isOwner = Boolean(user && dog.ownerId === user.id);
-  const publicUrl = `https://buddies.vercel.app/dogs/${dog.slug}`;
+  const publicUrl = `${getAppUrl()}/dogs/${dog.slug}`;
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">

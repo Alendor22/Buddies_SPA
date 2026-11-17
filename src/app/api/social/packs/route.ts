@@ -180,14 +180,26 @@ export async function POST(request: NextRequest) {
     const visibleOwners = new Set(privacy.map((row) => row.userId));
     const visibleDogs = eligible.filter((dog) => visibleOwners.has(dog.ownerId));
     if (!visibleDogs.length) return NextResponse.json({ error: 'Those dogs’ owners are not currently discoverable.' }, { status: 403 });
-    const existingMemberships = await prisma.dogPackMember.findMany({ where: { packId, dogId: { in: visibleDogs.map((dog) => dog.id) } }, select: { dogId: true } });
-    const existingDogIds = new Set(existingMemberships.map((member) => member.dogId));
-    const newInvites = visibleDogs.filter((dog) => !existingDogIds.has(dog.id));
-    await prisma.dogPackMember.createMany({
-      data: newInvites.map((dog) => ({ id: randomUUID(), packId, dogId: dog.id, userId: dog.ownerId, status: 'INVITED' as const })),
-      skipDuplicates: true
-    });
-    await Promise.allSettled(newInvites.map((dog) => createNotification({
+    const existingMemberships = await prisma.dogPackMember.findMany({ where: { packId, dogId: { in: visibleDogs.map((dog) => dog.id) } }, select: { dogId: true, status: true } });
+    // DECLINED/LEFT rows don't block a fresh invite — a dog that declined or left (possibly
+    // unintentionally) can be re-invited. INVITED/ACCEPTED/REQUESTED rows still do: the unique
+    // (packId, dogId) constraint means re-inviting one of those must update it, not insert.
+    const inactiveDogIds = new Set(existingMemberships.filter((member) => member.status === 'DECLINED' || member.status === 'LEFT').map((member) => member.dogId));
+    const activeDogIds = new Set(existingMemberships.filter((member) => !inactiveDogIds.has(member.dogId)).map((member) => member.dogId));
+    const newInvites = visibleDogs.filter((dog) => !activeDogIds.has(dog.id) && !inactiveDogIds.has(dog.id));
+    const reinvites = visibleDogs.filter((dog) => inactiveDogIds.has(dog.id));
+    await prisma.$transaction([
+      prisma.dogPackMember.createMany({
+        data: newInvites.map((dog) => ({ id: randomUUID(), packId, dogId: dog.id, userId: dog.ownerId, status: 'INVITED' as const })),
+        skipDuplicates: true
+      }),
+      prisma.dogPackMember.updateMany({
+        where: { packId, dogId: { in: reinvites.map((dog) => dog.id) }, status: { in: ['DECLINED', 'LEFT'] } },
+        data: { status: 'INVITED', respondedAt: null, invitedAt: new Date() }
+      })
+    ]);
+    const invitedDogs = [...newInvites, ...reinvites];
+    await Promise.allSettled(invitedDogs.map((dog) => createNotification({
       userId: dog.ownerId,
       type: NotificationType.SYSTEM,
       routeKey: `dog-pack-invite:${packId}:${dog.id}`,
@@ -196,7 +208,7 @@ export async function POST(request: NextRequest) {
       body: `${dog.name} has been invited to join a dog pack.`,
       dogId: dog.id
     })));
-    return NextResponse.json({ invited: newInvites.length });
+    return NextResponse.json({ invited: invitedDogs.length });
   }
 
   if (payload.action === 'respond') {

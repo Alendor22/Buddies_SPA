@@ -6,7 +6,7 @@ export type BuddiesScanTarget = {
 };
 
 function allowedHost(url: URL, currentOrigin: URL) {
-  return url.host === currentOrigin.host || url.host === 'buddies.vercel.app';
+  return url.host === currentOrigin.host || url.host === 'dogbuddies.net';
 }
 
 function cleanSegment(value: string) {

@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { resolveBuddiesScan } from '@/lib/scanner';
 
-const ORIGIN = 'https://buddies.vercel.app';
+const ORIGIN = 'https://dogbuddies.net';
 
 describe('resolveBuddiesScan', () => {
   it('accepts a Buddies dog profile QR URL', () => {
-    expect(resolveBuddiesScan('https://buddies.vercel.app/dogs/Scout-01', ORIGIN)).toEqual({
+    expect(resolveBuddiesScan('https://dogbuddies.net/dogs/Scout-01', ORIGIN)).toEqual({
       path: '/dogs/scout-01',
       kind: 'dog-profile'
     });
   });
 
   it('accepts a Buddies public id QR URL', () => {
-    expect(resolveBuddiesScan('https://buddies.vercel.app/qr-dog/DOG_123', ORIGIN)).toEqual({
+    expect(resolveBuddiesScan('https://dogbuddies.net/qr-dog/DOG_123', ORIGIN)).toEqual({
       path: '/qr-dog/DOG_123',
       kind: 'public-dog-id'
     });
@@ -30,7 +30,7 @@ describe('resolveBuddiesScan', () => {
   });
 
   it('rejects non-profile Buddies URLs', () => {
-    expect(resolveBuddiesScan('https://buddies.vercel.app/dashboard', ORIGIN)).toBeNull();
+    expect(resolveBuddiesScan('https://dogbuddies.net/dashboard', ORIGIN)).toBeNull();
   });
 
   it('rejects path injection in manual input', () => {
@@ -38,7 +38,7 @@ describe('resolveBuddiesScan', () => {
   });
 
   it('rejects malformed percent encoding without throwing', () => {
-    expect(resolveBuddiesScan('https://buddies.vercel.app/dogs/%E0%A4%A', ORIGIN)).toBeNull();
+    expect(resolveBuddiesScan('https://dogbuddies.net/dogs/%E0%A4%A', ORIGIN)).toBeNull();
     expect(resolveBuddiesScan('%E0%A4%A', ORIGIN)).toBeNull();
   });
 });

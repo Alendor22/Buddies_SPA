@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DogQrActions from '@/components/DogQrActions';
+import { getAppUrl } from '@/lib/appUrl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -18,7 +19,7 @@ export default async function DogQrPage({ params }: { params: Promise<{ slug: st
   if (!dog) notFound();
 
   const publicPath = `/qr-dog/${encodeURIComponent(dog.publicId ?? dog.id)}`;
-  const publicUrl = `https://buddies.vercel.app${publicPath}`;
+  const publicUrl = `${getAppUrl()}${publicPath}`;
   const isOwner = Boolean(user && dog.ownerId === user.id);
 
   const svg = await QRCode.toString(publicUrl, {
