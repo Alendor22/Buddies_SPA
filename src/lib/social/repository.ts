@@ -144,7 +144,13 @@ export async function addFeedItem(actorId: string, type: string, targetType?: st
 export async function listFeed(userId: string) {
   return prisma.$queryRaw<Array<{ id: string; actorId: string; type: string; targetType: string | null; targetId: string | null; createdAt: Date }>>`
     SELECT f."id", f."actorId", f."type", f."targetType", f."targetId", f."createdAt" FROM "ActivityFeedItem" f
-    WHERE f."actorId" = ${userId} OR EXISTS (SELECT 1 FROM "Buddy" b WHERE (b."userAId" = ${userId} AND b."userBId" = f."actorId") OR (b."userBId" = ${userId} AND b."userAId" = f."actorId"))
+    WHERE f."actorId" = ${userId}
+      OR EXISTS (SELECT 1 FROM "Buddy" b WHERE (b."userAId" = ${userId} AND b."userBId" = f."actorId") OR (b."userBId" = ${userId} AND b."userAId" = f."actorId"))
+      OR (f."targetType" = 'group' AND EXISTS (
+        SELECT 1 FROM "SocialGroupMember" gm
+        JOIN "SocialGroup" g ON g."id" = gm."groupId"
+        WHERE gm."userId" = ${userId} AND gm."groupId" = f."targetId" AND g."visibility" = 'PUBLIC'
+      ))
     ORDER BY f."createdAt" DESC LIMIT 100
   `;
 }
