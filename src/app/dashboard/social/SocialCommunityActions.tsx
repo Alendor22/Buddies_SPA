@@ -133,8 +133,8 @@ export default function SocialCommunityActions() {
     const dogId = requestDogId;
     if (!dogId) return setError('Create a safe dog profile before requesting to join a pack.');
     await run(async () => {
-      await requestJson('/api/social/packs', { method: 'POST', body: JSON.stringify({ action: 'request', packId, dogId }) });
-      setMessage('Join request sent to the pack creator.');
+      await requestJson('/api/social/packs', { method: 'POST', body: JSON.stringify({ action: 'join', packId, dogId }) });
+      setMessage('Your dog joined the public pack.');
     });
   }
 
@@ -160,7 +160,7 @@ export default function SocialCommunityActions() {
       <div className="space-y-6">
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Create a pack</h2>
-          <p className="mt-1 text-sm text-slate-600">Start with a dog you manage, then invite buddy dogs. A pack is formed when at least three dogs accept.</p>
+          <p className="mt-1 text-sm text-slate-600">Start with a dog you manage, then invite eligible dogs. A pack is formed when at least three dogs accept.</p>
           <form onSubmit={createPack} className="mt-4 grid gap-3">
             <label className="grid gap-1 text-sm font-medium">Pack name<input required name="name" maxLength={80} className="rounded-lg border px-3 py-2 font-normal" /></label>
             <label className="grid gap-1 text-sm font-medium">Description<textarea name="description" maxLength={500} rows={2} className="rounded-lg border px-3 py-2 font-normal" /></label>
@@ -183,7 +183,7 @@ export default function SocialCommunityActions() {
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{pack.acceptedDogs.map((dog) => dog.name).join(', ')}</p>
                 {pack.isOwner && data?.candidateDogs.length > 0 && <form onSubmit={(event) => void inviteDogs(event, pack.id)} className="mt-4 border-t pt-4">
-                  <p className="text-sm font-medium">Invite dog buddies</p>
+                  <p className="text-sm font-medium">Invite eligible dogs</p>
                   <div className="mt-2 grid max-h-36 gap-2 overflow-y-auto sm:grid-cols-2">
                     {data.candidateDogs.filter((dog) => !pack.acceptedDogs.some((member) => member.id === dog.id) && !pack.pendingDogs.some((member) => member.id === dog.id)).map((dog) => (
                       <label key={dog.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedDogs.includes(dog.id)} onChange={(event) => setSelectedDogs((current) => event.target.checked ? [...current, dog.id] : current.filter((id) => id !== dog.id))} />{dog.name}{dog.breed ? ` · ${dog.breed}` : ''}</label>
@@ -204,10 +204,10 @@ export default function SocialCommunityActions() {
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Suggested packs</h2>
           <p className="mt-1 text-sm text-slate-600">Suggestions use shared routes, coarse active walking areas, breed, and dog-friendly preferences. Exact live locations are never shown.</p>
-          {data?.ownDogs.length ? <label className="mt-3 grid max-w-sm gap-1 text-sm font-medium">Dog to include in your request<select value={requestDogId} onChange={(event) => setRequestDogId(event.target.value)} className="rounded-lg border px-3 py-2 font-normal">{data.ownDogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label> : null}
+          {data?.ownDogs.length ? <label className="mt-3 grid max-w-sm gap-1 text-sm font-medium">Dog to include in the pack<select value={requestDogId} onChange={(event) => setRequestDogId(event.target.value)} className="rounded-lg border px-3 py-2 font-normal">{data.ownDogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label> : null}
           <div className="mt-4 space-y-3">
             {suggestions.length ? suggestions.map((pack) => <article key={pack.id} className="rounded-xl border p-4">
-              <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{pack.name}</h3><p className="mt-1 text-sm text-slate-500">{pack.memberCount} dogs · organized by {pack.ownerName}</p></div><button disabled={busy || !data?.ownDogs.length} onClick={() => void requestToJoin(pack.id)} className="shrink-0 rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Request to join</button></div>
+              <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{pack.name}</h3><p className="mt-1 text-sm text-slate-500">{pack.memberCount} dogs · organized by {pack.ownerName}</p></div><button disabled={busy || !data?.ownDogs.length} onClick={() => void requestToJoin(pack.id)} className="shrink-0 rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Join pack</button></div>
               <p className="mt-3 text-sm text-slate-700">{pack.reasons.join(' · ')}</p><p className="mt-1 text-xs text-slate-500">{pack.dogs.map((dog) => dog.name).join(', ')}</p>
             </article>) : <p className="text-sm text-slate-600">No pack suggestions yet. Recommendations appear as nearby packs form and shared walking history becomes available.</p>}
           </div>

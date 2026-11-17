@@ -2,7 +2,6 @@ import { NotificationType } from '@/generated/prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, normalizeEmail } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { orderedDogBuddyPair } from '@/lib/buddies';
 import { dogWalkInvitesRoute, UI_ROUTES } from '@/lib/uiRoutes';
 
 export const dynamic = 'force-dynamic';
@@ -26,24 +25,26 @@ export async function POST(request: NextRequest) {
 
   const senderDog = await prisma.dog.findFirst({
     where: { id: senderDogId, ownerId: user.id },
-    select: { id: true, name: true, breed: true, slug: true, ownerId: true }
+    select: { id: true, name: true, breed: true, slug: true, ownerId: true, status: true }
   });
-  if (!senderDog) return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
+  if (!senderDog || senderDog.status !== 'SAFE') return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
 
   const invitedDog = invitedDogId
-    ? await prisma.dog.findUnique({ where: { id: invitedDogId }, select: { id: true, name: true, breed: true, slug: true, ownerId: true } })
-    : await prisma.dog.findFirst({ where: { owner: { email: legacyEmail } }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, breed: true, slug: true, ownerId: true } });
+    ? await prisma.dog.findUnique({ where: { id: invitedDogId }, select: { id: true, name: true, breed: true, slug: true, ownerId: true, status: true } })
+    : await prisma.dog.findFirst({ where: { owner: { email: legacyEmail } }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, breed: true, slug: true, ownerId: true, status: true } });
 
-  if (!invitedDog || invitedDog.ownerId === user.id) {
+  if (!invitedDog || invitedDog.ownerId === user.id || invitedDog.status !== 'SAFE') {
     return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
   }
 
-  const dogPair = orderedDogBuddyPair(senderDog.id, invitedDog.id);
-  const dogBuddy = await prisma.dogBuddy.findUnique({
-    where: { dogAId_dogBId: dogPair },
-    select: { id: true }
-  });
-  if (!dogBuddy) return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=not-dog-buddies`, request.url), 303);
+  const [privacy, blockedBySender, blockedSender] = await Promise.all([
+    prisma.socialPrivacy.findUnique({ where: { userId: invitedDog.ownerId }, select: { discoverable: true, allowWalkInvites: true } }),
+    prisma.socialBlock.findUnique({ where: { blockerId_blockedId: { blockerId: user.id, blockedId: invitedDog.ownerId } }, select: { id: true } }),
+    prisma.socialBlock.findUnique({ where: { blockerId_blockedId: { blockerId: invitedDog.ownerId, blockedId: user.id } }, select: { id: true } })
+  ]);
+  if ((privacy && (!privacy.discoverable || !privacy.allowWalkInvites)) || blockedBySender || blockedSender) {
+    return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-unavailable`, request.url), 303);
+  }
 
   const startsAt = new Date(startsAtRaw);
   const earliestAllowed = Date.now() - 5 * 60_000;
@@ -89,5 +90,5 @@ export async function POST(request: NextRequest) {
     return invitation;
   });
 
-  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?walk=sent&dog=${encodeURIComponent(senderDog.name)}&invited=${encodeURIComponent(invitedDog.name)}&inviteId=${result.id}`, request.url), 303);
+  return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?walk=sent&dog=${encodeURIComponent(senderDog.name)}&invited=${encodeURIComponent(invitedDog.name)}&inviteId=${result.id}#walk-invitations`, request.url), 303);
 }

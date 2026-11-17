@@ -15,6 +15,7 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().trim().min(1).max(80), description: z.string().max(500).optional(), dogId: z.string().min(1) }),
   z.object({ action: z.literal('invite'), packId: z.string().min(1), dogIds: z.array(z.string().min(1)).min(1).max(20).refine((ids) => new Set(ids).size === ids.length) }),
   z.object({ action: z.literal('respond'), packId: z.string().min(1), dogId: z.string().min(1), decision: z.enum(['accept', 'decline']) }),
+  z.object({ action: z.literal('join'), packId: z.string().min(1), dogId: z.string().min(1) }),
   z.object({ action: z.literal('request'), packId: z.string().min(1), dogId: z.string().min(1) }),
   z.object({ action: z.literal('request-response'), packId: z.string().min(1), dogId: z.string().min(1), decision: z.enum(['accept', 'decline']) })
 ]);
@@ -25,35 +26,19 @@ async function getEligibleDogs(userId: string) {
     where: { ...dogManagerScope(userId), status: 'SAFE' },
     select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true }
   });
-  if (!ownDogs.length) return { ownDogs, candidateDogs: [] };
-
-  const links = await prisma.dogBuddy.findMany({
-    where: {
-      OR: [
-        { dogAId: { in: ownDogs.map((dog) => dog.id) } },
-        { dogBId: { in: ownDogs.map((dog) => dog.id) } }
-      ]
-    },
-    include: {
-      dogA: { select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true, status: true } },
-      dogB: { select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true, status: true } }
-    },
+  const rawCandidates = await prisma.dog.findMany({
+    where: { status: 'SAFE', ownerId: { notIn: [userId, ...blocked] } },
+    select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true },
+    orderBy: { name: 'asc' },
     take: 300
   });
-  const candidates = new Map<string, { id: string; name: string; breed: string | null; photoUrl: string | null; ownerId: string }>();
-  const linked = new Map<string, (typeof links)[number]['dogA']>();
-  for (const link of links) {
-    const dog = ownDogs.some((own) => own.id === link.dogAId) ? link.dogB : link.dogA;
-    if (dog.status !== 'SAFE' || blocked.includes(dog.ownerId)) continue;
-    linked.set(dog.id, dog);
-  }
-  const visibleOwners = await prisma.socialPrivacy.findMany({
-    where: { userId: { in: [...new Set([...linked.values()].map((dog) => dog.ownerId))] }, discoverable: true },
-    select: { userId: true }
+  const privacy = await prisma.socialPrivacy.findMany({
+    where: { userId: { in: [...new Set(rawCandidates.map((dog) => dog.ownerId))] } },
+    select: { userId: true, discoverable: true }
   });
-  const visibleOwnerIds = new Set(visibleOwners.map((privacy) => privacy.userId));
-  for (const dog of linked.values()) if (visibleOwnerIds.has(dog.ownerId)) candidates.set(dog.id, dog);
-  return { ownDogs, candidateDogs: [...candidates.values()] };
+  const privacyByUser = new Map(privacy.map((row) => [row.userId, row.discoverable]));
+  const candidateDogs = rawCandidates.filter((dog) => privacyByUser.get(dog.ownerId) !== false);
+  return { ownDogs, candidateDogs };
 }
 
 export async function GET() {
@@ -147,7 +132,7 @@ export async function POST(request: NextRequest) {
       },
       select: { id: true }
     });
-    return NextResponse.json({ packId: pack.id, message: 'Pack created. Invite two or more buddy dogs to form your pack.' }, { status: 201 });
+    return NextResponse.json({ packId: pack.id, message: 'Pack created. Invite eligible community dogs to form your pack.' }, { status: 201 });
   }
 
   if (payload.action === 'invite') {
@@ -160,26 +145,17 @@ export async function POST(request: NextRequest) {
     if (!pack) return NextResponse.json({ error: 'Only the pack creator can invite dogs.' }, { status: 403 });
     if (!ownDogs.length) return NextResponse.json({ error: 'A safe dog profile is required to invite pack members.' }, { status: 400 });
     const blocked = await listBlockedUserIds(user.id);
-    const dogs = await prisma.dog.findMany({
+    const eligibleDogs = await prisma.dog.findMany({
       where: { id: { in: dogIds }, status: 'SAFE', ownerId: { notIn: [user.id, ...blocked] } },
       select: { id: true, name: true, ownerId: true }
     });
-    const linkedDogs = await prisma.dogBuddy.findMany({
-      where: {
-        OR: [
-          { dogAId: { in: ownDogs.map((dog) => dog.id) }, dogBId: { in: dogs.map((dog) => dog.id) } },
-          { dogBId: { in: ownDogs.map((dog) => dog.id) }, dogAId: { in: dogs.map((dog) => dog.id) } }
-        ]
-      },
-      select: { dogAId: true, dogBId: true }
+    const ownerPrivacy = await prisma.socialPrivacy.findMany({
+      where: { userId: { in: [...new Set(eligibleDogs.map((dog) => dog.ownerId))] } },
+      select: { userId: true, discoverable: true }
     });
-    const linkedIds = new Set(linkedDogs.map((link) => ownDogs.some((own) => own.id === link.dogAId) ? link.dogBId : link.dogAId));
-    const eligible = dogs.filter((dog) => linkedIds.has(dog.id));
-    if (!eligible.length) return NextResponse.json({ error: 'Invites can be sent to safe dogs connected through your dog buddy relationships.' }, { status: 403 });
-    const privacy = await prisma.socialPrivacy.findMany({ where: { userId: { in: eligible.map((dog) => dog.ownerId) }, discoverable: true }, select: { userId: true } });
-    const visibleOwners = new Set(privacy.map((row) => row.userId));
-    const visibleDogs = eligible.filter((dog) => visibleOwners.has(dog.ownerId));
-    if (!visibleDogs.length) return NextResponse.json({ error: 'Those dogs’ owners are not currently discoverable.' }, { status: 403 });
+    const discoverability = new Map(ownerPrivacy.map((row) => [row.userId, row.discoverable]));
+    const visibleDogs = eligibleDogs.filter((dog) => discoverability.get(dog.ownerId) !== false);
+    if (!visibleDogs.length) return NextResponse.json({ error: 'Choose safe dogs whose owners are discoverable and have not blocked you.' }, { status: 403 });
     const existingMemberships = await prisma.dogPackMember.findMany({ where: { packId, dogId: { in: visibleDogs.map((dog) => dog.id) } }, select: { dogId: true, status: true } });
     // DECLINED/LEFT rows don't block a fresh invite — a dog that declined or left (possibly
     // unintentionally) can be re-invited. INVITED/ACCEPTED/REQUESTED rows still do: the unique
@@ -227,6 +203,35 @@ export async function POST(request: NextRequest) {
     await prisma.dogPackMember.update({ where: { id: invitation.id }, data: { status: decision, respondedAt: new Date() } });
     const formed = await prisma.dogPackMember.count({ where: { packId, status: 'ACCEPTED' } });
     return NextResponse.json({ decision: decision.toLowerCase(), formed: formed >= 3 });
+  }
+
+  if (payload.action === 'join') {
+    const { packId, dogId } = payload;
+    const [pack, dog, existing] = await Promise.all([
+      prisma.dogPack.findFirst({ where: { id: packId, visibility: 'PUBLIC' }, select: { id: true, name: true, ownerId: true } }),
+      prisma.dog.findFirst({ where: { id: dogId, ...dogManagerScope(user.id), status: 'SAFE' }, select: { id: true } }),
+      prisma.dogPackMember.findUnique({ where: { packId_dogId: { packId, dogId } }, select: { id: true, status: true } })
+    ]);
+    if (!pack || !dog) return NextResponse.json({ error: 'That public pack or safe dog is unavailable.' }, { status: 404 });
+    const blocked = await listBlockedUserIds(user.id);
+    if (blocked.includes(pack.ownerId)) return NextResponse.json({ error: 'You cannot join this pack.' }, { status: 403 });
+    if (existing?.status === 'ACCEPTED') return NextResponse.json({ joined: true, alreadyMember: true });
+    if (existing) {
+      await prisma.dogPackMember.update({ where: { id: existing.id }, data: { userId: user.id, status: 'ACCEPTED', respondedAt: new Date() } });
+    } else {
+      await prisma.dogPackMember.create({ data: { packId, dogId, userId: user.id, status: 'ACCEPTED', respondedAt: new Date() } });
+    }
+    const formed = await prisma.dogPackMember.count({ where: { packId, status: 'ACCEPTED' } });
+    await createNotification({
+      userId: pack.ownerId,
+      type: NotificationType.SYSTEM,
+      routeKey: `dog-pack-joined:${packId}:${dogId}`,
+      href: '/dashboard/social#packs',
+      title: `A dog joined ${pack.name}`,
+      body: 'A dog owner joined your public pack.',
+      dogId
+    }).catch(() => undefined);
+    return NextResponse.json({ joined: true, formed: formed >= 3 }, { status: 201 });
   }
 
   if (payload.action === 'request') {

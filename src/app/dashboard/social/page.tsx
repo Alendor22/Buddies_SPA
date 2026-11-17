@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getReputation, getSocialPrivacy, listConversations, listEvents, listFeed } from '@/lib/social/repository';
 import SocialCommunityActions from './SocialCommunityActions';
+import SocialGroups from './SocialGroups';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,7 @@ export default async function SocialDashboardPage() {
         <div>
           <p className="text-sm font-medium text-slate-500">Buddies Social</p>
           <h1 className="text-3xl font-bold text-slate-950">Social hub</h1>
-          <p className="mt-2 max-w-2xl text-slate-600">Discover dogs, coordinate walks, message trusted connections, join groups, follow activity, and manage your social privacy.</p>
+          <p className="mt-2 max-w-2xl text-slate-600">Discover dogs, coordinate walks, message connections, join public groups and packs, follow community activity, and manage your social privacy.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/dashboard/buddies" className="rounded-lg border bg-white px-4 py-2">Dog buddies</Link>
@@ -46,12 +47,13 @@ export default async function SocialDashboardPage() {
         <Card title="Conversations" value={conversations.length} href="/dashboard/messages" description="Direct and walk conversations." />
         <Card title="Packs" value="Explore" href="/dashboard/social#packs" description="Dog-centered packs, invitations, and recommendations." />
         <Card title="Upcoming events" value={events.length} href="/dashboard/social#events" description="Walks, meetups, and community events." />
-        <Card title="Feed items" value={feed.length} href="/dashboard/social#activity" description="Recent activity from you and your buddies." />
+        <Card title="Feed items" value={feed.length} href="/dashboard/social#activity" description="Recent activity from you, your buddies, and groups you subscribe to." />
         <Card title="Reputation" value={reputation} href="/dashboard/social#trust" description="Trust score from verified social activity." />
         <Card title="Discoverability" value={privacy?.discoverable ? 'On' : 'Off'} href="/dashboard/social#privacy" description="Control how other Buddies members find you." />
       </section>
 
       <div id="packs"><SocialCommunityActions /></div>
+      <SocialGroups />
 
       <section id="activity" className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Recent activity</h2>
@@ -61,7 +63,7 @@ export default async function SocialDashboardPage() {
               <p className="font-medium">{item.type.replaceAll('_', ' ')}</p>
               <p className="mt-1 text-sm text-slate-500">{item.createdAt.toLocaleString()}</p>
             </article>
-          )) : <p className="text-sm text-slate-600">Your social feed is ready. Buddy and event activity will appear here.</p>}
+          )) : <p className="text-sm text-slate-600">Your social feed is ready. Buddy, group, and event activity will appear here.</p>}
         </div>
       </section>
 

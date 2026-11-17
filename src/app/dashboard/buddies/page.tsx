@@ -2,10 +2,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import DogBuddyRequestControl from '@/components/DogBuddyRequestControl';
+import WalkInvitationForm from '@/components/WalkInvitationForm';
 import { getAppUrl } from '@/lib/appUrl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';
+import { listBlockedUserIds } from '@/lib/social/repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,14 +41,15 @@ type BuddyUiStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED';
 type PairState = { direction: 'OUTGOING' | 'INCOMING'; status: BuddyUiStatus; requestId: string };
 
 function pageMessage(params: SearchParams) {
-  if (params.walk === 'sent') return `${params.dog ?? 'Your dog'} invited ${params.invited ?? 'a buddy'} to a walk.`;
+  if (params.walk === 'sent') return `${params.dog ?? 'Your dog'} invited ${params.invited ?? 'a dog'} to a walk.`;
   if (params.sent) return `${params.from ?? 'Your dog'} sent ${params.to ?? 'a dog'} a buddy request.`;
   if (params.accepted) return 'Dog buddy request accepted.';
   if (params.declined) return 'Dog buddy request declined.';
   if (params.cancelled) return 'Dog buddy request cancelled.';
   if (params.error === 'respond-first') return 'A reverse request is already pending. Review that request first.';
-  if (params.error === 'not-dog-buddies') return 'Those two dogs must be buddies before a walk invitation can be sent.';
+  if (params.error === 'not-dog-buddies') return 'Dog buddy status is not required to send a walk invitation.';
   if (params.error === 'walk-invalid') return 'Choose a valid dog buddy pair and walk time.';
+  if (params.error === 'walk-unavailable') return 'That dog is not accepting walk invitations or the owner has blocked this connection.';
   if (params.error === 'walk-time') return 'Choose a current or future walk time.';
   if (params.error === 'walk-resolved') return 'That walk invitation was already resolved.';
   if (params.error === 'request-resolved') return 'That buddy request was already resolved.';
@@ -161,6 +164,27 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
     return states;
   };
 
+  const blockedUserIds = await listBlockedUserIds(user.id);
+  const blockedByUsers = await prisma.socialBlock.findMany({ where: { blockedId: user.id }, select: { blockerId: true } });
+  const excludedOwnerIds = [...new Set([user.id, ...blockedUserIds, ...blockedByUsers.map((block) => block.blockerId)])];
+  const availableWalkDogs = await prisma.dog.findMany({
+    where: { status: 'SAFE', ownerId: { notIn: excludedOwnerIds } },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    select: { id: true, name: true, ownerId: true }
+  });
+  const walkPrivacy = await prisma.socialPrivacy.findMany({
+    where: { userId: { in: [...new Set(availableWalkDogs.map((dog) => dog.ownerId))] } },
+    select: { userId: true, discoverable: true, allowWalkInvites: true }
+  });
+  const walkPrivacyByUser = new Map(walkPrivacy.map((privacy) => [privacy.userId, privacy]));
+  const walkInviteDogs = availableWalkDogs
+    .filter((dog) => {
+      const privacy = walkPrivacyByUser.get(dog.ownerId);
+      return !privacy || (privacy.discoverable && privacy.allowWalkInvites);
+    })
+    .map(({ id, name }) => ({ id, name }));
+
   const incomingInvites = invitations.filter((invite) => invite.invitedDog.ownerId === user.id);
   const sentInvites = invitations.filter((invite) => invite.senderDog.ownerId === user.id);
   const inviteLink = `${getAppUrl()}/dashboard/buddies?inviteFrom=${encodeURIComponent(user.id)}`;
@@ -183,20 +207,20 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
 
       {myDogs.length === 0 ? <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">Create a dog profile first</h2><p className="mt-2 text-slate-600">Dog-to-dog requests require at least one owned profile.</p><Link href={UI_ROUTES.addProfile} className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link></section> : null}
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Section title="Search dogs"><form action={UI_ROUTES.buddies} method="get" className="grid gap-3"><input name="q" defaultValue={query} placeholder="Search dog name, breed, city, or neighborhood" className="rounded-lg border px-3 py-3 text-base" /><button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Search</button></form></Section>
-        <Section title="Invite via link"><p className="break-all text-sm text-slate-600">{inviteLink}</p><div className="mt-3 flex flex-wrap gap-2"><Link href="/dashboard/buddies/invite" className="rounded-lg border px-4 py-2">Open invite QR</Link><a href={`sms:?&body=${encodeURIComponent(`Join my dog network on Buddies: ${inviteLink}`)}`} className="rounded-lg border px-4 py-2">Send link</a></div></Section>
-      </section>
+      <section className="mt-8"><Section title="Search dogs"><form action={`${UI_ROUTES.buddies}#dog-search-results`} method="get" className="grid gap-3"><input name="q" defaultValue={query} placeholder="Search dog name, breed, city, or neighborhood" className="rounded-lg border px-3 py-3 text-base" /><button className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white">Search</button></form></Section></section>
+      <div id="dog-search-results" className="mt-4 scroll-mt-24">
+        <Section title={query ? `Search results for “${query}”` : inviteOwnerId ? 'Dogs from your invite' : 'Suggested dogs'}><div className="grid gap-3">{suggested.length === 0 ? <p className="text-sm text-slate-600">{query ? `No dogs match “${query}”. Try a name, breed, or city.` : 'No unmatched dog profiles found.'}</p> : suggested.map((dog) => <article key={dog.id} className="rounded-xl border p-4"><DogIdentity dog={dog} /><DogBuddyRequestControl receiverDog={{ id: dog.id, name: dog.name }} senderDogs={myDogs.map((myDog) => ({ id: myDog.id, name: myDog.name }))} initialStates={requestStatesFor(dog.id)} /></article>)}</div></Section>
+      </div>
+      <section className="mt-8"><Section title="Invite via link"><p className="break-all text-sm text-slate-600">{inviteLink}</p><div className="mt-3 flex flex-wrap gap-2"><Link href="/dashboard/buddies/invite" className="rounded-lg border px-4 py-2">Open invite QR</Link><a href={`sms:?&body=${encodeURIComponent(`Join my dog network on Buddies: ${inviteLink}`)}`} className="rounded-lg border px-4 py-2">Send link</a></div></Section></section>
 
       <div className="mt-8"><Section id="buddy-requests" title="Dog buddy requests"><div className="grid gap-6 lg:grid-cols-2"><div><h3 className="font-semibold">Incoming</h3><div className="mt-3 grid gap-3">{incoming.length === 0 ? <p className="text-sm text-slate-600">No pending incoming requests.</p> : incoming.map((request) => <article key={request.id} className="rounded-xl border p-4"><DogIdentity dog={request.senderDog as DogSummary} caption={`Request for ${request.receiverDog.name}`} />{request.message ? <p className="mt-3 text-sm text-slate-700">{request.message}</p> : null}<div className="mt-3 flex gap-2"><form action="/api/dog-buddies/respond" method="post"><input type="hidden" name="requestId" value={request.id} /><input type="hidden" name="action" value="accept" /><button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Accept</button></form><form action="/api/dog-buddies/respond" method="post"><input type="hidden" name="requestId" value={request.id} /><input type="hidden" name="action" value="decline" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Decline</button></form></div></article>)}</div></div><div><h3 className="font-semibold">Sent</h3><div className="mt-3 grid gap-3">{outgoing.length === 0 ? <p className="text-sm text-slate-600">No sent requests pending.</p> : outgoing.map((request) => <article key={request.id} className="rounded-xl border p-4"><DogIdentity dog={request.receiverDog as DogSummary} caption={`${request.senderDog.name} → ${request.receiverDog.name} · REQUEST SENT`} /><form action="/api/dog-buddies/respond" method="post" className="mt-3"><input type="hidden" name="requestId" value={request.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Cancel request</button></form></article>)}</div></div></div></Section></div>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Section title={inviteOwnerId ? 'Dogs from your invite' : 'Suggested dogs'}><div className="grid gap-3">{suggested.length === 0 ? <p className="text-sm text-slate-600">No unmatched dog profiles found.</p> : suggested.map((dog) => <article key={dog.id} className="rounded-xl border p-4"><DogIdentity dog={dog} /><DogBuddyRequestControl receiverDog={{ id: dog.id, name: dog.name }} senderDogs={myDogs.map((myDog) => ({ id: myDog.id, name: myDog.name }))} initialStates={requestStatesFor(dog.id)} /></article>)}</div></Section>
         <Section title="Trusted dog network"><div className="grid gap-3">{trustedConnections.length === 0 ? <p className="text-sm text-slate-600">No accepted dog buddies yet.</p> : trustedConnections.map((connection) => <article key={connection.id} className="rounded-xl border p-4"><p className="font-semibold">{connection.myDog.name} ↔ {connection.otherDog.name}</p><p className="mt-1 text-sm text-slate-600">Direct dog buddy relationship</p><div className="mt-3 flex gap-2"><Link href={`/dogs/${connection.myDog.slug}#walk-invitations`} className="rounded-lg border px-3 py-2 text-sm">{connection.myDog.name}</Link><Link href={`/dogs/${connection.otherDog.slug}`} className="rounded-lg border px-3 py-2 text-sm">{connection.otherDog.name}</Link></div></article>)}</div></Section>
       </section>
 
       <section id="walk-invitations" className="mt-8 scroll-mt-24 grid gap-6 lg:grid-cols-2">
-        <Section title="Send walk invitation"><form action="/api/buddies/walk-invite" method="post" className="grid gap-3"><label className="grid gap-2 text-sm font-medium">Dog buddy pair<select name="connection" required className="rounded-lg border px-3 py-3 text-base"><option value="">Select connection</option>{trustedConnections.map((connection) => <option key={connection.id} value={`${connection.myDog.id}:${connection.otherDog.id}`}>{connection.myDog.name} → {connection.otherDog.name}</option>)}</select></label><label className="grid gap-2 text-sm font-medium">Starts at<input name="startsAt" type="datetime-local" required className="rounded-lg border px-3 py-3 text-base" /></label><label className="grid gap-2 text-sm font-medium">Note<input name="note" maxLength={500} placeholder="Optional walk note" className="rounded-lg border px-3 py-3 text-base" /></label><button disabled={!trustedConnections.length} className="rounded-lg bg-slate-900 px-5 py-3 font-medium text-white disabled:opacity-50">Send dog-to-dog invite</button></form></Section>
+        <Section title="Send walk invitation"><WalkInvitationForm senderDogs={myDogs.filter((dog) => dog.status === 'SAFE').map((dog) => ({ id: dog.id, name: dog.name }))} invitedDogs={walkInviteDogs} /></Section>
         <Section title="Walk invitation activity"><div className="grid gap-5"><div><h3 className="font-semibold">Received</h3><div className="mt-2 grid gap-2">{incomingInvites.length === 0 ? <p className="text-sm text-slate-600">No invitations received.</p> : incomingInvites.map((invite) => <article key={invite.id} className="rounded-xl border p-4"><p className="font-semibold">{invite.senderDog.name} invited {invite.invitedDog.name}</p><p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.status}</p>{invite.status === 'PENDING' ? <div className="mt-3 flex gap-2"><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="accept" /><button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Accept</button></form><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="decline" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Decline</button></form></div> : null}</article>)}</div></div><div><h3 className="font-semibold">Sent</h3><div className="mt-2 grid gap-2">{sentInvites.length === 0 ? <p className="text-sm text-slate-600">No invitations sent.</p> : sentInvites.map((invite) => <article key={invite.id} className="rounded-xl border p-4"><p className="font-semibold">{invite.senderDog.name} → {invite.invitedDog.name}</p><p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.status}</p>{invite.status === 'PENDING' ? <form action="/api/walk-invitations/respond" method="post" className="mt-3"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Cancel invite</button></form> : null}</article>)}</div></div></div></Section>
       </section>
     </main>
