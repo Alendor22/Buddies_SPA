@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
 
   const senderDog = await prisma.dog.findFirst({
     where: { id: senderDogId, ownerId: user.id },
-    select: { id: true, name: true, breed: true, slug: true, ownerId: true }
+    select: { id: true, name: true, breed: true, slug: true, ownerId: true, status: true }
   });
-  if (!senderDog) return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
+  if (!senderDog || senderDog.status !== 'SAFE') return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-invalid`, request.url), 303);
 
   const invitedDog = invitedDogId
     ? await prisma.dog.findUnique({ where: { id: invitedDogId }, select: { id: true, name: true, breed: true, slug: true, ownerId: true } })
