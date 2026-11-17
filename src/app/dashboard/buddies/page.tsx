@@ -7,6 +7,7 @@ import { getAppUrl } from '@/lib/appUrl';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UI_ROUTES } from '@/lib/uiRoutes';
+import { listBlockedUserIds } from '@/lib/social/repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,6 +163,20 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
     return states;
   };
 
+  const blockedUserIds = await listBlockedUserIds(user.id);
+  const blockedByUsers = await prisma.socialBlock.findMany({ where: { blockedId: user.id }, select: { blockerId: true } });
+  const excludedOwnerIds = [...new Set([user.id, ...blockedUserIds, ...blockedByUsers.map((block) => block.blockerId)])];
+  const walkInviteDogs = await prisma.dog.findMany({
+    where: {
+      status: 'SAFE',
+      ownerId: { notIn: excludedOwnerIds },
+      owner: { socialPrivacy: { is: { discoverable: true, allowWalkInvites: true } } }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    select: { id: true, name: true }
+  });
+
   const incomingInvites = invitations.filter((invite) => invite.invitedDog.ownerId === user.id);
   const sentInvites = invitations.filter((invite) => invite.senderDog.ownerId === user.id);
   const inviteLink = `${getAppUrl()}/dashboard/buddies?inviteFrom=${encodeURIComponent(user.id)}`;
@@ -197,7 +212,7 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
       </section>
 
       <section id="walk-invitations" className="mt-8 scroll-mt-24 grid gap-6 lg:grid-cols-2">
-        <Section title="Send walk invitation"><WalkInvitationForm connections={trustedConnections.map((connection) => ({ id: connection.id, myDog: { id: connection.myDog.id, name: connection.myDog.name }, otherDog: { id: connection.otherDog.id, name: connection.otherDog.name } }))} /></Section>
+        <Section title="Send walk invitation"><WalkInvitationForm senderDogs={myDogs.filter((dog) => dog.status === 'SAFE').map((dog) => ({ id: dog.id, name: dog.name }))} invitedDogs={walkInviteDogs} /></Section>
         <Section title="Walk invitation activity"><div className="grid gap-5"><div><h3 className="font-semibold">Received</h3><div className="mt-2 grid gap-2">{incomingInvites.length === 0 ? <p className="text-sm text-slate-600">No invitations received.</p> : incomingInvites.map((invite) => <article key={invite.id} className="rounded-xl border p-4"><p className="font-semibold">{invite.senderDog.name} invited {invite.invitedDog.name}</p><p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.status}</p>{invite.status === 'PENDING' ? <div className="mt-3 flex gap-2"><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="accept" /><button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Accept</button></form><form action="/api/walk-invitations/respond" method="post"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="decline" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Decline</button></form></div> : null}</article>)}</div></div><div><h3 className="font-semibold">Sent</h3><div className="mt-2 grid gap-2">{sentInvites.length === 0 ? <p className="text-sm text-slate-600">No invitations sent.</p> : sentInvites.map((invite) => <article key={invite.id} className="rounded-xl border p-4"><p className="font-semibold">{invite.senderDog.name} → {invite.invitedDog.name}</p><p className="mt-1 text-sm text-slate-600">{invite.walk.startsAt.toLocaleString()} · {invite.status}</p>{invite.status === 'PENDING' ? <form action="/api/walk-invitations/respond" method="post" className="mt-3"><input type="hidden" name="invitationId" value={invite.id} /><input type="hidden" name="action" value="cancel" /><button className="rounded-lg border px-4 py-2 text-sm font-medium">Cancel invite</button></form> : null}</article>)}</div></div></div></Section>
       </section>
     </main>
