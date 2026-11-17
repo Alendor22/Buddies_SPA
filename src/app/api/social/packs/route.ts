@@ -28,16 +28,18 @@ async function getEligibleDogs(userId: string) {
     where: { ...dogManagerScope(userId), status: 'SAFE' },
     select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true }
   });
-  const candidateDogs = await prisma.dog.findMany({
-    where: {
-      status: 'SAFE',
-      ownerId: { notIn: excludedOwners },
-      owner: { socialPrivacy: { is: { discoverable: true } } }
-    },
+  const rawCandidates = await prisma.dog.findMany({
+    where: { status: 'SAFE', ownerId: { notIn: excludedOwners } },
     select: { id: true, name: true, breed: true, photoUrl: true, ownerId: true },
     orderBy: { name: 'asc' },
     take: 300
   });
+  const privacy = await prisma.socialPrivacy.findMany({
+    where: { userId: { in: [...new Set(rawCandidates.map((dog) => dog.ownerId))] } },
+    select: { userId: true, discoverable: true }
+  });
+  const privacyByUser = new Map(privacy.map((row) => [row.userId, row.discoverable]));
+  const candidateDogs = rawCandidates.filter((dog) => privacyByUser.get(dog.ownerId) !== false);
   return { ownDogs, candidateDogs };
 }
 
@@ -143,16 +145,16 @@ export async function POST(request: NextRequest) {
     const blocked = await listBlockedUserIds(user.id);
     const blockedBy = await prisma.socialBlock.findMany({ where: { blockedId: user.id }, select: { blockerId: true } });
     const excludedOwners = [...new Set([user.id, ...blocked, ...blockedBy.map((row) => row.blockerId)])];
-    const dogs = await prisma.dog.findMany({
-      where: {
-        id: { in: dogIds },
-        status: 'SAFE',
-        ownerId: { notIn: excludedOwners },
-        owner: { socialPrivacy: { is: { discoverable: true } } }
-      },
+    const eligibleDogs = await prisma.dog.findMany({
+      where: { id: { in: dogIds }, status: 'SAFE', ownerId: { notIn: excludedOwners } },
       select: { id: true, name: true, ownerId: true }
     });
-    const visibleDogs = dogs;
+    const ownerPrivacy = await prisma.socialPrivacy.findMany({
+      where: { userId: { in: [...new Set(eligibleDogs.map((dog) => dog.ownerId))] } },
+      select: { userId: true, discoverable: true }
+    });
+    const discoverability = new Map(ownerPrivacy.map((row) => [row.userId, row.discoverable]));
+    const visibleDogs = eligibleDogs.filter((dog) => discoverability.get(dog.ownerId) !== false);
     if (!visibleDogs.length) return NextResponse.json({ error: 'Choose safe dogs whose owners are discoverable and have not blocked you.' }, { status: 403 });
     const existingMemberships = await prisma.dogPackMember.findMany({ where: { packId, dogId: { in: visibleDogs.map((dog) => dog.id) } }, select: { dogId: true } });
     const existingDogIds = new Set(existingMemberships.map((member) => member.dogId));
