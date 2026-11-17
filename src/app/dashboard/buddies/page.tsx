@@ -41,13 +41,13 @@ type BuddyUiStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED';
 type PairState = { direction: 'OUTGOING' | 'INCOMING'; status: BuddyUiStatus; requestId: string };
 
 function pageMessage(params: SearchParams) {
-  if (params.walk === 'sent') return `${params.dog ?? 'Your dog'} invited ${params.invited ?? 'a buddy'} to a walk.`;
+  if (params.walk === 'sent') return `${params.dog ?? 'Your dog'} invited ${params.invited ?? 'a dog'} to a walk.`;
   if (params.sent) return `${params.from ?? 'Your dog'} sent ${params.to ?? 'a dog'} a buddy request.`;
   if (params.accepted) return 'Dog buddy request accepted.';
   if (params.declined) return 'Dog buddy request declined.';
   if (params.cancelled) return 'Dog buddy request cancelled.';
   if (params.error === 'respond-first') return 'A reverse request is already pending. Review that request first.';
-  if (params.error === 'not-dog-buddies') return 'Those two dogs must be buddies before a walk invitation can be sent.';
+  if (params.error === 'not-dog-buddies') return 'Dog buddy status is not required to send a walk invitation.';
   if (params.error === 'walk-invalid') return 'Choose a valid dog buddy pair and walk time.';
   if (params.error === 'walk-unavailable') return 'That dog is not accepting walk invitations or the owner has blocked this connection.';
   if (params.error === 'walk-time') return 'Choose a current or future walk time.';
