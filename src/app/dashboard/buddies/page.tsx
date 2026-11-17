@@ -49,6 +49,7 @@ function pageMessage(params: SearchParams) {
   if (params.error === 'respond-first') return 'A reverse request is already pending. Review that request first.';
   if (params.error === 'not-dog-buddies') return 'Those two dogs must be buddies before a walk invitation can be sent.';
   if (params.error === 'walk-invalid') return 'Choose a valid dog buddy pair and walk time.';
+  if (params.error === 'walk-unavailable') return 'That dog is not accepting walk invitations or the owner has blocked this connection.';
   if (params.error === 'walk-time') return 'Choose a current or future walk time.';
   if (params.error === 'walk-resolved') return 'That walk invitation was already resolved.';
   if (params.error === 'request-resolved') return 'That buddy request was already resolved.';
@@ -166,16 +167,23 @@ export default async function BuddiesPage({ searchParams }: { searchParams: Prom
   const blockedUserIds = await listBlockedUserIds(user.id);
   const blockedByUsers = await prisma.socialBlock.findMany({ where: { blockedId: user.id }, select: { blockerId: true } });
   const excludedOwnerIds = [...new Set([user.id, ...blockedUserIds, ...blockedByUsers.map((block) => block.blockerId)])];
-  const walkInviteDogs = await prisma.dog.findMany({
-    where: {
-      status: 'SAFE',
-      ownerId: { notIn: excludedOwnerIds },
-      owner: { socialPrivacy: { is: { discoverable: true, allowWalkInvites: true } } }
-    },
+  const availableWalkDogs = await prisma.dog.findMany({
+    where: { status: 'SAFE', ownerId: { notIn: excludedOwnerIds } },
     orderBy: { createdAt: 'desc' },
     take: 100,
-    select: { id: true, name: true }
+    select: { id: true, name: true, ownerId: true }
   });
+  const walkPrivacy = await prisma.socialPrivacy.findMany({
+    where: { userId: { in: [...new Set(availableWalkDogs.map((dog) => dog.ownerId))] } },
+    select: { userId: true, discoverable: true, allowWalkInvites: true }
+  });
+  const walkPrivacyByUser = new Map(walkPrivacy.map((privacy) => [privacy.userId, privacy]));
+  const walkInviteDogs = availableWalkDogs
+    .filter((dog) => {
+      const privacy = walkPrivacyByUser.get(dog.ownerId);
+      return !privacy || (privacy.discoverable && privacy.allowWalkInvites);
+    })
+    .map(({ id, name }) => ({ id, name }));
 
   const incomingInvites = invitations.filter((invite) => invite.invitedDog.ownerId === user.id);
   const sentInvites = invitations.filter((invite) => invite.senderDog.ownerId === user.id);
