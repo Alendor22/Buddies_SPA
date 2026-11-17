@@ -17,8 +17,18 @@ export default function SocialGroups() {
   }, []);
 
   useEffect(() => {
-    void refresh().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Could not load public groups.'));
-  }, [refresh]);
+    let cancelled = false;
+    void fetch('/api/social/groups', { cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json() as { groups?: Group[]; error?: string };
+        if (!response.ok) throw new Error(result.error ?? 'Could not load public groups.');
+        if (!cancelled) setGroups(result.groups ?? []);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load public groups.');
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   async function toggle(group: Group) {
     setBusyId(group.id);
