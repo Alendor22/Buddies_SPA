@@ -130,6 +130,14 @@ enum RecognitionEventOutcome {
   ERROR
 }
 
+enum DogPackMemberStatus {
+  INVITED
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  LEFT
+}
+
 model User {
   id                       String                  @id @default(cuid())
   clerkId                  String?                 @unique
@@ -176,6 +184,8 @@ model User {
   socialMessages           SocialMessage[]
   ownedSocialGroups        SocialGroup[]
   socialGroupMemberships   SocialGroupMember[]
+  ownedDogPacks            DogPack[]
+  dogPackMemberships       DogPackMember[]
   activityFeedItems        ActivityFeedItem[]
   hostedSocialEvents       SocialEvent[]
   socialEventAttendance    SocialEventAttendee[]
@@ -313,6 +323,7 @@ model Dog {
   activityFeedItems        ActivityFeedItem[]
   socialMessages           SocialMessage[]         @relation("SocialMessageSenderDog")
   receivedSocialMessages   SocialMessage[]         @relation("SocialMessageRecipientDog")
+  dogPackMemberships       DogPackMember[]
   metaDeliveries           MetaDelivery[]
   moderationReports        ModerationReport[]
   createdAt                DateTime                @default(now())
@@ -992,6 +1003,42 @@ model SocialGroupMember {
   @@index([userId, joinedAt])
 }
 
+// Dog-centered social groups. A pack is considered formed once it has at least
+// three ACCEPTED dog memberships; pending invitations do not count toward that limit.
+model DogPack {
+  id          String          @id @default(cuid())
+  ownerId     String
+  owner       User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  city        String?
+  visibility  String          @default("PUBLIC")
+  members     DogPackMember[]
+  events      SocialEvent[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([ownerId, createdAt])
+  @@index([city, visibility])
+}
+
+model DogPackMember {
+  id          String              @id @default(cuid())
+  packId      String
+  pack        DogPack             @relation(fields: [packId], references: [id], onDelete: Cascade)
+  dogId       String
+  dog         Dog                 @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      DogPackMemberStatus @default(INVITED)
+  invitedAt   DateTime            @default(now())
+  respondedAt DateTime?
+
+  @@unique([packId, dogId])
+  @@index([userId, status, invitedAt])
+  @@index([dogId, status])
+}
+
 model ActivityFeedItem {
   id         String   @id @default(cuid())
   actorId    String
@@ -1016,6 +1063,8 @@ model SocialEvent {
   host         User                  @relation(fields: [hostId], references: [id], onDelete: Cascade)
   groupId      String?
   group        SocialGroup?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  packId       String?
+  pack         DogPack?              @relation(fields: [packId], references: [id], onDelete: SetNull)
   title        String
   description  String?
   locationName String?
@@ -1031,6 +1080,7 @@ model SocialEvent {
 
   @@index([hostId, startsAt])
   @@index([groupId, startsAt])
+  @@index([packId, startsAt])
   @@index([visibility, startsAt])
 }
 

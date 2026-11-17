@@ -104,6 +104,9 @@ The repository currently describes these modules:
 - Lost-dog alerts
 - Live last-seen events
 - Dog-to-dog buddy relationships
+- Dog-centered packs with dog-owner invitations and a three-accepted-dog formation threshold
+- Public and pack-linked meetup creation
+- Pack suggestions using shared recent routes, coarse active walking neighborhoods, breed, and compatibility preferences
 - Walking invitations
 - Walking requests
 - Realtime messaging

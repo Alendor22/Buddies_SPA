@@ -23,7 +23,10 @@
         "src/app/not-found.tsx",
         "src/app/dashboard/page.tsx",
         "src/app/dashboard/account/",
-        "src/app/dashboard/menu/"
+        "src/app/dashboard/menu/",
+        "src/app/data-deletion/",
+        "src/app/privacy-policy/",
+        "src/app/terms/"
       ],
       "testPrefixes": ["tests/e2e/public-shell.spec.ts"]
     },
@@ -85,7 +88,8 @@
         "tests/integration/buddies/",
         "tests/unit/shared/",
         "tests/contracts/phase2-social.test.ts",
-        "tests/database/phase2-social-schema.test.ts"
+        "tests/database/phase2-social-schema.test.ts",
+        "tests/integration/social/"
       ]
     },
     {
@@ -147,7 +151,7 @@
     { "route": "src/app/api/buddies/respond/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/buddies/walk-invite/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/check-ins/route.ts", "access": "authenticated", "testState": "backlog" },
-    { "route": "src/app/api/cron/cleanup-expired/route.ts", "access": "service-secret", "testState": "backlog" },
+    { "route": "src/app/api/cron/cleanup-expired/route.ts", "access": "service-secret", "testState": "covered" },
     { "route": "src/app/api/db-status/route.ts", "access": "review-required", "testState": "backlog" },
     { "route": "src/app/api/dog-buddies/respond/route.ts", "access": "authenticated", "testState": "covered" },
     { "route": "src/app/api/dogs/claim/route.ts", "access": "review-required", "testState": "backlog" },
@@ -155,8 +159,8 @@
     { "route": "src/app/api/dogs/route.ts", "access": "mixed", "testState": "backlog" },
     { "route": "src/app/api/health/route.ts", "access": "public", "testState": "backlog" },
     { "route": "src/app/api/maps/config/route.ts", "access": "public", "testState": "backlog" },
-    { "route": "src/app/api/maps/directions/route.ts", "access": "review-required", "testState": "backlog" },
-    { "route": "src/app/api/maps/static/route.ts", "access": "public", "testState": "backlog" },
+    { "route": "src/app/api/maps/directions/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/maps/static/route.ts", "access": "public", "testState": "covered" },
     { "route": "src/app/api/notifications/read/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/notifications/unread/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/qr/[id]/route.ts", "access": "public", "testState": "backlog" },
@@ -176,10 +180,12 @@
     { "route": "src/app/api/social/conversations/[id]/messages/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social/conversations/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social/discovery/route.ts", "access": "authenticated", "testState": "backlog" },
-    { "route": "src/app/api/social/events/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/events/route.ts", "access": "authenticated", "testState": "covered" },
     { "route": "src/app/api/social/feed/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social/groups/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social/moderation/route.ts", "access": "authenticated", "testState": "backlog" },
+    { "route": "src/app/api/social/packs/route.ts", "access": "authenticated", "testState": "covered" },
+    { "route": "src/app/api/social/packs/suggestions/route.ts", "access": "authenticated", "testState": "covered" },
     { "route": "src/app/api/social/privacy/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/social/reputation/route.ts", "access": "authenticated", "testState": "backlog" },
     { "route": "src/app/api/uploads/presign/route.ts", "access": "review-required", "testState": "backlog" },

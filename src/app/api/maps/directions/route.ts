@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import { getMapboxToken } from '@/lib/mapboxToken';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,6 +65,17 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return json({ error: 'Authentication required.' }, 401);
+
+  const limit = await rateLimit('maps:directions', user.id, 30, 60);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: 'Too many routing requests.' }, {
+      status: 429,
+      headers: { 'Retry-After': String(limit.retryAfterSeconds) }
+    });
+  }
+
   const token = getMapboxToken();
   if (!token) return json({ error: 'Mapbox access token is not configured.' }, 503);
 

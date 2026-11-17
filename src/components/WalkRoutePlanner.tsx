@@ -22,6 +22,7 @@ import {
   type SavedRoute,
   useBuddiesStore
 } from '@/stores/useBuddiesStore';
+import { shouldFallbackToDirectMapbox } from '@/lib/maps/routingPolicy';
 
 type DirectionsPayload = {
   geometry: Coordinate[];
@@ -577,6 +578,7 @@ export default function WalkRoutePlanner({
 
     try {
       let payload: DirectionsPayload & { error?: string };
+      let serverStatus: number | null = null;
       try {
         const response = await fetch('/api/maps/directions', {
           method: 'POST',
@@ -585,9 +587,11 @@ export default function WalkRoutePlanner({
           signal: controller.signal,
           cache: 'no-store'
         });
+        serverStatus = response.status;
         payload = await response.json() as DirectionsPayload & { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Server driving route failed.');
-      } catch {
+      } catch (error) {
+        if (serverStatus !== null && !shouldFallbackToDirectMapbox(serverStatus)) throw error;
         patchWalkPlanner({
           routingState: 'routing',
           routingError: null,
