@@ -38,11 +38,11 @@ export async function POST(request: NextRequest) {
   }
 
   const [privacy, blockedBySender, blockedSender] = await Promise.all([
-    prisma.socialPrivacy.findUnique({ where: { userId: invitedDog.ownerId }, select: { allowWalkInvites: true } }),
+    prisma.socialPrivacy.findUnique({ where: { userId: invitedDog.ownerId }, select: { discoverable: true, allowWalkInvites: true } }),
     prisma.socialBlock.findUnique({ where: { blockerId_blockedId: { blockerId: user.id, blockedId: invitedDog.ownerId } }, select: { id: true } }),
     prisma.socialBlock.findUnique({ where: { blockerId_blockedId: { blockerId: invitedDog.ownerId, blockedId: user.id } }, select: { id: true } })
   ]);
-  if (privacy?.allowWalkInvites === false || blockedBySender || blockedSender) {
+  if ((privacy && (!privacy.discoverable || !privacy.allowWalkInvites)) || blockedBySender || blockedSender) {
     return NextResponse.redirect(new URL(`${UI_ROUTES.buddies}?error=walk-unavailable`, request.url), 303);
   }
 
