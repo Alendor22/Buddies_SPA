@@ -50,6 +50,15 @@ async function handle(request: Request) {
   });
 }
 
-export const GET = handle;
+// Per the MCP Streamable HTTP spec, a client's GET opens a long-lived SSE stream for
+// server-initiated messages. This server's tools are pure read-only request/response -
+// nothing is ever pushed to the client - but a spec-compliant client still opens that
+// stream, which then sits idle until the platform kills the function at its max
+// duration. Declining with 405 tells the client outright that no such stream is
+// offered, which is a normal, supported response (see the spec's "GET not supported"
+// case) and stops that timeout from recurring on every connection.
+export async function GET() {
+  return new Response(null, { status: 405, headers: { 'allow': 'POST, DELETE' } });
+}
 export const POST = handle;
 export const DELETE = handle;

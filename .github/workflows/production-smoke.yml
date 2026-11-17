@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYMENT_URL: https://buddies.vercel.app
+      DEPLOYMENT_URL: https://dogbuddies.net
       EXPECTED_COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       SMOKE_ATTEMPTS: 36
       SMOKE_INTERVAL_MS: 10000

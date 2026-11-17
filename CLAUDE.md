@@ -10,7 +10,7 @@
 **Project:** Buddies SPA V2  
 **Repository:** `Alendor22/Buddies_SPA`  
 **Default branch:** `main`  
-**Production:** `https://buddies.vercel.app`  
+**Production:** `https://dogbuddies.net`  
 **Local WSL path:** `/home/motoscucci/coding/Buddies_SPA`
 
 Buddies is a production-oriented dog identity, safety, walking, and social-network application.
@@ -423,13 +423,13 @@ Production smoke waits for Vercel to expose the intended commit SHA before consi
 Liveness:
 
 ```text
-GET https://buddies.vercel.app/api/health
+GET https://dogbuddies.net/api/health
 ```
 
 Readiness:
 
 ```text
-GET https://buddies.vercel.app/api/health?deep=1
+GET https://dogbuddies.net/api/health?deep=1
 ```
 
 Deep readiness checks database/Redis and safe configuration status.

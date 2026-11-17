@@ -88,8 +88,8 @@ Run the full validation suite with `npm run test:all` when the required disposab
 Useful production checks:
 
 ```text
-https://buddies.vercel.app/api/health
-https://buddies.vercel.app/api/health?deep=1
+https://dogbuddies.net/api/health
+https://dogbuddies.net/api/health?deep=1
 ```
 
 A successful liveness response alone does not establish database or service readiness. For release verification, compare the deployed commit SHA with the intended commit and inspect the deep-readiness response.
