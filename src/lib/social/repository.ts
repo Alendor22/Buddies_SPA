@@ -130,10 +130,21 @@ export async function syncPackConversation(packId: string) {
 export async function syncEventConversation(eventId: string) {
   const event = await prisma.socialEvent.findUnique({
     where: { id: eventId },
-    select: { id: true, title: true, hostId: true, attendees: { where: { status: 'GOING' }, select: { userId: true } } }
+    select: {
+      id: true, title: true, hostId: true,
+      attendees: { where: { status: 'GOING' }, select: { userId: true } },
+      pack: { select: { members: { where: { status: 'ACCEPTED' }, select: { userId: true } } } }
+    }
   });
   if (!event) return null;
-  const userIds = [...new Set([event.hostId, ...event.attendees.map((attendee) => attendee.userId)])];
+  const packMemberIds = event.pack?.members.map((member) => member.userId) ?? [];
+  if (packMemberIds.length) {
+    await prisma.socialEventAttendee.createMany({
+      data: packMemberIds.map((userId) => ({ eventId, userId, status: 'GOING' })),
+      skipDuplicates: true
+    });
+  }
+  const userIds = [...new Set([event.hostId, ...event.attendees.map((attendee) => attendee.userId), ...packMemberIds])];
   const conversation = await prisma.conversation.upsert({
     where: { eventId: event.id },
     create: {
@@ -148,6 +159,38 @@ export async function syncEventConversation(eventId: string) {
     prisma.conversationMember.createMany({ data: userIds.map((userId) => ({ conversationId: conversation.id, userId, role: userId === event.hostId ? 'OWNER' : 'MEMBER' })), skipDuplicates: true })
   ]);
   return conversation.id;
+}
+
+/** Materialize legacy pack and meetup threads only for the current user's communities. */
+export async function syncUserCommunityConversations(userId: string) {
+  const [packs, events] = await Promise.all([
+    prisma.dogPack.findMany({
+      where: {
+        conversation: { is: null },
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId, status: 'ACCEPTED' } } }
+        ]
+      },
+      select: { id: true },
+      take: 100
+    }),
+    prisma.socialEvent.findMany({
+      where: {
+        conversation: { is: null },
+        OR: [
+          { hostId: userId },
+          { attendees: { some: { userId, status: 'GOING' } } }
+        ]
+      },
+      select: { id: true },
+      take: 100
+    })
+  ]);
+  await Promise.all([
+    ...packs.map((pack) => syncPackConversation(pack.id)),
+    ...events.map((event) => syncEventConversation(event.id))
+  ]);
 }
 
 // The newest 200 messages, returned oldest-first for display. Ordering ASC before the
@@ -231,12 +274,16 @@ export async function createEvent(
 }
 
 export async function listEvents(userId: string) {
-  return prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; packId: string | null; packName: string | null; attending: boolean; conversationId: string | null }>>`
+  const events = await prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; packId: string | null; packName: string | null; attending: boolean; conversationId: string | null }>>`
     SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", e."packId", p."name" AS "packName", c."id" AS "conversationId",
       EXISTS(SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING') AS attending
     FROM "SocialEvent" e LEFT JOIN "DogPack" p ON p."id" = e."packId" LEFT JOIN "Conversation" c ON c."eventId" = e."id"
     WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId} ORDER BY e."startsAt" ASC LIMIT 100
   `;
+  const participatingEvents = events.filter((event) => event.attending || event.hostId === userId);
+  const conversations = await Promise.all(participatingEvents.map((event) => syncEventConversation(event.id)));
+  const conversationIds = new Map(participatingEvents.map((event, index) => [event.id, conversations[index] ?? event.conversationId]));
+  return events.map((event) => ({ ...event, conversationId: conversationIds.get(event.id) ?? event.conversationId }));
 }
 
 export async function reportContent(reporterId: string, targetType: string, targetId: string | null, category: string, details: string | null, targetUserId: string | null, targetDogId: string | null) {

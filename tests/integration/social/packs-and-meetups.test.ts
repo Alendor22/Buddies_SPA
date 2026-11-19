@@ -7,6 +7,8 @@ const createNotificationMock = vi.hoisted(() => vi.fn());
 const createEventMock = vi.hoisted(() => vi.fn());
 const addFeedItemMock = vi.hoisted(() => vi.fn());
 const listBlockedUserIdsMock = vi.hoisted(() => vi.fn());
+const syncPackConversationMock = vi.hoisted(() => vi.fn());
+const syncEventConversationMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   dog: { findFirst: vi.fn(), findMany: vi.fn() },
   dogPack: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
@@ -29,6 +31,8 @@ vi.mock('@/lib/notifications', () => ({ createNotification: createNotificationMo
 vi.mock('@/lib/social/repository', () => ({
   addFeedItem: addFeedItemMock,
   createEvent: createEventMock,
+  syncPackConversation: syncPackConversationMock,
+  syncEventConversation: syncEventConversationMock,
   listEvents: vi.fn(),
   listBlockedUserIds: listBlockedUserIdsMock
 }));
@@ -61,6 +65,8 @@ describe('dog packs and pack meetups', () => {
     prismaMock.socialPrivacy.findMany.mockResolvedValue([]);
     createNotificationMock.mockResolvedValue({});
     createEventMock.mockResolvedValue('event-1');
+    syncPackConversationMock.mockResolvedValue('pack-conversation-1');
+    syncEventConversationMock.mockResolvedValue('event-conversation-1');
     addFeedItemMock.mockResolvedValue({});
   });
 
@@ -180,7 +186,7 @@ describe('dog packs and pack meetups', () => {
     }));
 
     expect(response.status).toBe(201);
-    expect(await response.json()).toEqual({ eventId: 'event-1' });
+    expect(await response.json()).toEqual({ eventId: 'event-1', conversationId: 'event-conversation-1' });
     expect(createEventMock).toHaveBeenCalledWith('owner-1', 'Pack walk', expect.any(Date), null, null, {
       packId: 'pack-1', endsAt: null, latitude: null, longitude: null
     });
