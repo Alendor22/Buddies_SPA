@@ -929,6 +929,10 @@ model Conversation {
   id        String               @id @default(cuid())
   kind      String               @default("DIRECT")
   title     String?
+  dogPackId String?              @unique
+  dogPack   DogPack?             @relation(fields: [dogPackId], references: [id], onDelete: Cascade)
+  eventId   String?              @unique
+  event     SocialEvent?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   members   ConversationMember[]
   messages  SocialMessage[]
   createdAt DateTime             @default(now())
@@ -1015,6 +1019,7 @@ model DogPack {
   visibility  String          @default("PUBLIC")
   members     DogPackMember[]
   events      SocialEvent[]
+  conversation Conversation?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -1075,6 +1080,7 @@ model SocialEvent {
   visibility   String                @default("PUBLIC")
   maxAttendees Int?
   attendees    SocialEventAttendee[]
+  conversation Conversation?
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @default(now())
 
