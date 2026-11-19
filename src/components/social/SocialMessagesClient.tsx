@@ -1,7 +1,7 @@
 'use client';
 
 import type * as Ably from 'ably';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getRealtimeClient } from '@/lib/realtime';
 import { channels } from '@/lib/realtime';
 
@@ -20,18 +20,23 @@ function reauthorizeRealtime() {
 }
 
 type Dog = { id: string; name: string; ownerId: string; photoUrl?: string | null; breed?: string | null };
-type Conversation = { id: string; peerId: string | null; peerName: string | null; lastBody: string | null; lastMessageAt: string | null };
+type Conversation = { id: string; kind: string; title: string | null; peerId: string | null; peerName: string | null; lastBody: string | null; lastMessageAt: string | null };
 type Message = { id: string; senderId: string; senderDogId: string | null; senderDogName: string | null; recipientDogId: string | null; recipientDogName: string | null; body: string; createdAt: string };
 
-export default function SocialMessagesClient({ userId, dogs, initialSearch = '' }: { userId: string; dogs: Dog[]; initialSearch?: string }) {
+export default function SocialMessagesClient({ userId, dogs, initialSearch = '', initialConversationId = '' }: { userId: string; dogs: Dog[]; initialSearch?: string; initialConversationId?: string }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(initialConversationId || null);
+  const activeIdRef = useRef(activeId);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesConversationId, setMessagesConversationId] = useState<string | null>(null);
   const [query, setQuery] = useState(initialSearch);
   const [results, setResults] = useState<Dog[]>([]);
+  const [searching, setSearching] = useState(false);
   const [senderDogId, setSenderDogId] = useState(dogs[0]?.id ?? '');
   const [peerDogs, setPeerDogs] = useState<Dog[]>([]);
   const [recipientDogId, setRecipientDogId] = useState('');
+  const preferredRecipientDogId = useRef('');
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [peerTypingConversationId, setPeerTypingConversationId] = useState<string | null>(null);
@@ -44,13 +49,29 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   const refreshMessages = useCallback(async (id: string) => {
     const response = await fetch(`/api/social/conversations/${id}/messages`, { cache: 'no-store' });
     if (response.ok) {
+      if (activeIdRef.current !== id) return;
       const data = await response.json();
       setMessages(data.messages ?? []);
+      setMessagesConversationId(id);
       const availableDogs = data.peerDogs ?? [];
       setPeerDogs(availableDogs);
-      setRecipientDogId((current) => availableDogs.some((dog: Dog) => dog.id === current) ? current : availableDogs[0]?.id ?? '');
+      setRecipientDogId((current) => {
+        const preferred = preferredRecipientDogId.current;
+        preferredRecipientDogId.current = '';
+        return availableDogs.some((dog: Dog) => dog.id === preferred) ? preferred : availableDogs.some((dog: Dog) => dog.id === current) ? current : availableDogs[0]?.id ?? '';
+      });
     }
   }, []);
+
+  function selectConversation(conversationId: string) {
+    setMessages([]);
+    setMessagesConversationId(null);
+    setPeerDogs([]);
+    setRecipientDogId('');
+    setBody('');
+    setError('');
+    setActiveId(conversationId);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +101,14 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
       const data = await response.json();
       if (cancelled) return;
       setMessages(data.messages ?? []);
+      setMessagesConversationId(activeId);
       const availableDogs = data.peerDogs ?? [];
       setPeerDogs(availableDogs);
-      setRecipientDogId(current => availableDogs.some((dog: Dog) => dog.id === current) ? current : availableDogs[0]?.id ?? '');
+      setRecipientDogId(current => {
+        const preferred = preferredRecipientDogId.current;
+        preferredRecipientDogId.current = '';
+        return availableDogs.some((dog: Dog) => dog.id === preferred) ? preferred : availableDogs.some((dog: Dog) => dog.id === current) ? current : availableDogs[0]?.id ?? '';
+      });
     }
     void loadMessages();
     return () => { cancelled = true; };
@@ -177,12 +203,25 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
   }, [activeId, refreshConversations, refreshMessages]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      if (!query.trim()) return setResults([]);
-      const response = await fetch(`/api/social/discovery?q=${encodeURIComponent(query.trim())}`, { cache: 'no-store' });
-      if (response.ok) setResults((await response.json()).dogs ?? []);
+      if (!query.trim()) {
+        setResults([]);
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
+      try {
+        const response = await fetch(`/api/social/discovery?q=${encodeURIComponent(query.trim())}`, { cache: 'no-store', signal: controller.signal });
+        if (response.ok) setResults((await response.json()).dogs ?? []);
+        else setResults([]);
+      } catch {
+        if (!controller.signal.aborted) setResults([]);
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query]);
 
   async function startConversation(dog: Dog) {
@@ -192,8 +231,8 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     if (!response.ok) return setError(data.error ?? 'Unable to start conversation.');
     // A new conversation's channel is not in the current token's capability yet.
     void reauthorizeRealtime();
-    setActiveId(data.conversationId);
-    setRecipientDogId(dog.id);
+    preferredRecipientDogId.current = dog.id;
+    selectConversation(data.conversationId);
     setQuery(''); setResults([]);
     await refreshConversations();
   }
@@ -203,7 +242,7 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
     if (!activeId || !body.trim() || !senderDogId || !recipientDogId) return;
     setError('');
     const response = await fetch(`/api/social/conversations/${activeId}/messages`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body, senderDogId, recipientDogId })
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body, senderDogId, recipientDogId: isGroupConversation ? null : recipientDogId })
     });
     const data = await response.json();
     if (!response.ok) return setError(data.error ?? 'Unable to send message.');
@@ -214,19 +253,26 @@ export default function SocialMessagesClient({ userId, dogs, initialSearch = '' 
 
   const active = useMemo(() => conversations.find((item) => item.id === activeId), [conversations, activeId]);
   const peerTyping = Boolean(activeId && peerTypingConversationId === activeId);
+  const visibleMessages = messagesConversationId === activeId ? messages : [];
+  const isGroupConversation = active?.kind === 'PACK' || active?.kind === 'EVENT';
 
   return <div className="mt-8 grid gap-6 lg:grid-cols-[320px_1fr]">
     <aside className="rounded-2xl border bg-white p-4 shadow-sm">
       <h2 className="font-semibold">New message</h2>
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dogs or breeds" className="mt-3 w-full rounded-lg border px-3 py-2" />
+      <label className="mt-3 block text-sm font-medium">Dog to message<input aria-label="Search dogs or breeds" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dogs or breeds" className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+      {error && !activeId && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
+      {query.trim() && searching && <p className="mt-2 text-sm text-slate-500" role="status">Searching dogs…</p>}
       {results.length > 0 && <div className="mt-2 grid gap-2">{results.map((dog) => <button key={dog.id} onClick={() => void startConversation(dog)} className="rounded-lg border p-3 text-left"><strong>{dog.name}</strong><span className="block text-sm text-slate-500">{dog.breed ?? 'Dog profile'}</span></button>)}</div>}
-      <h2 className="mt-6 font-semibold">Conversations</h2>
-      <div className="mt-2 grid gap-2">{conversations.map((conversation) => <button key={conversation.id} onClick={() => setActiveId(conversation.id)} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.peerName ?? 'Buddy'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}</div>
+      {query.trim() && !searching && results.length === 0 && <p className="mt-2 text-sm text-slate-500">No dogs found. Check the spelling or try a breed.</p>}
+      <h2 className="mt-6 font-semibold">Direct conversations</h2>
+      <div className="mt-2 grid gap-2">{conversations.filter((conversation) => conversation.kind === 'DIRECT').map((conversation) => <button key={conversation.id} onClick={() => selectConversation(conversation.id)} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.peerName ?? 'Buddy'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}{!conversations.some((conversation) => conversation.kind === 'DIRECT') && <p className="text-sm text-slate-500">Start a message by searching for a dog above.</p>}</div>
+      <h2 className="mt-6 font-semibold">Packs & meetup chats</h2>
+      <div className="mt-2 grid gap-2">{conversations.filter((conversation) => conversation.kind === 'PACK' || conversation.kind === 'EVENT').map((conversation) => <button key={conversation.id} onClick={() => selectConversation(conversation.id)} className={`rounded-lg border p-3 text-left ${activeId === conversation.id ? 'bg-slate-100' : ''}`}><strong>{conversation.title ?? conversation.peerName ?? 'Community chat'}</strong><span className="block truncate text-sm text-slate-500">{conversation.lastBody ?? 'No messages yet'}</span></button>)}{!conversations.some((conversation) => conversation.kind === 'PACK' || conversation.kind === 'EVENT') && <p className="text-sm text-slate-500">Pack and meetup conversations appear here when you join.</p>}</div>
     </aside>
     <section className="flex min-h-[520px] flex-col rounded-2xl border bg-white shadow-sm">
-      <header className="border-b p-4"><h2 className="font-semibold">{active?.peerName ?? 'Select a conversation'}</h2>{active && peerTyping ? <p className="mt-1 text-sm text-emerald-600" aria-live="polite">{active.peerName ?? 'Your buddy'} is typing…</p> : null}{active && peerDogs.length > 0 && <p className="mt-1 text-sm text-slate-500">Messaging {peerDogs.find((dog) => dog.id === recipientDogId)?.name ?? 'a dog'}</p>}</header>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message) => <div key={message.id} className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.senderId === userId ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100'}`}><div className="mb-1 text-xs opacity-70">{message.senderDogName ?? 'Dog'} → {message.recipientDogName ?? 'Dog'}</div><p>{message.body}</p></div>)}</div>
-      {activeId && <form onSubmit={send} className="border-t p-4"><div className="mb-3 flex flex-wrap gap-3"><label className="text-sm">From<select value={senderDogId} onChange={(e) => setSenderDogId(e.target.value)} className="rounded border px-2 py-1">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label><label className="text-sm">To<select value={recipientDogId} onChange={(e) => setRecipientDogId(e.target.value)} className="ml-2 rounded border px-2 py-1">{peerDogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label></div><div className="flex gap-2"><input value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} placeholder="Message" className="flex-1 rounded-lg border px-3 py-2"/><button disabled={!body.trim() || !senderDogId || !recipientDogId} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-40">Send</button></div>{error && <p className="mt-2 text-sm text-red-600">{error}</p>}</form>}
+      <header className="border-b p-4"><h2 className="font-semibold">{active?.title ?? active?.peerName ?? 'Select a conversation'}</h2>{active && peerTyping ? <p className="mt-1 text-sm text-emerald-600" aria-live="polite">{active.peerName ?? 'A member'} is typing…</p> : null}{active && !isGroupConversation && peerDogs.length > 0 && <p className="mt-1 text-sm text-slate-500">Messaging {peerDogs.find((dog) => dog.id === recipientDogId)?.name ?? 'a dog'}</p>}</header>
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">{!activeId ? <div className="grid min-h-64 place-content-center text-center"><h3 className="font-semibold">Start a conversation</h3><p className="mt-1 text-sm text-slate-500">Search for a dog, or select a conversation to view its history.</p></div> : visibleMessages.length === 0 ? <p className="py-12 text-center text-sm text-slate-500">No messages in this conversation yet. Say hello.</p> : visibleMessages.map((message) => <div key={message.id} className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.senderId === userId ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100'}`}><div className="mb-1 text-xs opacity-70">{message.senderDogName ?? 'Dog'}{message.recipientDogName ? ` → ${message.recipientDogName}` : isGroupConversation ? ' → Group' : ''}</div><p>{message.body}</p></div>)}</div>
+      {activeId && <form onSubmit={send} className="border-t p-4"><div className="mb-3 flex flex-wrap gap-3"><label className="text-sm">From<select value={senderDogId} onChange={(e) => setSenderDogId(e.target.value)} className="rounded border px-2 py-1">{dogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label>{!isGroupConversation && <label className="text-sm">To<select value={recipientDogId} onChange={(e) => setRecipientDogId(e.target.value)} className="ml-2 rounded border px-2 py-1">{peerDogs.map((dog) => <option key={dog.id} value={dog.id}>{dog.name}</option>)}</select></label>}{isGroupConversation && <p className="self-center text-sm text-slate-500">Sending to everyone in this conversation</p>}</div><div className="flex gap-2"><input value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} placeholder="Message" className="flex-1 rounded-lg border px-3 py-2"/><button disabled={!body.trim() || !senderDogId || (!isGroupConversation && !recipientDogId)} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-40">Send</button></div>{error && <p className="mt-2 text-sm text-red-600">{error}</p>}</form>}
     </section>
   </div>;
 }

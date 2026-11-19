@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { createConversation, listBlockedUserIds, listConversations } from '@/lib/social/repository';
+import { createConversation, listBlockedUserIds, listConversations, syncUserCommunityConversations } from '@/lib/social/repository';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  await syncUserCommunityConversations(user.id);
   return NextResponse.json({ conversations: await listConversations(user.id) });
 }
 

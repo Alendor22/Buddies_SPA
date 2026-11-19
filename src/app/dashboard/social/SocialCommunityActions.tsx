@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type DogOption = { id: string; name: string; breed: string | null; photoUrl: string | null };
 type Pack = {
   id: string;
+  conversationId: string | null;
   name: string;
   description: string | null;
   isOwner: boolean;
@@ -182,6 +184,7 @@ export default function SocialCommunityActions() {
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pack.formed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>{pack.formed ? 'ACTIVE' : 'FORMING'}</span>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{pack.acceptedDogs.map((dog) => dog.name).join(', ')}</p>
+                {pack.conversationId && <Link href={`/dashboard/messages?conversation=${encodeURIComponent(pack.conversationId)}`} className="mt-3 inline-flex rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Open pack chat</Link>}
                 {pack.isOwner && data?.candidateDogs.length > 0 && <form onSubmit={(event) => void inviteDogs(event, pack.id)} className="mt-4 border-t pt-4">
                   <p className="text-sm font-medium">Invite eligible dogs</p>
                   <div className="mt-2 grid max-h-36 gap-2 overflow-y-auto sm:grid-cols-2">

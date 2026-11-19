@@ -114,7 +114,7 @@ describe('Phase 2 social repository', () => {
     prismaMock.$queryRaw
       .mockResolvedValueOnce([{ id: 'group-1', name: 'Park Dogs', description: null, city: null, joined: true }])
       .mockResolvedValueOnce([{ id: 'feed-1', actorId: 'user-1', type: 'GROUP_CREATED', targetType: 'group', targetId: 'group-1', createdAt: new Date() }])
-      .mockResolvedValueOnce([{ id: 'event-1', title: 'Dog walk', locationName: null, startsAt: new Date(), hostId: 'user-1', attending: true }]);
+      .mockResolvedValueOnce([{ id: 'event-1', title: 'Dog walk', locationName: null, startsAt: new Date(), hostId: 'user-2', attending: false }]);
 
     await expect(createGroup('user-1', 'Park Dogs', null, null)).resolves.toEqual(expect.any(String));
     await expect(listGroups('user-1')).resolves.toHaveLength(1);
