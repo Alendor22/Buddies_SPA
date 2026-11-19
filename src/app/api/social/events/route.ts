@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
-import { addFeedItem, createEvent, listEvents } from '@/lib/social/repository';
+import { addFeedItem, createEvent, listEvents, syncEventConversation } from '@/lib/social/repository';
 import { dogManagerScope } from '@/lib/social/dogManagerScope';
 
 export const dynamic = 'force-dynamic';
@@ -28,9 +28,25 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (body?.action === 'join') {
+    const joinLimit = await rateLimit('social:events:join', user.id, 30, 3600);
+    if (!joinLimit.allowed) return NextResponse.json({ error: 'Too many meetup joins recently. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(joinLimit.retryAfterSeconds) } });
+    const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
+    if (!eventId) return NextResponse.json({ error: 'A meetup is required.' }, { status: 400 });
+    const event = await prisma.socialEvent.findUnique({ where: { id: eventId }, select: { id: true, startsAt: true, visibility: true } });
+    if (!event || event.visibility !== 'PUBLIC' || event.startsAt <= new Date()) return NextResponse.json({ error: 'This meetup is unavailable.' }, { status: 404 });
+    await prisma.socialEventAttendee.upsert({
+      where: { eventId_userId: { eventId, userId: user.id } },
+      create: { eventId, userId: user.id, status: 'GOING' },
+      update: { status: 'GOING' }
+    });
+    const conversationId = await syncEventConversation(eventId);
+    return NextResponse.json({ joined: true, conversationId }, { status: 200 });
+  }
   const limit = await rateLimit('social:events:create', user.id, 10, 3600);
   if (!limit.allowed) return NextResponse.json({ error: 'Too many meetups created recently. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } });
-  const parsed = createEventSchema.safeParse(await request.json().catch(() => null));
+  const parsed = createEventSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: 'Provide a title, valid future time, and valid meetup details.' }, { status: 400 });
   const payload = parsed.data;
   const title = payload.title.trim();
@@ -71,6 +87,7 @@ export async function POST(request: NextRequest) {
     latitude,
     longitude
   });
+  const conversationId = await syncEventConversation(eventId);
   await addFeedItem(user.id, 'EVENT_CREATED', 'event', eventId);
-  return NextResponse.json({ eventId }, { status: 201 });
+  return NextResponse.json({ eventId, conversationId }, { status: 201 });
 }
