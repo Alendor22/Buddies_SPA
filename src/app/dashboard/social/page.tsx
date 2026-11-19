@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getReputation, getSocialPrivacy, listConversations, listEvents, listFeed } from '@/lib/social/repository';
 import SocialCommunityActions from './SocialCommunityActions';
 import SocialGroups from './SocialGroups';
+import MeetupConversationAction from './MeetupConversationAction';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +77,7 @@ export default async function SocialDashboardPage() {
               <p className="mt-1 text-sm text-slate-600">{event.locationName ?? 'Location to be announced'}</p>
               <p className="mt-1 text-sm text-slate-500">{event.startsAt.toLocaleString()}</p>
               {event.packName && <p className="mt-2 inline-flex rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">{event.packName} meetup</p>}
+              <MeetupConversationAction eventId={event.id} conversationId={event.conversationId} attending={event.attending} />
             </article>
           )) : <p className="text-sm text-slate-600">No upcoming events yet.</p>}
         </div>
