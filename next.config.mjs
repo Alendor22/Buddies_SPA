@@ -68,6 +68,9 @@ const contentSecurityPolicy = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    agentUpgrade: 'security'
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   webpack(config) {
