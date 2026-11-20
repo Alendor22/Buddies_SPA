@@ -102,6 +102,14 @@ export async function listConversations(userId: string) {
   `;
 }
 
+/** Reconcile a conversation's membership to exactly the given user IDs. */
+async function syncConversationMembership(conversationId: string, userIds: string[], ownerId: string) {
+  await prisma.$transaction([
+    prisma.conversationMember.deleteMany({ where: { conversationId, userId: { notIn: userIds } } }),
+    prisma.conversationMember.createMany({ data: userIds.map((userId) => ({ conversationId, userId, role: userId === ownerId ? 'OWNER' : 'MEMBER' })), skipDuplicates: true })
+  ]);
+}
+
 /** Keep one durable group thread per pack and synchronize it to accepted dog owners. */
 export async function syncPackConversation(packId: string) {
   const pack = await prisma.dogPack.findUnique({
@@ -119,10 +127,7 @@ export async function syncPackConversation(packId: string) {
     update: { title: `Pack: ${pack.name}` },
     select: { id: true }
   });
-  await prisma.$transaction([
-    prisma.conversationMember.deleteMany({ where: { conversationId: conversation.id, userId: { notIn: userIds } } }),
-    prisma.conversationMember.createMany({ data: userIds.map((userId) => ({ conversationId: conversation.id, userId, role: userId === pack.ownerId ? 'OWNER' : 'MEMBER' })), skipDuplicates: true })
-  ]);
+  await syncConversationMembership(conversation.id, userIds, pack.ownerId);
   return conversation.id;
 }
 
@@ -154,10 +159,7 @@ export async function syncEventConversation(eventId: string) {
     update: { title: `Meetup: ${event.title}` },
     select: { id: true }
   });
-  await prisma.$transaction([
-    prisma.conversationMember.deleteMany({ where: { conversationId: conversation.id, userId: { notIn: userIds } } }),
-    prisma.conversationMember.createMany({ data: userIds.map((userId) => ({ conversationId: conversation.id, userId, role: userId === event.hostId ? 'OWNER' : 'MEMBER' })), skipDuplicates: true })
-  ]);
+  await syncConversationMembership(conversation.id, userIds, event.hostId);
   return conversation.id;
 }
 
@@ -273,17 +275,19 @@ export async function createEvent(
   return id;
 }
 
+// conversationId comes straight from the query: syncEventConversation already runs at the
+// two points membership actually changes (create and join, in the events route), so a list
+// read doesn't need to re-sync on every call. An event a user participates in but that has
+// no conversation yet (e.g. a legacy one from before this feature) gets one lazily the next
+// time the user opens Messages, via syncUserCommunityConversations - same pattern already
+// used there.
 export async function listEvents(userId: string) {
-  const events = await prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; packId: string | null; packName: string | null; attending: boolean; conversationId: string | null }>>`
+  return prisma.$queryRaw<Array<{ id: string; title: string; locationName: string | null; startsAt: Date; hostId: string; packId: string | null; packName: string | null; attending: boolean; conversationId: string | null }>>`
     SELECT e."id", e."title", e."locationName", e."startsAt", e."hostId", e."packId", p."name" AS "packName", c."id" AS "conversationId",
       EXISTS(SELECT 1 FROM "SocialEventAttendee" a WHERE a."eventId" = e."id" AND a."userId" = ${userId} AND a."status" = 'GOING') AS attending
     FROM "SocialEvent" e LEFT JOIN "DogPack" p ON p."id" = e."packId" LEFT JOIN "Conversation" c ON c."eventId" = e."id"
     WHERE e."startsAt" >= CURRENT_TIMESTAMP OR e."hostId" = ${userId} ORDER BY e."startsAt" ASC LIMIT 100
   `;
-  const participatingEvents = events.filter((event) => event.attending || event.hostId === userId);
-  const conversations = await Promise.all(participatingEvents.map((event) => syncEventConversation(event.id)));
-  const conversationIds = new Map(participatingEvents.map((event, index) => [event.id, conversations[index] ?? event.conversationId]));
-  return events.map((event) => ({ ...event, conversationId: conversationIds.get(event.id) ?? event.conversationId }));
 }
 
 export async function reportContent(reporterId: string, targetType: string, targetId: string | null, category: string, details: string | null, targetUserId: string | null, targetDogId: string | null) {
