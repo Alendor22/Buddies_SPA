@@ -48,8 +48,6 @@ async function createWalkAction(formData: FormData) {
       notes: notes || null,
       routeName: crossStreet,
       routeEngine: null,
-      routeGeometry: null,
-      routeSteps: null,
       routeDistanceMiles: null,
       routeDurationMin: null
     }
