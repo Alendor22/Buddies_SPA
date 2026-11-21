@@ -40,7 +40,6 @@ export default async function SocialDashboardPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/dashboard/buddies" className="rounded-lg border bg-white px-4 py-2">Buddy requests</Link>
-          <Link href="/dashboard/check-ins" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Nearby check-ins</Link>
         </div>
       </div>
 
