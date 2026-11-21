@@ -68,7 +68,7 @@ export default async function SocialMapPage() {
         </div>
         <div className="flex gap-2">
           <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2 text-sm font-medium">Walks</Link>
-          <Link href={UI_ROUTES.createWalk} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Start route</Link>
+          <Link href={UI_ROUTES.createWalk} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Plan a walk</Link>
         </div>
       </div>
 
