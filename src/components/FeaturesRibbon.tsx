@@ -18,7 +18,6 @@ type FeaturesRibbonProps = {
 
 const publicFeatures: FeatureItem[] = [
   { href: '/', label: 'Home', icon: '⌂', match: (pathname) => pathname === '/' },
-  { href: '/map', label: 'Map', icon: '⌖', match: (pathname) => pathname.startsWith('/map') },
   { href: '/scanner', label: 'Scanner', icon: '⌗', match: (pathname) => pathname.startsWith('/scanner') },
   { href: '/dogs', label: 'Profiles', icon: '🐶', match: (pathname) => pathname.startsWith('/dogs') },
 ];
@@ -27,13 +26,18 @@ const memberFeatures: FeatureItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦', match: (pathname) => pathname === '/dashboard' },
   { href: '/dashboard/social', label: 'Social', icon: '◎', match: (pathname) => pathname.startsWith('/dashboard/social') },
   { href: '/dashboard/buddies', label: 'Buddies', icon: '👥', match: (pathname) => pathname.startsWith('/dashboard/buddies') },
-  { href: '/dashboard/check-ins', label: 'Check-ins', icon: '✓', match: (pathname) => pathname.startsWith('/dashboard/check-ins') },
   { href: '/dashboard/walks', label: 'Walks', icon: '↝', match: (pathname) => pathname.startsWith('/dashboard/walks') },
   { href: '/dashboard/messages', label: 'Messages', icon: '✉', match: (pathname) => pathname.startsWith('/dashboard/messages') },
   { href: '/dashboard/buddies/invite', label: 'Invite', icon: '+', match: (pathname) => pathname.startsWith('/dashboard/buddies/invite') },
   { href: '/dashboard/lost/report', label: 'Lost Dog', icon: '!', match: (pathname) => pathname.startsWith('/dashboard/lost') },
   { href: '/find-dog', label: 'Find Lost Dog', icon: '🔎', match: (pathname) => pathname.startsWith('/find-dog') },
   { href: '/dashboard/notifications', label: 'Alerts', icon: '🔔', match: (pathname) => pathname.startsWith('/dashboard/notifications') },
+];
+
+const mapFeatures: FeatureItem[] = [
+  { href: '/map', label: 'Live map', icon: '⌖', match: (pathname) => pathname.startsWith('/map') },
+  { href: '/dashboard/social-map', label: 'Neighborhood activity', icon: '◎', match: (pathname) => pathname.startsWith('/dashboard/social-map') },
+  { href: '/dashboard/check-ins', label: 'Dog check-ins', icon: '✓', match: (pathname) => pathname.startsWith('/dashboard/check-ins') },
 ];
 
 function FeatureLink({ item, pathname, count, onNavigate }: { item: FeatureItem; pathname: string; count?: number; onNavigate: () => void }) {
@@ -61,7 +65,9 @@ function FeatureLink({ item, pathname, count, onNavigate }: { item: FeatureItem;
 
 export default function FeaturesRibbon({ pathname, signedIn, notificationCount }: FeaturesRibbonProps) {
   const [expanded, setExpanded] = useState(false);
+  const [mapsExpanded, setMapsExpanded] = useState(false);
   const features = signedIn ? [...publicFeatures, ...memberFeatures] : publicFeatures;
+  const mapsActive = mapFeatures.some((item) => item.match(pathname));
 
   return (
     <div className="pointer-events-none fixed left-3 top-20 z-[70] max-w-[calc(100vw-1.5rem)] sm:left-6 sm:top-20 sm:max-w-[min(56rem,calc(100vw-3rem))]">
@@ -83,6 +89,12 @@ export default function FeaturesRibbon({ pathname, signedIn, notificationCount }
             aria-label="Features"
             className="flex max-h-[min(70vh,34rem)] max-w-full flex-wrap justify-start gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
           >
+            <section aria-label="Maps" className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 p-2">
+              <button type="button" aria-expanded={mapsExpanded} onClick={() => setMapsExpanded((value) => !value)} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm ${mapsActive ? 'border-cyan-900 bg-cyan-900 text-white' : 'border-cyan-200 bg-white text-cyan-950'}`}>
+                <span aria-hidden="true">⌖</span><span>Maps</span><span aria-hidden="true">{mapsExpanded ? '▾' : '▸'}</span>
+              </button>
+              {mapsExpanded ? <div className="flex flex-wrap gap-2">{mapFeatures.filter((item) => signedIn || item.href === '/map').map((item) => <FeatureLink key={item.href} item={item} pathname={pathname} onNavigate={() => { setExpanded(false); setMapsExpanded(false); }} />)}</div> : null}
+            </section>
             {features.map((item) => (
               <FeatureLink
                 key={item.href}

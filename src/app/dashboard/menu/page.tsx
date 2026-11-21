@@ -50,7 +50,12 @@ export default async function MenuPage() {
         <Link href={UI_ROUTES.profiles} className="rounded-lg border px-4 py-4 font-medium">Profiles</Link>
         <Link href={UI_ROUTES.addProfile} className="rounded-lg border px-4 py-4 font-medium">Add dog</Link>
         <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-4 font-medium">Buddies social graph</Link>
-        <Link href={UI_ROUTES.checkIns} className="rounded-lg border px-4 py-4 font-medium">Nearby dog check-ins</Link>
+        <section className="grid gap-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+          <h2 className="font-semibold text-cyan-950">Maps</h2>
+          <Link href="/map" className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Live map</Link>
+          <Link href={UI_ROUTES.socialMap} className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Neighborhood activity</Link>
+          <Link href={UI_ROUTES.checkIns} className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Dog check-ins</Link>
+        </section>
         <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-4 font-medium">Walks</Link>
         <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-4 font-medium">Direct messages</Link>
         <Link href={UI_ROUTES.lostReport} className="rounded-lg border px-4 py-4 font-medium">Lost dog mode</Link>
