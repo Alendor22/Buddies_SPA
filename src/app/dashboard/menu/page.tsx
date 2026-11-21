@@ -37,10 +37,10 @@ export default async function MenuPage() {
           <span className="rounded-full bg-red-600 px-3 py-1 text-sm font-bold text-white">{unread.length}</span>
         </div>
         <div className="mt-4 grid gap-2 text-sm">
-          <Link href={UI_ROUTES.buddyRequests} className="rounded-lg border px-4 py-3">Buddy requests: {buddyRequests}</Link>
-          <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-3">Walk messages: {messages}</Link>
+          <div className="rounded-lg border px-4 py-3">Buddy requests: {buddyRequests}</div>
+          <div className="rounded-lg border px-4 py-3">Walk messages: {messages}</div>
           <Link href={UI_ROUTES.alerts} className="rounded-lg border px-4 py-3">Dog alerts: {dogAlerts}</Link>
-          <Link href={UI_ROUTES.walkInvites} className="rounded-lg border px-4 py-3">Walk invites: {walkInvites}</Link>
+          <div className="rounded-lg border px-4 py-3">Walk invites: {walkInvites}</div>
           <Link href={UI_ROUTES.alerts} className="rounded-lg bg-slate-900 px-4 py-3 text-center font-medium text-white">Open notification center</Link>
         </div>
       </section>
@@ -49,15 +49,20 @@ export default async function MenuPage() {
         <Link href={UI_ROUTES.dashboard} className="rounded-lg border px-4 py-4 font-medium">Dashboard</Link>
         <Link href={UI_ROUTES.profiles} className="rounded-lg border px-4 py-4 font-medium">Profiles</Link>
         <Link href={UI_ROUTES.addProfile} className="rounded-lg border px-4 py-4 font-medium">Add dog</Link>
-        <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-4 font-medium">Buddies social graph</Link>
         <section className="grid gap-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
           <h2 className="font-semibold text-cyan-950">Maps</h2>
           <Link href="/map" className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Live map</Link>
           <Link href={UI_ROUTES.socialMap} className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Neighborhood activity</Link>
           <Link href={UI_ROUTES.checkIns} className="rounded-lg border border-cyan-200 bg-white px-4 py-3 font-medium">Dog check-ins</Link>
         </section>
-        <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-4 font-medium">Walks</Link>
-        <Link href={UI_ROUTES.messages} className="rounded-lg border px-4 py-4 font-medium">Direct messages</Link>
+        <section className="grid gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3">
+          <h2 className="font-semibold text-violet-950">Social</h2>
+          <Link href="/dashboard/social" className="rounded-lg border border-violet-200 bg-white px-4 py-3 font-medium">Social hub · packs & meetups</Link>
+          <Link href={UI_ROUTES.buddies} className="rounded-lg border border-violet-200 bg-white px-4 py-3 font-medium">Buddy requests</Link>
+          <Link href="/dashboard/buddies/invite" className="rounded-lg border border-violet-200 bg-white px-4 py-3 font-medium">Invite dogs</Link>
+          <Link href={UI_ROUTES.walks} className="rounded-lg border border-violet-200 bg-white px-4 py-3 font-medium">Walks & invitations</Link>
+          <Link href={UI_ROUTES.messages} className="rounded-lg border border-violet-200 bg-white px-4 py-3 font-medium">Conversations</Link>
+        </section>
         <Link href={UI_ROUTES.lostReport} className="rounded-lg border px-4 py-4 font-medium">Lost dog mode</Link>
         <Link href="/find-dog" className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-4 font-medium text-sky-900">Find a lost dog by photo</Link>
         <Link href={UI_ROUTES.records} className="rounded-lg border px-4 py-4 font-medium">Vet records</Link>
