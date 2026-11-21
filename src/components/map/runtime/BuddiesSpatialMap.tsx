@@ -8,6 +8,7 @@ import LiveMapLayers, {
   type ReportMapItem
 } from '@/components/map/LiveMapLayers';
 import MapActionBar from '@/components/map/hud/MapActionBar';
+import MapAppNavigation from '@/components/map/hud/MapAppNavigation';
 import WalkTelemetryHUD from '@/components/map/hud/WalkTelemetryHUD';
 import SpatialOverlaySheet from '@/components/map/interactions/SpatialOverlaySheet';
 import AutoWalkDetector from '@/components/map/telemetry/AutoWalkDetector';
@@ -392,6 +393,7 @@ export default function BuddiesSpatialMap() {
 
       <ArSpatialLabels activeDogs={activeDogs} reports={reports} />
       <ArOverlayControls key={cameraMode} />
+      <MapAppNavigation />
       <WalkTelemetryHUD />
       <MapActionBar />
       <SpatialOverlaySheet activeDogs={activeDogs} />
