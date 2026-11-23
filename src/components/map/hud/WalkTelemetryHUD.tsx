@@ -71,7 +71,7 @@ export default function WalkTelemetryHUD() {
     && telemetry.longitude != null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-3 top-3 z-30 sm:inset-x-5 sm:top-5">
+    <div className="pointer-events-none absolute inset-x-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-30 sm:inset-x-5 sm:top-20">
       <div className="mx-auto flex max-w-3xl items-start justify-between gap-2">
         <div className="rounded-full border border-white/25 bg-slate-950/55 px-3 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-xl">
           <span className="mr-2" aria-hidden="true">🐾</span>
