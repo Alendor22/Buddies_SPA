@@ -47,8 +47,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap gap-2">
           <Link href={UI_ROUTES.addProfile} className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Add dog</Link>
           <Link href="/map" className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-cyan-900">Maps</Link>
-          <Link href={UI_ROUTES.walks} className="rounded-lg border px-4 py-2">Walk messages{unreadMessages ? ` (${unreadMessages})` : ''}</Link>
-          <Link href={UI_ROUTES.buddies} className="rounded-lg border px-4 py-2">Buddies</Link>
+          <Link href="/dashboard/social" className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-violet-950">Social</Link>
           <Link href="/find-dog" className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sky-900">Find lost dog</Link>
         </div>
       </div>
@@ -68,8 +67,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold text-cyan-950">Maps</h2><p className="mt-1 text-sm text-cyan-900">Open the live map, neighborhood activity, or dog check-ins from one place.</p></div><Link href="/map" className="rounded-lg bg-cyan-950 px-4 py-2 text-sm font-semibold text-white">Open live map</Link></div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><Link href={UI_ROUTES.socialMap} className="rounded-xl border border-cyan-200 bg-white p-4"><h3 className="font-semibold text-cyan-950">Neighborhood activity</h3><p className="mt-1 text-sm text-slate-600">View active dogs, buddy halos, reports, heat activity, and route memory.</p></Link><Link href={UI_ROUTES.checkIns} className="rounded-xl border border-cyan-200 bg-white p-4"><h3 className="font-semibold text-cyan-950">Dog check-ins</h3><p className="mt-1 text-sm text-slate-600">Check dogs into parks and discover active dogs nearby.</p></Link></div>
       </section>
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
-        <Link href={UI_ROUTES.walks} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Walk messages</h2><p className="mt-2 text-sm text-slate-600">Open persisted realtime walk conversations and presence.</p></Link>
+      <section className="mt-8 rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold text-violet-950">Social</h2><p className="mt-1 text-sm text-violet-900">Manage buddy connections, packs, meetups, walks, and conversations together.</p></div><Link href="/dashboard/social" className="rounded-lg bg-violet-950 px-4 py-2 text-sm font-semibold text-white">Open Social</Link></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href={UI_ROUTES.buddies} className="rounded-xl border border-violet-200 bg-white p-4"><h3 className="font-semibold text-violet-950">Buddy requests</h3><p className="mt-1 text-sm text-slate-600">Review requests and manage dog connections.</p></Link>
+          <Link href="/dashboard/social#packs" className="rounded-xl border border-violet-200 bg-white p-4"><h3 className="font-semibold text-violet-950">Packs & meetups</h3><p className="mt-1 text-sm text-slate-600">Join groups and coordinate community events.</p></Link>
+          <Link href={UI_ROUTES.walks} className="rounded-xl border border-violet-200 bg-white p-4"><h3 className="font-semibold text-violet-950">Walks & invitations</h3><p className="mt-1 text-sm text-slate-600">Plan walks and respond to invitations.</p></Link>
+          <Link href={UI_ROUTES.messages} className="rounded-xl border border-violet-200 bg-white p-4"><h3 className="font-semibold text-violet-950">Conversations</h3><p className="mt-1 text-sm text-slate-600">Open direct, walk, pack, and meetup chats.</p></Link>
+        </div>
+      </section>
+      <section className="mt-8 grid gap-4 md:grid-cols-2">
         <Link href={UI_ROUTES.lostReport} className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-semibold">Safety network</h2><p className="mt-2 text-sm text-slate-600">Report a lost dog, map the last-seen point, and alert trusted buddies.</p></Link>
         <Link href="/find-dog" className="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm"><h2 className="text-xl font-semibold text-sky-950">Find a lost dog</h2><p className="mt-2 text-sm text-sky-900">Upload a found-dog photo for visual matching against enrolled lost-dog profiles.</p></Link>
       </section>
