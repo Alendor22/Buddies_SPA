@@ -8,9 +8,10 @@ import { getClerkPublishableKey } from '@/lib/clerkConfig';
 import { getPublicMapboxToken } from '@/lib/mapboxToken';
 import './globals.css';
 
-const appIcon = '/icons/icon-512.png';
+const appIcon = 'https://www.dogbuddies.net/icons/icon-512.png';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.dogbuddies.net'),
   title: 'Buddies',
   description: 'Dog identity, safety, walking, and community network',
   manifest: '/manifest.webmanifest',
