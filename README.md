@@ -1,99 +1,75 @@
 # Buddies SPA V2
 
-Buddies is a mobile-first dog identity, safety, walking, and social platform. It gives each dog a durable profile and QR identity, and brings dog discovery, lost-dog workflows, walks, messaging, and nearby activity into one application.
+Buddies is a mobile-first dog identity, safety, walking, and social web application. Dog and owner profiles, QR identity, lost-dog reporting, dog discovery, maps, walks, messaging, and community activity are organized in one signed-in product.
 
 ## Product design
 
-Buddies is built as a modular web application. PostgreSQL stores durable product data; Prisma provides database access and migrations; Redis supports short-lived activity and rate limits; Cloudflare R2 stores media; Ably carries realtime events and presence; Mapbox powers maps and route views. Client state is handled with Zustand. Authorization and validation belong on the server, while public dog and QR views expose only safety information intended for sharing.
+The application uses a Next.js App Router frontend with server-side routes and PostgreSQL-backed domain data. Prisma models and migrations define durable data; authentication, validation, and ownership checks are enforced by server routes. Map views support walk planning and nearby social activity. Public dog and QR pages are designed to expose a dog's shareable safety information.
 
-Primary user journeys:
+## Implemented in the repository
 
-1. Create an account and manage owner and dog profiles.
-2. Share a dog's QR identity and public-safe safety profile.
-3. Enroll dog photos and search or verify a found dog using the recognition service.
-4. Connect with other dogs, coordinate walks, exchange messages, and explore nearby activity.
-5. Connect an authorized MCP client to read the signed-in owner's Buddies data.
+These capabilities have application routes and/or UI and supporting tests in the current `main` branch. They describe checked-in functionality, not a guarantee that every optional external integration is active in production.
 
-## Current application capabilities
+- **Dog identity and safety:** owner and dog profiles, QR pages/scanning, and lost-dog reporting and discovery.
+- **Photo recognition:** enrollment and search flows connect to the dog-reidentification service. Image normalization/compression and uncertain-match similarity feedback are implemented. Enrollment is controlled by configuration; the recognition endpoint, token, and calibrated threshold must be configured for operation.
+- **Social and walks:** buddy requests, walk invitations, map and route planning, packs, pack discovery, meetups, and social navigation. Packs and meetups can be connected to conversations; community participation supports invitations and join requests.
+- **Messaging:** conversation history and message routes are persisted in application data. Realtime delivery depends on Ably configuration.
+- **Account and public information:** public privacy, terms, and data-deletion pages, plus a data-deletion request status view.
+- **MCP:** `/api/mcp` provides read-only, owner-scoped tools for dog profiles, walks, and unread notifications. Personal access tokens are created in account settings and can be revoked.
+- **Media and temporary activity:** Cloudflare R2 media support and Upstash Redis support are present in the application.
 
-The current application includes these product areas:
+## Planned or configuration-dependent
 
-- **Dog identity:** owner-managed dog profiles, QR identity, and a public-safe dog safety profile.
-- **Lost and found:** lost-dog events and last-seen information, plus photo-based recognition enrollment, search, and verification. Recognition photos are normalized and compressed before upload; an uncertain search can return the closest similarity score instead of implying a confident match.
-- **Social connections:** dog buddy relationships and walking invitations or requests.
-- **Packs and meetups:** dog-centered packs with invitations, join requests, and a three-accepted-dog threshold; create public or pack-linked meetups from the social hub.
-- **Pack discovery:** suggestions rank formed public packs using recent shared route hashes, coarse active walking neighborhoods, breed overlap, and dog-friendly preferences. Exact dog coordinates are not returned.
-- **Walks and maps:** Mapbox map and route planning with waypoint support, plus nearby activity and realtime presence.
-- **Messaging:** realtime messaging backed by persisted application data.
-- **Media and temporary activity:** Cloudflare R2 media integration and Redis-backed short-lived activity and rate limits.
-- **Read-only MCP:** `/api/mcp` exposes owner-scoped tools for listing the owner's dogs, retrieving a dog profile, listing walks, and listing unread notifications. Personal access tokens are shown once when created and can be revoked. MCP v1 is read-only.
-
-These are checked-in application capabilities in the current working branch; check the current UI, tests, and production health before treating any individual workflow as verified in a live deployment. Pack and meetup changes are still under review and are not claimed as deployed.
+- Meta connections, sharing, and messaging are behind feature flags and default to off. Configure and validate them in an isolated environment before enabling.
+- Dog photo enrollment/search requires the external recognition service and a calibrated match threshold. The example configuration leaves enrollment disabled and recognition endpoint values empty.
+- Production readiness reports Ably as `not_configured` (see the snapshot below), so realtime delivery is not verified even though persisted messaging is implemented.
+- Packs/meetups and other checked-in features should be exercised in the target deployment before relying on them for live workflows.
 
 ## Technology
 
-- Next.js 16 App Router and React 19
-- TypeScript and Node.js 24 or later
-- Tailwind CSS 4
-- PostgreSQL, Prisma 7, and the PostgreSQL adapter
+- Next.js 16 App Router, React 19, TypeScript, Node.js 24+
+- Tailwind CSS 4, Zustand 5, Zod 4
+- PostgreSQL, Prisma 7 with the PostgreSQL adapter
 - Clerk authentication
-- Zustand 5 and Zod 4
-- Mapbox GL and `react-map-gl`
-- Ably realtime
+- Mapbox GL / `react-map-gl`
+- Ably realtime transport (requires configuration)
 - Upstash Redis
 - Cloudflare R2 through the AWS S3-compatible SDK
-- Dog-recognition service deployed to Fly.io
-- Vercel production hosting and GitHub Actions CI
+- Dog recognition service on Fly.io
+- Vercel hosting; GitHub Actions for CI, gated production deployment, smoke checks, and service deployment
 
-## Build and release status
+## Build, release, and production status
 
-The default branch is `main`. The repository defines CI checks for phase contracts, type checking, linting, tests, and a CI-safe Next.js production build. Database tests and Chromium browser journeys are available as separate validation steps. Production deployment targets Vercel; the recognition-service workflow deploys that service to Fly.io when its configured conditions are met.
+The GitHub Actions CI workflow runs phase-contract and Prisma checks, typecheck, lint, progressive tests with coverage, a CI-safe Next.js build, PostgreSQL migration/invariant tests, and Chromium browser journeys. `npm run build:ci` intentionally avoids production database migrations. `npm run build` runs `prisma migrate deploy` before the app build.
 
-The latest repository change reviewed for this README is `8e12908` (November 13, 2026), which hardens map and cleanup API usage. Recent merged work also covers recognition cold starts, camera-roll uploads and image normalization, no-match similarity reporting, Fly.io deployment automation, and the read-only MCP server.
+The production workflow is configured to deploy only after successful CI; production smoke checks then validate the exact deployed commit. The Fly.io workflow deploys the recognition service when its service files change or when manually dispatched.
 
-This section describes the checked-in release process; it does not assert that the latest commit is currently deployed or that production is healthy. Confirm the intended commit and readiness endpoint before making that claim.
+**Evidence snapshot (November 27, 2026):** Vercel reports the production deployment for `main` at commit `a0e0d8194e671d106c0c94f41a59f14e958139e7` as Ready. A deep readiness request to `https://www.dogbuddies.net/api/health?deep=1` returned `ready: true`, database and Redis healthy, auth and Mapbox configured, and R2 configured. Ably reported `not_configured`. The latest GitHub CI run for that commit completed with the validation and database-test jobs successful but the critical Chromium browser-journey job failed; the automated production deploy and smoke workflows were skipped. The live deployment and deep health response are evidence of current service readiness, but do not turn the failed browser gate into a passing CI result.
+
+Production status can change after this snapshot. Before release or operational decisions, check the [latest CI runs](https://github.com/Alendor22/Buddies_SPA/actions), the Vercel deployment's source SHA, and the deep readiness endpoint. A liveness response alone does not verify database or service readiness.
 
 ## Local development
 
-Requirements: Node.js 24 or later, PostgreSQL, and the environment variables required by the features you run. Start with the example environment file and keep real secrets out of source control.
+Requirements: Node.js 24 or later, npm, and PostgreSQL. Copy the example environment file and supply the values needed by the features you use. Keep real secrets out of source control.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npx prisma generate
+npm run prisma:deploy
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Apply existing migrations to a development database with:
+Open [http://localhost:3000](http://localhost:3000). For a local development database, set `DATABASE_URL` and `DATABASE_URL_UNPOOLED` in `.env` to that database before applying migrations. Mapbox, Clerk, Ably, Redis, R2, and dog-recognition variables are described in [`.env.example`](./.env.example); some features can be unavailable until their services are configured. See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment variables, migration sequencing, readiness checks, release gates, and rollback instructions.
+
+## Validation commands
 
 ```bash
-npm run prisma:deploy
-```
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for required environment variables, production migrations, readiness checks, release gates, and rollback steps.
-
-## Validation
-
-Common checks:
-
-```bash
+npm run audit:phases
 npm run typecheck
 npm run lint
 npm test
 npm run build:ci
 ```
 
-Run the full validation suite with `npm run test:all` when the required disposable PostgreSQL database and Playwright browser setup are available. `npm run check` runs the phase audit, Prisma generation, type checking, lint, fast tests, and CI build. The production `npm run build` also applies Prisma migrations, so use it only in an environment configured for that release behavior.
-
-Useful production checks:
-
-```text
-https://dogbuddies.net/api/health
-https://dogbuddies.net/api/health?deep=1
-```
-
-A successful liveness response alone does not establish database or service readiness. For release verification, compare the deployed commit SHA with the intended commit and inspect the deep-readiness response.
-
-## Keeping this README current
-
-Review this README every two weeks against changes merged to `main`. Update the build snapshot, implemented capabilities, architecture, and setup or deployment guidance only when supported by current source, tests, workflow results, or deployment evidence. Label planned or unverified functionality clearly; do not infer production health from a successful code build. Keep the update focused and record it as a small documentation commit.
+Additional suites: `npm run test:database` needs a disposable PostgreSQL database; `npm run test:e2e` needs the Playwright Chromium setup and configured test authentication. `npm run test:all` runs the full suite. `npm run check` combines phase audit, Prisma generation, typecheck, lint, fast tests, and the CI build.
