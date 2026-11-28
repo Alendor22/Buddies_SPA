@@ -9,6 +9,7 @@ const addFeedItemMock = vi.hoisted(() => vi.fn());
 const listBlockedUserIdsMock = vi.hoisted(() => vi.fn());
 const syncPackConversationMock = vi.hoisted(() => vi.fn());
 const syncEventConversationMock = vi.hoisted(() => vi.fn());
+const syncPackEventsMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   dog: { findFirst: vi.fn(), findMany: vi.fn() },
   dogPack: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
@@ -33,6 +34,7 @@ vi.mock('@/lib/social/repository', () => ({
   createEvent: createEventMock,
   syncPackConversation: syncPackConversationMock,
   syncEventConversation: syncEventConversationMock,
+  syncPackEvents: syncPackEventsMock,
   listEvents: vi.fn(),
   listBlockedUserIds: listBlockedUserIdsMock
 }));
@@ -67,6 +69,7 @@ describe('dog packs and pack meetups', () => {
     createEventMock.mockResolvedValue('event-1');
     syncPackConversationMock.mockResolvedValue('pack-conversation-1');
     syncEventConversationMock.mockResolvedValue('event-conversation-1');
+    syncPackEventsMock.mockResolvedValue(undefined);
     addFeedItemMock.mockResolvedValue({});
   });
 

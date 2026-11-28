@@ -131,6 +131,12 @@ export async function syncPackConversation(packId: string) {
   return conversation.id;
 }
 
+/** Re-sync every meetup linked to a pack so a newly accepted member is added as an attendee. */
+export async function syncPackEvents(packId: string) {
+  const events = await prisma.socialEvent.findMany({ where: { packId }, select: { id: true } });
+  await Promise.all(events.map((event) => syncEventConversation(event.id)));
+}
+
 /** Keep a meetup thread limited to its host and confirmed attendees. */
 export async function syncEventConversation(eventId: string) {
   const event = await prisma.socialEvent.findUnique({
