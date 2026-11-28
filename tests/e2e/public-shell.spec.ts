@@ -17,7 +17,13 @@ test.describe('public application shell', () => {
 
     const featuresNav = page.getByRole('navigation', { name: 'Features' });
     await expect(featuresNav).toBeVisible();
-    await expect(featuresNav.getByRole('link', { name: 'Map' })).toHaveAttribute('href', '/map');
+
+    const mapsToggle = featuresNav.getByRole('button', { name: 'Maps' });
+    await expect(mapsToggle).toBeVisible();
+    await expect(mapsToggle).toHaveAttribute('aria-expanded', 'false');
+    await mapsToggle.click();
+    await expect(featuresNav.getByRole('link', { name: 'Live map' })).toHaveAttribute('href', '/map');
+
     await expect(featuresNav.getByRole('link', { name: 'Scanner' })).toHaveAttribute('href', '/scanner');
     await expect(featuresNav.getByRole('link', { name: 'Profiles' })).toHaveAttribute('href', '/dogs');
 
