@@ -39,8 +39,7 @@ export default async function SocialDashboardPage() {
           <p className="mt-2 max-w-2xl text-slate-600">Discover dogs, coordinate walks, message connections, join public groups and packs, follow community activity, and manage your social privacy.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/buddies" className="rounded-lg border bg-white px-4 py-2">Dog buddies</Link>
-          <Link href="/dashboard/check-ins" className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">Nearby check-ins</Link>
+          <Link href="/dashboard/buddies" className="rounded-lg border bg-white px-4 py-2">Buddy requests</Link>
         </div>
       </div>
 

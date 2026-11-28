@@ -175,6 +175,7 @@ export default async function WalksPage({ searchParams }: { searchParams: Promis
                 <div>
                   <h2 className="text-xl font-semibold">{walk.dog.name}</h2>
                   <p className="mt-1 text-sm text-slate-600">{walk.dog.breed ?? 'Breed not listed'} · {walk.startsAt.toLocaleString()} · {walk.durationMin} min</p>
+                  <p className="mt-1 text-sm text-slate-700"><span className="font-semibold">Meeting cross streets:</span> {walk.routeName || 'Not specified'}</p>
                   <p className="mt-1 text-sm font-semibold">{walk.status}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
