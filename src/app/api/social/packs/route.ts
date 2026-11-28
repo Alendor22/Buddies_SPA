@@ -6,7 +6,7 @@ import { NotificationType } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
 import { rateLimit } from '@/lib/rateLimit';
-import { listBlockedUserIds, syncPackConversation } from '@/lib/social/repository';
+import { listBlockedUserIds, syncPackConversation, syncPackEvents } from '@/lib/social/repository';
 import { dogManagerScope } from '@/lib/social/dogManagerScope';
 
 export const dynamic = 'force-dynamic';
@@ -204,7 +204,10 @@ export async function POST(request: NextRequest) {
     });
     if (!invitation) return NextResponse.json({ error: 'This invitation is unavailable or has already been answered.' }, { status: 404 });
     await prisma.dogPackMember.update({ where: { id: invitation.id }, data: { status: decision, respondedAt: new Date() } });
-    if (decision === 'ACCEPTED') await syncPackConversation(packId);
+    if (decision === 'ACCEPTED') {
+      await syncPackConversation(packId);
+      await syncPackEvents(packId);
+    }
     const formed = await prisma.dogPackMember.count({ where: { packId, status: 'ACCEPTED' } });
     return NextResponse.json({ decision: decision.toLowerCase(), formed: formed >= 3 });
   }
@@ -226,6 +229,7 @@ export async function POST(request: NextRequest) {
       await prisma.dogPackMember.create({ data: { packId, dogId, userId: user.id, status: 'ACCEPTED', respondedAt: new Date() } });
     }
     await syncPackConversation(packId);
+    await syncPackEvents(packId);
     const formed = await prisma.dogPackMember.count({ where: { packId, status: 'ACCEPTED' } });
     await createNotification({
       userId: pack.ownerId,
@@ -274,6 +278,7 @@ export async function POST(request: NextRequest) {
     if (result.count !== 1) return NextResponse.json({ error: 'This request is unavailable or has already been reviewed.' }, { status: 404 });
     if (decision === 'ACCEPTED') {
       await syncPackConversation(packId);
+      await syncPackEvents(packId);
       const member = await prisma.dogPackMember.findUnique({ where: { packId_dogId: { packId, dogId } }, include: { pack: { select: { name: true } }, dog: { select: { name: true } } } });
       if (member) await createNotification({
         userId: member.userId,

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   dogPack: { findUnique: vi.fn() },
-  socialEvent: { findUnique: vi.fn() },
+  socialEvent: { findUnique: vi.fn(), findMany: vi.fn() },
+  socialEventAttendee: { createMany: vi.fn() },
   conversation: { upsert: vi.fn() },
   conversationMember: { deleteMany: vi.fn(), createMany: vi.fn() },
   $transaction: vi.fn()
@@ -10,7 +11,7 @@ const prismaMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ prisma: prismaMock }));
 
-import { syncEventConversation, syncPackConversation } from '@/lib/social/repository';
+import { syncEventConversation, syncPackConversation, syncPackEvents } from '@/lib/social/repository';
 
 describe('community conversation synchronization', () => {
   beforeEach(() => {
@@ -18,6 +19,7 @@ describe('community conversation synchronization', () => {
     prismaMock.$transaction.mockResolvedValue([]);
     prismaMock.conversationMember.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.conversationMember.createMany.mockResolvedValue({ count: 0 });
+    prismaMock.socialEventAttendee.createMany.mockResolvedValue({ count: 0 });
   });
 
   it('creates a stable pack thread for the owner and accepted dog owners', async () => {
@@ -59,6 +61,40 @@ describe('community conversation synchronization', () => {
       data: [
         { conversationId: 'conversation-event-1', userId: 'host-1', role: 'OWNER' },
         { conversationId: 'conversation-event-1', userId: 'guest-1', role: 'MEMBER' }
+      ]
+    }));
+  });
+
+  it('re-syncs every meetup linked to a pack, enrolling newly accepted members as attendees', async () => {
+    prismaMock.socialEvent.findMany.mockResolvedValue([{ id: 'event-10' }, { id: 'event-20' }]);
+    prismaMock.socialEvent.findUnique.mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+      Promise.resolve({
+        id,
+        title: `Meetup ${id}`,
+        hostId: 'host-1',
+        attendees: [{ userId: 'host-1' }],
+        pack: { members: [{ userId: 'host-1' }, { userId: 'new-member' }] }
+      })
+    );
+    prismaMock.conversation.upsert.mockImplementation(({ where: { eventId } }: { where: { eventId: string } }) =>
+      Promise.resolve({ id: `conversation-${eventId}` })
+    );
+
+    await syncPackEvents('pack-1');
+
+    expect(prismaMock.socialEvent.findMany).toHaveBeenCalledWith({ where: { packId: 'pack-1' }, select: { id: true } });
+    expect(prismaMock.socialEventAttendee.createMany).toHaveBeenCalledWith({
+      data: [{ eventId: 'event-10', userId: 'host-1', status: 'GOING' }, { eventId: 'event-10', userId: 'new-member', status: 'GOING' }],
+      skipDuplicates: true
+    });
+    expect(prismaMock.socialEventAttendee.createMany).toHaveBeenCalledWith({
+      data: [{ eventId: 'event-20', userId: 'host-1', status: 'GOING' }, { eventId: 'event-20', userId: 'new-member', status: 'GOING' }],
+      skipDuplicates: true
+    });
+    expect(prismaMock.conversationMember.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [
+        { conversationId: 'conversation-event-10', userId: 'host-1', role: 'OWNER' },
+        { conversationId: 'conversation-event-10', userId: 'new-member', role: 'MEMBER' }
       ]
     }));
   });
